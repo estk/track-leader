@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO activities (id, user_id, activity_type, filename, object_store_path,\n                                    distance, ascent, descent, duration,\n                                    submitted_at, created_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "activity_type",
+            "kind": {
+              "Enum": [
+                "run",
+                "bike",
+                "walk",
+                "hike",
+                "mtb",
+                "other"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        "Float8",
+        "Float8",
+        "Float8",
+        "Int8",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "73ca9e3fb3c86d83a6596b22f490df954b23574da691f7e539c24ac0ae7d0158"
+}

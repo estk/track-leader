@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, activity_type as \"activity_type: _\", filename, object_store_path,\n                   distance, ascent, descent, duration,\n                   submitted_at, created_at\n            FROM activities\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "activity_type: _",
+        "type_info": {
+          "Custom": {
+            "name": "activity_type",
+            "kind": {
+              "Enum": [
+                "run",
+                "bike",
+                "walk",
+                "hike",
+                "mtb",
+                "other"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "object_store_path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "distance",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "ascent",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 7,
+        "name": "descent",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 8,
+        "name": "duration",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4a6a2ac09f5d64e774322233a93e19c96eec1f69c739fccdbe9a3cafe4d68b14"
+}

@@ -88,8 +88,9 @@ Note: Original GPX files are stored in the object store rather than as individua
 
 ### Option 2: Manual Setup
 
-1. Set up PostgreSQL database
-2. Set environment variable: `DATABASE_URL=postgres://user:password@localhost/dbname`
+1. Set up PostgreSQL databasea: `docker run --name pg -e POSTGRES_PASSWORD=pg -p 5432:5432 -d postgres`
+2. Set environment variable: `DATABASE_URL=postgres://postgres:pg@localhost:5432`
+3. `cargo sqlx migrate run && cargo sqlx prepare`
 3. Run the service: `cargo run --bin tracks`
 
 The service will automatically run database migrations on startup.

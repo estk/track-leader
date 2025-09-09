@@ -17,19 +17,19 @@ impl Database {
         sqlx::query!(
             r#"
             INSERT INTO activities (id, user_id, activity_type, filename, object_store_path,
-                                    total_distance, total_ascent, total_descent, total_time,
+                                    distance, ascent, descent, duration,
                                     submitted_at, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             "#,
             activity.id,
             activity.user_id,
             activity.activity_type as _,
             activity.filename,
             activity.object_store_path,
-            activity.metrics.total_distance,
-            activity.metrics.total_ascent,
-            activity.metrics.total_descent,
-            activity.metrics.total_time,
+            activity.metrics.distance,
+            activity.metrics.ascent,
+            activity.metrics.descent,
+            activity.metrics.duration,
             activity.submitted_at,
             activity.created_at,
         )

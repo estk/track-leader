@@ -46,10 +46,7 @@ pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> a
 
     println!("Server running on http://0.0.0.0:{}", port);
 
-    axum::Server::from_tcp(listener.into_std()?)
-        .unwrap()
-        .serve(app.into_make_service())
-        .await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
