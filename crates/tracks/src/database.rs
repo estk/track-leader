@@ -44,8 +44,8 @@ impl Database {
             Activity,
             r#"
             SELECT id, user_id, activity_type as "activity_type: _", filename, object_store_path,
-                   total_distance, total_ascent, total_descent, total_time,
-                   submitted_at, created_at, updated_at
+                   distance, ascent, descent, duration,
+                   submitted_at, created_at
             FROM activities
             WHERE id = $1
             "#,
@@ -62,8 +62,8 @@ impl Database {
             Activity,
             r#"
             SELECT id, user_id, activity_type as "activity_type: _", filename, object_store_path,
-                   total_distance, total_ascent, total_descent, total_time,
-                   submitted_at, created_at, updated_at
+                   distance, ascent, descent, duration,
+                   submitted_at, created_at
             FROM activities
             WHERE user_id = $1
             ORDER BY submitted_at DESC

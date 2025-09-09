@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use gpx::{read, Gpx, Waypoint};
-use time::{Duration, OffsetDateTime};
+use time::{Duration, OffsetDateTime, UtcDateTime};
 
 use crate::{
     errors::AppError,
@@ -12,6 +12,7 @@ pub struct GpxProcessor;
 pub struct ProcessedGpx {
     pub metrics: ActivityMetrics,
     pub activity_type: ActivityType,
+    pub created_at: UtcDateTime,
 }
 
 impl GpxProcessor {
@@ -19,6 +20,7 @@ impl GpxProcessor {
         let gpx: Gpx = read(content.as_ref())
             .map_err(|e| AppError::GpxParsing(format!("Failed to parse GPX: {}", e)))?;
 
+        let created_at: OffsetDateTime = gpx.metadata.unwrap().time.unwrap().into();
         let mut all_points = Vec::new();
         let mut sequence = 0;
 
@@ -42,6 +44,7 @@ impl GpxProcessor {
         Ok(ProcessedGpx {
             metrics,
             activity_type: ActivityType::Other,
+            created_at: created_at.to_utc(),
         })
     }
 

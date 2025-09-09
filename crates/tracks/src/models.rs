@@ -13,6 +13,7 @@ pub struct Activity {
     #[sqlx(flatten)]
     pub metrics: ActivityMetrics,
     pub submitted_at: UtcDateTime,
+    pub created_at: UtcDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
