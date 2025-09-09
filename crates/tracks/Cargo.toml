@@ -1,0 +1,21 @@
+[package]
+name = "tracks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.6", features = ["multipart"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "time", "migrate", "macros", "offline"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+gpx = "0.9"
+tower = "0.4"
+tower-http = { version = "0.4", features = ["fs", "cors"] }
+anyhow = "1.0"
+thiserror = "1.0"
+object_store = { version = "0.8", features = ["http"] }
+bytes = "1.0"
+time = { version = "0.3.43", features = ["serde"] }

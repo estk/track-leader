@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: tracks_postgres
+    environment:
+      POSTGRES_DB: tracks_db
+      POSTGRES_USER: tracks_user
+      POSTGRES_PASSWORD: tracks_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracks_user -d tracks_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tracks-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tracks_service
+    environment:
+      DATABASE_URL: postgres://tracks_user:tracks_password@postgres:5432/tracks_db
+      OBJECT_STORE_PATH: /app/uploads
+      PORT: 3000
+      RUST_LOG: info
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  uploads_data:
