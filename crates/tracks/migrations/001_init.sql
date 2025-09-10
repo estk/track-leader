@@ -1,3 +1,11 @@
+-- Create users table
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
 -- Create activity_type enum
 CREATE TYPE activity_type AS ENUM ('run', 'bike', 'walk', 'hike', 'mtb', 'other');
 

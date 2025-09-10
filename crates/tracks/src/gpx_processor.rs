@@ -20,7 +20,7 @@ impl GpxProcessor {
         let gpx: Gpx = read(content.as_ref())
             .map_err(|e| AppError::GpxParsing(format!("Failed to parse GPX: {}", e)))?;
 
-        let created_at: OffsetDateTime = gpx.metadata.unwrap().time.unwrap().into();
+        let created_at: Option<OffsetDateTime> = gpx.metadata.unwrap().time.map(Into::into);
         let mut all_points = Vec::new();
         let mut sequence = 0;
 
@@ -44,7 +44,8 @@ impl GpxProcessor {
         Ok(ProcessedGpx {
             metrics,
             activity_type: ActivityType::Other,
-            created_at,
+            // should just be nullable
+            created_at: created_at.unwrap_or(OffsetDateTime::now_utc()),
         })
     }
 

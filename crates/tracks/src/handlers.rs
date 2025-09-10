@@ -4,17 +4,32 @@ use axum::{
     response::{IntoResponse, Json, Response},
     Extension,
 };
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    database::Database,
+    database::{self, Database},
     errors::AppError,
     gpx_processor::GpxProcessor,
-    models::{Activity, ActivityType},
+    models::{Activity, ActivityType, User},
     object_store_service::ObjectStoreService,
 };
+
+#[derive(Deserialize)]
+pub struct NewUserQuery {
+    pub name: String,
+    pub email: String,
+}
+
+pub async fn new_user(
+    Extension(db): Extension<Database>,
+    Query(params): Query<NewUserQuery>,
+) -> Result<Json<User>, AppError> {
+    let user = User::new(params.name, params.email);
+    db.new_user(&user).await?;
+    Ok(Json(user))
+}
 
 #[derive(Deserialize)]
 pub struct UploadQuery {
@@ -22,14 +37,14 @@ pub struct UploadQuery {
     pub activity_type: ActivityType,
 }
 
-pub async fn upload_gpx(
+pub async fn new_activity(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
     Query(params): Query<UploadQuery>,
     mut multipart: Multipart,
 ) -> Result<Json<Activity>, AppError> {
     let mut filename = String::new();
-    let mut file_bytes = Bytes::new();
+    let mut file_bytes = BytesMut::new();
 
     while let Some(field) = multipart
         .next_field()
@@ -40,16 +55,18 @@ pub async fn upload_gpx(
 
         if name == "file" {
             filename = field.file_name().unwrap_or("unknown.gpx").to_string();
-            file_bytes = field
+            let chunk = field
                 .bytes()
                 .await
                 .map_err(|_| AppError::InvalidInput("Failed to read file data".to_string()))?;
+            file_bytes.extend(chunk);
         }
     }
 
     if file_bytes.is_empty() {
         return Err(AppError::InvalidInput("No file provided".to_string()));
     }
+    let file_bytes = file_bytes.freeze();
 
     let activity_id = Uuid::new_v4();
 

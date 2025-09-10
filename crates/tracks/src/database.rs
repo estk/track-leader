@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-use crate::models::{Activity, ActivityMetrics};
+use crate::models::{Activity, ActivityMetrics, User};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -53,29 +53,13 @@ impl Database {
         .fetch_optional(&self.pool)
         .await?;
 
-        // let activity = row.map(|r| Activity {
-        //     id: r.id,
-        //     user_id: r.user_id,
-        //     activity_type: r.activity_type,
-        //     filename: r.filename,
-        //     object_store_path: r.object_store_path,
-        //     metrics: ActivityMetrics {
-        //         distance: r.distance,
-        //         ascent: r.ascent,
-        //         descent: r.descent,
-        //         duration: r.duration,
-        //     },
-        //     submitted_at: r.submitted_at,
-        //     created_at: r.created_at,
-        // });
-
         Ok(activity)
     }
 
     pub async fn get_user_activities(&self, user_id: Uuid) -> Result<Vec<Activity>, AppError> {
         let activities: Vec<Activity> = sqlx::query_as(
             r#"
-            SELECT id, user_id, activity_type as "activity_type: _", filename, object_store_path,
+            SELECT id, user_id, activity_type, filename, object_store_path,
                    distance, ascent, descent, duration,
                    submitted_at, created_at
             FROM activities
@@ -87,25 +71,23 @@ impl Database {
         .fetch_all(&self.pool)
         .await?;
 
-        // let activities = rows
-        //     .into_iter()
-        //     .map(|r| Activity {
-        //         id: r.id,
-        //         user_id: r.user_id,
-        //         activity_type: r.activity_type,
-        //         filename: r.filename,
-        //         object_store_path: r.object_store_path,
-        //         metrics: ActivityMetrics {
-        //             distance: r.distance,
-        //             ascent: r.ascent,
-        //             descent: r.descent,
-        //             duration: r.duration,
-        //         },
-        //         submitted_at: r.submitted_at,
-        //         created_at: r.created_at,
-        //     })
-        //     .collect();
-
         Ok(activities)
+    }
+
+    pub async fn new_user(&self, user: &User) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            INSERT INTO users (id, name, email, created_at)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            user.id,
+            user.name,
+            user.email,
+            user.created_at
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }

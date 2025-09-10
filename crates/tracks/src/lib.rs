@@ -15,7 +15,9 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     database::Database,
-    handlers::{download_gpx_file, get_activity, get_user_activities, health_check, upload_gpx},
+    handlers::{
+        download_gpx_file, get_activity, get_user_activities, health_check, new_activity, new_user,
+    },
     object_store_service::ObjectStoreService,
 };
 
@@ -30,7 +32,8 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
 
     Router::new()
         .route("/health", get(health_check))
-        .route("/activities/upload", post(upload_gpx))
+        .route("/users/new", get(new_user))
+        .route("/activities/new", post(new_activity))
         .route("/activities/{id}", get(get_activity))
         .route("/activities/{id}/download", get(download_gpx_file))
         .route("/activities", get(get_user_activities))

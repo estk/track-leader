@@ -4,6 +4,26 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct User {
+    pub id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub created_at: OffsetDateTime,
+}
+impl User {
+    pub fn new(email: String, name: String) -> Self {
+        let id = Uuid::new_v4();
+        let created_at = OffsetDateTime::now_utc();
+        Self {
+            id,
+            email,
+            name,
+            created_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Activity {
     pub id: Uuid,
     pub user_id: Uuid,
