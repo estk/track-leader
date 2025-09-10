@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use time::UtcDateTime;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -12,8 +12,8 @@ pub struct Activity {
     pub object_store_path: String,
     #[sqlx(flatten)]
     pub metrics: ActivityMetrics,
-    pub submitted_at: UtcDateTime,
-    pub created_at: UtcDateTime,
+    pub submitted_at: OffsetDateTime,
+    pub created_at: OffsetDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]

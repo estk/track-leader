@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use gpx::{read, Gpx, Waypoint};
-use time::{Duration, OffsetDateTime, UtcDateTime};
+use time::{Duration, OffsetDateTime};
 
 use crate::{
     errors::AppError,
@@ -12,7 +12,7 @@ pub struct GpxProcessor;
 pub struct ProcessedGpx {
     pub metrics: ActivityMetrics,
     pub activity_type: ActivityType,
-    pub created_at: UtcDateTime,
+    pub created_at: OffsetDateTime,
 }
 
 impl GpxProcessor {
@@ -44,7 +44,7 @@ impl GpxProcessor {
         Ok(ProcessedGpx {
             metrics,
             activity_type: ActivityType::Other,
-            created_at: created_at.to_utc(),
+            created_at,
         })
     }
 

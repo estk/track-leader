@@ -67,7 +67,7 @@ pub async fn upload_gpx(
         metrics: processed_gpx.metrics,
         filename,
         activity_type: processed_gpx.activity_type,
-        submitted_at: time::UtcDateTime::now(),
+        submitted_at: time::UtcDateTime::now().to_offset(time::UtcOffset::UTC),
         created_at: processed_gpx.created_at,
 
         object_store_path,
