@@ -20,3 +20,5 @@ object_store = { version = "0.12", features = ["http"] }
 bytes = "1.0"
 time = { version = "0.3.43", features = ["serde"] }
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
+rayon = "1.11.0"
+tracing = "0.1.41"

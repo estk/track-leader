@@ -1,8 +1,10 @@
+pub mod activity_queue;
 pub mod database;
 pub mod errors;
 pub mod handlers;
 pub mod models;
 pub mod object_store_service;
+pub mod scoring;
 
 use axum::{
     http::Method,
@@ -13,6 +15,7 @@ use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
+    activity_queue::ActivityQueue,
     database::Database,
     handlers::{
         download_gpx_file, get_activity, get_user_activities, health_check, new_activity, new_user,
@@ -22,6 +25,7 @@ use crate::{
 
 pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
     let db = Database::new(pool);
+    let aq = ActivityQueue::new(db.clone());
     let store = ObjectStoreService::new_local(object_store_path);
 
     let cors = CorsLayer::new()
@@ -38,6 +42,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/activities", get(get_user_activities))
         .layer(Extension(db))
         .layer(Extension(store))
+        .layer(Extension(aq))
         .layer(cors)
 }
 

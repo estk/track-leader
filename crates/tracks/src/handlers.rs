@@ -13,6 +13,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
+    activity_queue::ActivityQueue,
     database::Database,
     errors::AppError,
     models::{Activity, ActivityType, User},
@@ -44,6 +45,7 @@ pub struct UploadQuery {
 pub async fn new_activity(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
+    Extension(aq): Extension<ActivityQueue>,
     Query(params): Query<UploadQuery>,
     TypedHeader(content_type): TypedHeader<ContentType>,
     mut multipart: Multipart,
@@ -79,7 +81,7 @@ pub async fn new_activity(
 
     // Store the file in object store
     let object_store_path = store
-        .store_file(params.user_id, activity_id, file_type, file_bytes)
+        .store_file(params.user_id, activity_id, file_type, file_bytes.clone())
         .await?;
 
     let activity = Activity {
@@ -91,6 +93,8 @@ pub async fn new_activity(
 
         object_store_path,
     };
+    aq.submit(activity.id, file_type, file_bytes)
+        .map_err(AppError::Queue)?;
 
     db.save_activity(&activity).await?;
     Ok(Json(activity))
