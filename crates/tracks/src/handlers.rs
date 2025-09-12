@@ -4,16 +4,19 @@ use axum::{
     response::{IntoResponse, Json, Response},
     Extension,
 };
-use bytes::{Bytes, BytesMut};
+use axum_extra::{
+    headers::{ContentType, Mime},
+    TypedHeader,
+};
+use bytes::BytesMut;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    database::{self, Database},
+    database::Database,
     errors::AppError,
-    gpx_processor::GpxProcessor,
     models::{Activity, ActivityType, User},
-    object_store_service::ObjectStoreService,
+    object_store_service::{FileType, ObjectStoreService},
 };
 
 #[derive(Deserialize)]
@@ -35,57 +38,56 @@ pub async fn new_user(
 pub struct UploadQuery {
     pub user_id: Uuid,
     pub activity_type: ActivityType,
+    pub name: String,
 }
 
 pub async fn new_activity(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
     Query(params): Query<UploadQuery>,
+    TypedHeader(content_type): TypedHeader<ContentType>,
     mut multipart: Multipart,
 ) -> Result<Json<Activity>, AppError> {
-    let mut filename = String::new();
-    let mut file_bytes = BytesMut::new();
-
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|_| AppError::InvalidInput("Failed to process multipart data".to_string()))?
-    {
-        let name = field.name().unwrap_or("").to_string();
-
-        if name == "file" {
-            filename = field.file_name().unwrap_or("unknown.gpx").to_string();
-            let chunk = field
-                .bytes()
-                .await
-                .map_err(|_| AppError::InvalidInput("Failed to read file data".to_string()))?;
-            file_bytes.extend(chunk);
-        }
-    }
-
-    if file_bytes.is_empty() {
-        return Err(AppError::InvalidInput("No file provided".to_string()));
-    }
-    let file_bytes = file_bytes.freeze();
-
     let activity_id = Uuid::new_v4();
+    let name = params.name;
+    let activity_type = params.activity_type;
+    let file_type = {
+        let mime: Mime = content_type.into();
+        FileType::from(mime)
+    };
 
-    // Process GPX for metrics calculation
-    let processed_gpx = GpxProcessor::process_gpx(&file_bytes)?;
+    let file_bytes =
+        {
+            let mut file_bytes = BytesMut::new();
+
+            while let Some(field) = multipart.next_field().await.map_err(|_| {
+                AppError::InvalidInput("Failed to process multipart data".to_string())
+            })? {
+                if field.name() == Some("file") {
+                    let chunk = field.bytes().await.map_err(|_| {
+                        AppError::InvalidInput("Failed to read file data".to_string())
+                    })?;
+                    file_bytes.extend(chunk);
+                }
+            }
+
+            if file_bytes.is_empty() {
+                return Err(AppError::InvalidInput("No file provided".to_string()));
+            }
+            file_bytes.freeze()
+        };
 
     // Store the file in object store
     let object_store_path = store
-        .store_file(file_bytes, params.user_id, &filename, activity_id)
+        .store_file(params.user_id, activity_id, file_type, file_bytes)
         .await?;
 
     let activity = Activity {
         id: Uuid::new_v4(),
         user_id: params.user_id,
-        metrics: processed_gpx.metrics,
-        filename,
-        activity_type: processed_gpx.activity_type,
+        name,
+        activity_type,
         submitted_at: time::UtcDateTime::now().to_offset(time::UtcOffset::UTC),
-        created_at: processed_gpx.created_at,
 
         object_store_path,
     };
@@ -130,7 +132,7 @@ pub async fn download_gpx_file(
     headers.insert(header::CONTENT_TYPE, "application/gpx+xml".parse().unwrap());
     headers.insert(
         header::CONTENT_DISPOSITION,
-        format!("attachment; filename=\"{}\"", activity.filename)
+        format!("attachment; filename=\"{}\"", activity.name)
             .parse()
             .unwrap(),
     );

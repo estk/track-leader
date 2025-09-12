@@ -16,6 +16,7 @@ tower = "0.5"
 tower-http = { version = "0.5", features = ["fs", "cors"] }
 anyhow = "1.0"
 thiserror = "2.0"
-object_store = { version = "0.8", features = ["http"] }
+object_store = { version = "0.12", features = ["http"] }
 bytes = "1.0"
 time = { version = "0.3.43", features = ["serde"] }
+axum-extra = { version = "0.10.1", features = ["typed-header"] }

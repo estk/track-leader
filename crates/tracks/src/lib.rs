@@ -1,6 +1,5 @@
 pub mod database;
 pub mod errors;
-pub mod gpx_processor;
 pub mod handlers;
 pub mod models;
 pub mod object_store_service;

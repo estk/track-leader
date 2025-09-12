@@ -126,3 +126,11 @@ curl "http://localhost:3000/activities?user_id=123e4567-e89b-12d3-a456-426614174
 # Download original GPX file
 curl http://localhost:3000/activities/123e4567-e89b-12d3-a456-426614174000/download -o activity.gpx
 ```
+
+# Examples
+
+```bash
+curl '0.0.0.0:3000/users/new?name=foo&email=foo@bar.com'
+curl '0.0.0.0:3000/activities/new?user_id=ae765cc8-674a-4045-a8a4-2f9e330176c0&activity_type=Cycling' -F file="@/Users/estk/Downloads/reno tour.gpx"
+curl '0.0.0.0:3000/activities?user_id=ae765cc8-674a-4045-a8a4-2f9e330176c0&'
+ ```

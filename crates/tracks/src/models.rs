@@ -28,20 +28,9 @@ pub struct Activity {
     pub id: Uuid,
     pub user_id: Uuid,
     pub activity_type: ActivityType,
-    pub filename: String,
+    pub name: String,
     pub object_store_path: String,
-    #[sqlx(flatten)]
-    pub metrics: ActivityMetrics,
     pub submitted_at: OffsetDateTime,
-    pub created_at: OffsetDateTime,
-}
-
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct ActivityMetrics {
-    pub distance: f64,
-    pub ascent: f64,
-    pub descent: f64,
-    pub duration: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::Type)]
@@ -49,9 +38,10 @@ pub struct ActivityMetrics {
 pub enum ActivityType {
     Running,
     Cycling,
+    MountainBiking,
     Walking,
     Hiking,
-    Other,
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-use crate::models::{Activity, ActivityMetrics, User};
+use crate::models::{Activity, User};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -16,22 +16,16 @@ impl Database {
     pub async fn save_activity(&self, activity: &Activity) -> Result<(), AppError> {
         sqlx::query!(
             r#"
-            INSERT INTO activities (id, user_id, activity_type, filename, object_store_path,
-                                    distance, ascent, descent, duration,
-                                    submitted_at, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO activities (id, user_id, activity_type, name, object_store_path,
+                                    submitted_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             activity.id,
             activity.user_id,
             activity.activity_type as _,
-            activity.filename,
+            activity.name,
             activity.object_store_path,
-            activity.metrics.distance,
-            activity.metrics.ascent,
-            activity.metrics.descent,
-            activity.metrics.duration,
             activity.submitted_at.into(),
-            activity.created_at.into(),
         )
         .execute(&self.pool)
         .await?;

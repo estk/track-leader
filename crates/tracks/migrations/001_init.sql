@@ -14,14 +14,9 @@ CREATE TABLE activities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     activity_type activity_type NOT NULL,
-    filename TEXT NOT NULL,
+    name TEXT NOT NULL,
     object_store_path TEXT NOT NULL,
-    distance DOUBLE PRECISION NOT NULL DEFAULT 0,
-    ascent DOUBLE PRECISION NOT NULL DEFAULT 0,
-    descent DOUBLE PRECISION NOT NULL DEFAULT 0,
-    duration BIGINT NOT NULL DEFAULT 0,
-    submitted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    submitted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Create indexes for better query performance

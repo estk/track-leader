@@ -1,40 +1,74 @@
+use axum_extra::headers::Mime;
 use bytes::Bytes;
-use object_store::{local::LocalFileSystem, path::Path, ObjectStore};
+use object_store::{local::LocalFileSystem, path::Path, ObjectStore, PutOptions};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::errors::AppError;
 
-#[derive(Clone)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FileType {
+    Gpx,
+    Other,
+}
+impl From<Mime> for FileType {
+    fn from(mime: Mime) -> Self {
+        match mime.type_().as_str() {
+            "application" => match mime.subtype().as_str() {
+                "gpx+xml" => FileType::Gpx,
+                _ => FileType::Other,
+            },
+            _ => FileType::Other,
+        }
+    }
+}
+
+impl FileType {
+    pub fn as_mime_str(self) -> &'static str {
+        match self {
+            FileType::Gpx => "application/gpx+xml",
+            FileType::Other => "application/octet-stream",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ObjectStoreService {
     store: Arc<dyn ObjectStore>,
-    base_path: String,
+    _base_path: String,
 }
 
 impl ObjectStoreService {
     pub fn new_local(base_path: String) -> Self {
         let store = Arc::new(LocalFileSystem::new_with_prefix(&base_path).unwrap());
-        Self { store, base_path }
+        Self {
+            store,
+            _base_path: base_path,
+        }
     }
 
     pub async fn store_file(
         &self,
-        content: Bytes,
         user_id: Uuid,
-        filename: &str,
         activity_id: Uuid,
+        file_type: FileType,
+        content: Bytes,
     ) -> Result<String, AppError> {
-        let extension = std::path::Path::new(filename)
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("gpx");
+        assert!(matches!(file_type, FileType::Gpx));
 
-        let object_path = format!("activities/{}/{}.{}", user_id, activity_id, extension);
+        let object_path = format!("activities/{user_id}/{activity_id}",);
 
         let path = Path::from(object_path.clone());
 
+        let mut opts = PutOptions::default();
+        opts.attributes.insert(
+            object_store::Attribute::ContentType,
+            file_type.as_mime_str().into(),
+        );
+
         self.store
-            .put(&path, content.into())
+            .put_opts(&path, content.into(), opts)
             .await
             .map_err(|e| AppError::InvalidInput(format!("Failed to store file: {}", e)))?;
 
