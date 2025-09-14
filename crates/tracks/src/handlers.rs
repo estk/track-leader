@@ -93,7 +93,8 @@ pub async fn new_activity(
 
         object_store_path,
     };
-    aq.submit(activity.id, file_type, file_bytes)
+    let scoring_metrics = db.get_user_scoring_metrics(params.user_id).await?;
+    aq.submit(activity.id, scoring_metrics, file_type, file_bytes)
         .map_err(AppError::Queue)?;
 
     db.save_activity(&activity).await?;

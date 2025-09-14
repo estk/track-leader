@@ -1,5 +1,6 @@
 use crate::errors::AppError;
-use crate::models::{Activity, User};
+use crate::models::{Activity, Scores, TrackScoringMetricTag, User, UserPreferences};
+use enumflags2::BitFlags;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -78,6 +79,43 @@ impl Database {
             user.name,
             user.email,
             user.created_at
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_user_scoring_metrics(
+        &self,
+        uid: Uuid,
+    ) -> Result<BitFlags<TrackScoringMetricTag>, AppError> {
+        let prefs: UserPreferences = sqlx::query_as(
+            r#"
+            SELECT user_id, scoring_metric_tags
+            FROM user_preferences
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(uid)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(prefs.scoring_metric_tags)
+    }
+
+    pub async fn save_scores(&self, scores: Scores) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            INSERT INTO scores (user_id, activity_id, distance, duration, elevation_gain, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+            uid,
+            activity_id,
+            scores.distance,
+            scores.duration,
+            scores.elevation_gain,
+            time::SystemTime::now()
         )
         .execute(&self.pool)
         .await?;

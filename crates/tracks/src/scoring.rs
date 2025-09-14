@@ -1,6 +1,8 @@
-use enumflags2::{bitflags, BitFlags};
+use enumflags2::BitFlags;
 use geo::{geometry::Point, Distance as _, Haversine};
 use gpx::Gpx;
+
+use crate::models::{Scores, TrackScoringMetricTag};
 
 type TrackPoint = gpx::Waypoint;
 
@@ -25,21 +27,6 @@ pub fn score_track(tags: BitFlags<TrackScoringMetricTag>, track: &Gpx) -> Scores
     acc.finish()
 }
 
-#[bitflags]
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum TrackScoringMetricTag {
-    Distance,
-    Duration,
-    ElevationGain,
-}
-
-#[derive(Debug, Clone, Default)]
-struct Scores {
-    distance: f64,
-    duration: f64,
-    elevation_gain: f64,
-}
 #[derive(Debug, Clone, Default)]
 struct Metrics {
     distance: Option<DistanceMetric>,
@@ -108,5 +95,59 @@ impl TrackMetric for DistanceMetric {
 
     fn finish(&mut self) -> f64 {
         self.total_distance
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct DurationMetric {
+    start_time: Option<gpx::Time>,
+    end_time: Option<gpx::Time>,
+}
+
+impl TrackMetric for DurationMetric {
+    type Score = f64;
+    fn next_point(&mut self, wpt: &TrackPoint) {
+        if let Some(time) = wpt.time {
+            if self.start_time.is_none() {
+                self.start_time = Some(time);
+            }
+            self.end_time = Some(time);
+        }
+    }
+
+    fn finish(&mut self) -> f64 {
+        match (self.start_time, self.end_time) {
+            (Some(start), Some(end)) => {
+                let start_dt: time::OffsetDateTime = start.into();
+                let end_dt: time::OffsetDateTime = end.into();
+                (end_dt - start_dt).as_seconds_f64()
+            }
+            _ => 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ElevationGainMetric {
+    total_gain: f64,
+    last_elevation: Option<f64>,
+}
+
+impl TrackMetric for ElevationGainMetric {
+    type Score = f64;
+    fn next_point(&mut self, wpt: &TrackPoint) {
+        if let Some(elevation) = wpt.elevation {
+            if let Some(last_elev) = self.last_elevation {
+                let gain = elevation - last_elev;
+                if gain > 0.0 {
+                    self.total_gain += gain;
+                }
+            }
+            self.last_elevation = Some(elevation);
+        }
+    }
+
+    fn finish(&mut self) -> f64 {
+        self.total_gain
     }
 }
