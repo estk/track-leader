@@ -1,13 +1,14 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
-use bytes::Bytes;
+use bytes::{Buf as _, Bytes};
+use gpx::Gpx;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use crate::{database::Database, object_store_service::FileType};
+use crate::{database::Database, object_store_service::FileType, scoring};
 
 #[derive(Clone)]
 pub struct ActivityQueue {
@@ -48,7 +49,14 @@ impl ActivityQueue {
         let db = self.db.clone();
         let trt = self.trt.clone();
         self.pool.spawn(move || {
-            let scores = process_gpx(bytes);
+            let parsed_track = gpx::read(bytes.reader()).unwrap();
+            let scoring_metrics = db.get_user_scoring_metrics(user_id).unwrap();
+            let scores = HashMap::new();
+
+            for sm in scoring_metrics {
+                let score = scoring::score_track(sm, parsed_track);
+                scores.insert(sm, score);
+            }
 
             trt.block_on(async move {
                 db.save_scores(scores).await;
