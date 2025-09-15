@@ -4,12 +4,11 @@ use std::{
 };
 
 use bytes::{Buf as _, Bytes};
-use enumflags2::BitFlags;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use crate::{
-    database::Database, models::TrackScoringMetricTag, object_store_service::FileType, scoring,
+    database::Database, models::TrackScoringMetricTags, object_store_service::FileType, scoring,
 };
 
 #[derive(Clone)]
@@ -45,8 +44,9 @@ impl ActivityQueue {
     }
     pub fn submit(
         &self,
+        uid: Uuid,
         id: Uuid,
-        scoring_metrics: BitFlags<TrackScoringMetricTag>,
+        scoring_metrics: TrackScoringMetricTags,
         ft: FileType,
         bytes: Bytes,
     ) -> anyhow::Result<()> {
@@ -62,7 +62,7 @@ impl ActivityQueue {
             let scores = scoring::score_track(scoring_metrics, &parsed_track);
 
             trt.block_on(async move {
-                db.save_scores(scores).await;
+                db.save_scores(uid, id, scores).await.unwrap();
             });
             tx.send(id).unwrap();
         });

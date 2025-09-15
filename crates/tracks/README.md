@@ -2,6 +2,12 @@
 
 A Rust service built with Axum for processing GPS activity files, storing them using object_store, and saving activity metadata in PostgreSQL.
 
+## EAS notes
+
+### Todo
+
+- Implement score context that will place scores in sub-categories based on time/location/user_age/user_gender
+
 ## Features
 
 - **GPX File Processing**: Parse GPX files and calculate activity metrics

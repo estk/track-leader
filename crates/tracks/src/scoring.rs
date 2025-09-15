@@ -1,8 +1,7 @@
-use enumflags2::BitFlags;
 use geo::{geometry::Point, Distance as _, Haversine};
 use gpx::Gpx;
 
-use crate::models::{Scores, TrackScoringMetricTag};
+use crate::models::{Scores, TrackScoringMetricTag, TrackScoringMetricTags};
 
 type TrackPoint = gpx::Waypoint;
 
@@ -12,14 +11,14 @@ pub trait TrackMetric {
     fn finish(&mut self) -> Self::Score;
 }
 
-pub fn score_track(tags: BitFlags<TrackScoringMetricTag>, track: &Gpx) -> Scores {
+pub fn score_track(tags: TrackScoringMetricTags, track: &Gpx) -> Scores {
     let mut acc = Metrics::new(tags);
 
     // todo: revisit
     for track in &track.tracks {
         for seg in &track.segments {
             for point in &seg.points {
-                acc.next_point(&point);
+                acc.next_point(point);
             }
         }
     }
@@ -34,7 +33,7 @@ struct Metrics {
     elevation_gain: Option<ElevationGainMetric>,
 }
 impl Metrics {
-    fn new(tags: BitFlags<TrackScoringMetricTag>) -> Self {
+    fn new(tags: TrackScoringMetricTags) -> Self {
         let mut this = Self::default();
         for t in tags {
             match t {

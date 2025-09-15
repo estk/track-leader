@@ -53,20 +53,47 @@ pub struct CreateActivityRequest {
 
 #[bitflags]
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
-#[repr(u8)]
+#[sqlx(no_pg_array)]
+#[repr(u32)]
 pub enum TrackScoringMetricTag {
     Distance,
     Duration,
     ElevationGain,
 }
 
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
+#[repr(transparent)]
+pub struct TrackScoringMetricTags(BitFlags<TrackScoringMetricTag>);
+impl IntoIterator for TrackScoringMetricTags {
+    type Item = TrackScoringMetricTag;
+    type IntoIter = enumflags2::Iter<TrackScoringMetricTag>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+impl From<i32> for TrackScoringMetricTags {
+    fn from(value: i32) -> Self {
+        Self(BitFlags::from_bits_truncate(value as u32))
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, FromRow)]
 pub struct UserPreferences {
     pub user_id: Uuid,
-    pub scoring_metric_tags: BitFlags<TrackScoringMetricTag>,
+    #[sqlx(try_from = "i32")]
+    pub scoring_metric_tags: TrackScoringMetricTags,
 }
 
-#[derive(Debug, Clone, Default, FromRow)]
+#[derive(Debug, Clone, FromRow)]
+pub struct ScoresRow {
+    pub user_id: Uuid,
+    pub activity_id: Uuid,
+    #[sqlx(flatten)]
+    pub scores: Scores,
+    pub created_at: OffsetDateTime,
+}
+#[derive(Debug, Clone, Default, sqlx::Type)]
 pub struct Scores {
     pub distance: f64,
     pub duration: f64,
