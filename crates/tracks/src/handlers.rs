@@ -123,7 +123,7 @@ pub struct UserActivitiesQuery {
 
 pub async fn get_user_activities(
     Extension(db): Extension<Database>,
-    Query(params): Query<UserActivitiesQuery>,
+    Query(_params): Query<UserActivitiesQuery>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<Activity>>, AppError> {
     let activities = db.get_user_activities(id).await?;
