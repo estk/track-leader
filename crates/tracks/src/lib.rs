@@ -39,7 +39,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/activities/new", post(new_activity))
         .route("/activities/{id}", get(get_activity))
         .route("/activities/{id}/download", get(download_gpx_file))
-        .route("/activities", get(get_user_activities))
+        .route("/users/{id}/activities", get(get_user_activities))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

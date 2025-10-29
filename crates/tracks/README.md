@@ -6,7 +6,9 @@ A Rust service built with Axum for processing GPS activity files, storing them u
 
 ### Todo
 
-- Implement score context that will place scores in sub-categories based on time/location/user_age/user_gender
+- Allow for promotion from activity to route
+- When promoting an activity to a route, can we validate the quality of the trace?
+- Implement score filter that will place scores in sub-categories based on time/location/user_age/user_gender
 
 ## Features
 
