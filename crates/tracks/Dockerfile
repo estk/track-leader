@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.84 as builder
+FROM rust:1.90 as builder
 
 WORKDIR /app
 
@@ -18,6 +18,7 @@ RUN rm -rf src
 # Copy source code
 COPY src ./src
 COPY migrations ./migrations
+COPY .sqlx ./sqlx
 
 # Build the actual application
 RUN touch src/main.rs && cargo build --release --bin tracks

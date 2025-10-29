@@ -12,12 +12,12 @@
             "name": "activity_type",
             "kind": {
               "Enum": [
-                "run",
-                "bike",
-                "walk",
-                "hike",
-                "mtb",
-                "other"
+                "walking",
+                "running",
+                "hiking",
+                "road_cycling",
+                "mountain_biking",
+                "unknown"
               ]
             }
           }

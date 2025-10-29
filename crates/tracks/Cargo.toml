@@ -16,7 +16,7 @@ tower = "0.5"
 tower-http = { version = "0.5", features = ["fs", "cors"] }
 anyhow = "1.0"
 thiserror = "2.0"
-object_store = { version = "0.12", features = ["http"] }
+object_store = { version = "0.12.4", features = ["http"] }
 bytes = "1.0"
 time = { version = "0.3.43", features = ["serde"] }
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
@@ -25,3 +25,4 @@ tracing = "0.1.41"
 enumflags2 = { version = "0.7.12", features = ["serde"] }
 enum-map = "2.7.3"
 geo = "0.31.0"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }

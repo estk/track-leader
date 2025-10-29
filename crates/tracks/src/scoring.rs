@@ -1,7 +1,7 @@
 use geo::{geometry::Point, Distance as _, Haversine};
 use gpx::Gpx;
 
-use crate::models::{Scores, TrackScoringMetricTag, TrackScoringMetricTags};
+use crate::models::{Scores, };
 
 type TrackPoint = gpx::Waypoint;
 
@@ -11,8 +11,8 @@ pub trait TrackMetric {
     fn finish(&mut self) -> Self::Score;
 }
 
-pub fn score_track(tags: TrackScoringMetricTags, track: &Gpx) -> Scores {
-    let mut acc = Metrics::new(tags);
+pub fn score_track( track: &Gpx) -> Scores {
+    let mut acc = Metrics::new();
 
     // todo: revisit
     for track in &track.tracks {
@@ -33,18 +33,12 @@ struct Metrics {
     elevation_gain: Option<ElevationGainMetric>,
 }
 impl Metrics {
-    fn new(tags: TrackScoringMetricTags) -> Self {
-        let mut this = Self::default();
-        for t in tags {
-            match t {
-                TrackScoringMetricTag::Distance => this.distance = Some(DistanceMetric::default()),
-                TrackScoringMetricTag::Duration => this.duration = Some(DurationMetric::default()),
-                TrackScoringMetricTag::ElevationGain => {
-                    this.elevation_gain = Some(ElevationGainMetric::default())
-                }
-            };
+    fn new() -> Self {
+        Self {
+            distance: Some(DistanceMetric::default()),
+            duration: Some(DurationMetric::default()),
+            elevation_gain: Some(ElevationGainMetric::default()),
         }
-        this
     }
 }
 impl TrackMetric for Metrics {

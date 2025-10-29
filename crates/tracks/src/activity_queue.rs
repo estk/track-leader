@@ -8,7 +8,7 @@ use tokio::runtime::Runtime;
 use uuid::Uuid;
 
 use crate::{
-    database::Database, models::TrackScoringMetricTags, object_store_service::FileType, scoring,
+    database::Database, object_store_service::FileType, scoring,
 };
 
 #[derive(Clone)]
@@ -46,7 +46,6 @@ impl ActivityQueue {
         &self,
         uid: Uuid,
         id: Uuid,
-        scoring_metrics: TrackScoringMetricTags,
         ft: FileType,
         bytes: Bytes,
     ) -> anyhow::Result<()> {
@@ -59,7 +58,7 @@ impl ActivityQueue {
         self.pool.spawn(move || {
             let parsed_track = gpx::read(bytes.reader()).unwrap();
 
-            let scores = scoring::score_track(scoring_metrics, &parsed_track);
+            let scores = scoring::score_track(&parsed_track);
 
             trt.block_on(async move {
                 db.save_scores(uid, id, scores).await.unwrap();

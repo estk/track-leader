@@ -5,8 +5,7 @@ use axum::{
     Extension,
 };
 use axum_extra::{
-    headers::{ContentType, Mime},
-    TypedHeader,
+    headers::{ContentType, HeaderMapExt, Mime},
 };
 use bytes::BytesMut;
 use serde::Deserialize;
@@ -35,6 +34,13 @@ pub async fn new_user(
     Ok(Json(user))
 }
 
+pub async fn all_users(
+    Extension(db): Extension<Database>,
+) -> Result<Json<Vec<User>>, AppError> {
+    let users = db.all_users().await?;
+    Ok(Json(users))
+}
+
 #[derive(Deserialize)]
 pub struct UploadQuery {
     pub user_id: Uuid,
@@ -47,37 +53,42 @@ pub async fn new_activity(
     Extension(store): Extension<ObjectStoreService>,
     Extension(aq): Extension<ActivityQueue>,
     Query(params): Query<UploadQuery>,
-    TypedHeader(content_type): TypedHeader<ContentType>,
     mut multipart: Multipart,
 ) -> Result<Json<Activity>, AppError> {
     let activity_id = Uuid::new_v4();
     let name = params.name;
     let activity_type = params.activity_type;
-    let file_type = {
-        let mime: Mime = content_type.into();
-        FileType::from(mime)
-    };
 
-    let file_bytes =
+
+    let (mime_hdr, file_bytes) =
         {
             let mut file_bytes = BytesMut::new();
+            let mut mime_hdr = None;
 
             while let Some(field) = multipart.next_field().await.map_err(|_| {
                 AppError::InvalidInput("Failed to process multipart data".to_string())
             })? {
                 if field.name() == Some("file") {
+                    mime_hdr = field.headers().typed_get::<ContentType>();
                     let chunk = field.bytes().await.map_err(|_| {
                         AppError::InvalidInput("Failed to read file data".to_string())
                     })?;
                     file_bytes.extend(chunk);
+                } else {
+                    tracing::warn!("Unexpected field: {:?}", field.name());
                 }
             }
 
             if file_bytes.is_empty() {
                 return Err(AppError::InvalidInput("No file provided".to_string()));
             }
-            file_bytes.freeze()
+            (mime_hdr, file_bytes.freeze())
         };
+
+    let file_type = mime_hdr.map_or(FileType::Other, |ct| {
+        let mime = Mime::from(ct);
+        FileType::from(mime)
+    });
 
     // Store the file in object store
     let object_store_path = store
@@ -93,11 +104,10 @@ pub async fn new_activity(
 
         object_store_path,
     };
-    let scoring_metrics = db.get_user_scoring_metrics(params.user_id).await?;
+
     aq.submit(
         params.user_id,
         activity.id,
-        scoring_metrics,
         file_type,
         file_bytes,
     )

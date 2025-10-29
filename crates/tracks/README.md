@@ -96,8 +96,10 @@ Note: Original GPX files are stored in the object store rather than as individua
 
 ### Option 2: Manual Setup
 
-1. Set up PostgreSQL databasea: `docker run --name pg -e POSTGRES_PASSWORD=pg -p 5432:5432 -d postgres`
-2. Set environment variable: `DATABASE_URL=postgres://postgres:pg@localhost:5432`
+Todo: replace this image with postgis/postgis when they have a proper multiarch image
+
+1. Set up PostgreSQL databasea: `docker run --name pg -e POSTGRES_PASSWORD=pg -p 5432:5432 -d kartoza/postgis`
+2. Set environment variable: `DATABASE_URL=postgres://docker:pg@localhost:5432`
 3. `cargo sqlx migrate run && cargo sqlx prepare`
 3. Run the service: `cargo run --bin tracks`
 

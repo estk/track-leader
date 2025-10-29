@@ -16,10 +16,16 @@ impl From<Mime> for FileType {
     fn from(mime: Mime) -> Self {
         match mime.type_().as_str() {
             "application" => match mime.subtype().as_str() {
-                "gpx+xml" => FileType::Gpx,
-                _ => FileType::Other,
+                "gpx" => FileType::Gpx,
+                s => {
+                    tracing::warn!("Unknown mime subtype: {}", s);
+                    FileType::Other
+                }
             },
-            _ => FileType::Other,
+            s => {
+                tracing::warn!("Unknown mime type: {}", s);
+                FileType::Other
+            }
         }
     }
 }
@@ -55,17 +61,19 @@ impl ObjectStoreService {
         file_type: FileType,
         content: Bytes,
     ) -> Result<String, AppError> {
-        assert!(matches!(file_type, FileType::Gpx));
+        assert!(matches!(file_type, FileType::Gpx), "got: {file_type:?}");
 
         let object_path = format!("activities/{user_id}/{activity_id}",);
 
         let path = Path::from(object_path.clone());
 
-        let mut opts = PutOptions::default();
-        opts.attributes.insert(
-            object_store::Attribute::ContentType,
-            file_type.as_mime_str().into(),
-        );
+        let opts = PutOptions::default();
+
+        // todo re-enable when using proper blob storage
+        // opts.attributes.insert(
+        //     object_store::Attribute::ContentType,
+        //     file_type.as_mime_str().into(),
+        // );
 
         self.store
             .put_opts(&path, content.into(), opts)

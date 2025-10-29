@@ -18,7 +18,7 @@ use crate::{
     activity_queue::ActivityQueue,
     database::Database,
     handlers::{
-        download_gpx_file, get_activity, get_user_activities, health_check, new_activity, new_user,
+        all_users, download_gpx_file, get_activity, get_user_activities, health_check, new_activity, new_user
     },
     object_store_service::ObjectStoreService,
 };
@@ -36,6 +36,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/users/new", get(new_user))
+        .route("/users", get(all_users))
         .route("/activities/new", post(new_activity))
         .route("/activities/{id}", get(get_activity))
         .route("/activities/{id}/download", get(download_gpx_file))

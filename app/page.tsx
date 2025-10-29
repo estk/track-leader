@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import TrackList from "@/components/TrackList";
 import TrackUpload from "@/components/TrackUpload";
-import { Track } from "@/lib/database";
 
 export default function Home() {
   const [tracks, setTracks] = useState<Track[]>([]);

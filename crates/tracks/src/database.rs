@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-use crate::models::{Activity, Scores, TrackScoringMetricTags, User, UserPreferences};
+use crate::models::{Activity, Scores, User};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -53,9 +53,7 @@ impl Database {
     pub async fn get_user_activities(&self, user_id: Uuid) -> Result<Vec<Activity>, AppError> {
         let activities: Vec<Activity> = sqlx::query_as(
             r#"
-            SELECT id, user_id, activity_type, filename, object_store_path,
-                   distance, ascent, descent, duration,
-                   submitted_at, created_at
+            SELECT id, user_id, activity_type, name, object_store_path, submitted_at
             FROM activities
             WHERE user_id = $1
             ORDER BY submitted_at DESC
@@ -85,23 +83,21 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_user_scoring_metrics(
-        &self,
-        uid: Uuid,
-    ) -> Result<TrackScoringMetricTags, AppError> {
-        let prefs: UserPreferences = sqlx::query_as(
+    pub async fn all_users(&self) -> Result<Vec<User>, AppError> {
+        let users = sqlx::query_as!(
+            User,
             r#"
-            SELECT user_id, scoring_metric_tags
-            FROM user_preferences
-            WHERE user_id = $1
+            SELECT id, name, email, created_at
+            FROM users
+            ORDER BY created_at DESC
             "#,
         )
-        .bind(uid)
-        .fetch_one(&self.pool)
+        .fetch_all(&self.pool)
         .await?;
 
-        Ok(prefs.scoring_metric_tags)
+        Ok(users)
     }
+
 
     pub async fn save_scores(
         &self,
