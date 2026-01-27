@@ -32,6 +32,43 @@ function formatElevation(meters: number | null): string {
 
 const ACTIVITY_TYPES = ["All", "Running", "RoadCycling", "MountainBiking", "Hiking", "Walking"];
 
+type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "distance-asc" | "distance-desc" | "elevation-asc" | "elevation-desc";
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "name-asc", label: "Name (A-Z)" },
+  { value: "name-desc", label: "Name (Z-A)" },
+  { value: "distance-asc", label: "Distance (shortest)" },
+  { value: "distance-desc", label: "Distance (longest)" },
+  { value: "elevation-desc", label: "Elevation (highest)" },
+  { value: "elevation-asc", label: "Elevation (lowest)" },
+];
+
+function sortSegments(segments: Segment[], sortBy: SortOption): Segment[] {
+  const sorted = [...segments];
+  switch (sortBy) {
+    case "newest":
+      return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    case "oldest":
+      return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    case "name-asc":
+      return sorted.sort((a, b) => a.name.localeCompare(b.name));
+    case "name-desc":
+      return sorted.sort((a, b) => b.name.localeCompare(a.name));
+    case "distance-asc":
+      return sorted.sort((a, b) => a.distance_meters - b.distance_meters);
+    case "distance-desc":
+      return sorted.sort((a, b) => b.distance_meters - a.distance_meters);
+    case "elevation-desc":
+      return sorted.sort((a, b) => (b.elevation_gain_meters ?? 0) - (a.elevation_gain_meters ?? 0));
+    case "elevation-asc":
+      return sorted.sort((a, b) => (a.elevation_gain_meters ?? 0) - (b.elevation_gain_meters ?? 0));
+    default:
+      return sorted;
+  }
+}
+
 export default function SegmentsPage() {
   const router = useRouter();
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -41,6 +78,7 @@ export default function SegmentsPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activityTypeFilter, setActivityTypeFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
 
   useEffect(() => {
     const hasToken = !!api.getToken();
@@ -85,13 +123,26 @@ export default function SegmentsPage() {
         )}
       </div>
 
-      <Input
-        type="text"
-        placeholder="Search segments by name..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className="max-w-md"
-      />
+      <div className="flex flex-col sm:flex-row gap-4">
+        <Input
+          type="text"
+          placeholder="Search segments by name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="max-w-md"
+        />
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortOption)}
+          className="px-3 py-2 border rounded-md bg-background text-sm"
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {!showStarred && (
         <div className="flex flex-wrap gap-2">
@@ -121,8 +172,11 @@ export default function SegmentsPage() {
           <Skeleton className="h-32 w-full" />
         </div>
       ) : (() => {
-        const filteredSegments = segments.filter((s) =>
-          s.name.toLowerCase().includes(searchQuery.toLowerCase())
+        const filteredSegments = sortSegments(
+          segments.filter((s) =>
+            s.name.toLowerCase().includes(searchQuery.toLowerCase())
+          ),
+          sortBy
         );
         return filteredSegments.length === 0 ? (
         <Card>

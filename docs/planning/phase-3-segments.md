@@ -293,7 +293,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 ### 5.2 Segment Search
 
 **Tasks:**
-- [ ] Search by name
+- [x] Search by name
 - [x] Filter by activity type
 - [ ] Filter by distance range
 - [ ] Filter by climb category
