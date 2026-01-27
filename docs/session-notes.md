@@ -105,6 +105,24 @@
 
 ### Running the App
 
+**Quick Start (recommended):**
+```bash
+./scripts/start-dev.sh   # Starts all components in tmux with logging
+```
+
+**Monitor logs:**
+```bash
+./scripts/watch-logs.sh          # Watch all logs (errors highlighted)
+./scripts/watch-logs.sh backend  # Watch backend only
+tail -f logs/backend_latest.log  # Direct tail
+```
+
+**Stop everything:**
+```bash
+./scripts/stop-dev.sh
+```
+
+**Manual Start (alternative):**
 ```bash
 # Terminal 1 - Database
 cd crates/tracks

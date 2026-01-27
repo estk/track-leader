@@ -51,3 +51,6 @@ Thumbs.db
 
 target
 uploads
+
+# Development logs
+logs/
