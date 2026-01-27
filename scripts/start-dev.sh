@@ -49,18 +49,21 @@ tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
 # Create new tmux session with PostgreSQL pane
 tmux new-session -d -s "$SESSION_NAME" -n "dev" \
-    "echo '=== PostgreSQL ===' && cd '$PROJECT_ROOT/crates/tracks' && docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'; read"
+    "echo '=== PostgreSQL ===' && cd '$PROJECT_ROOT/crates/tracks' && docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'"
 
 # Wait a moment for tmux to initialize
 sleep 0.5
 
 # Split horizontally for backend
 tmux split-window -h -t "$SESSION_NAME:dev" \
-    "echo '=== Backend (port 3001) ===' && echo 'Waiting for PostgreSQL...' && sleep 3 && cd '$PROJECT_ROOT/crates/tracks' && RUST_LOG=info DATABASE_URL='postgres://tracks_user:tracks_password@localhost:5432/tracks_db' cargo run 2>&1 | tee '$BACKEND_LOG'; read"
+    "echo '=== Backend (port 3001) ===' && echo 'Waiting for PostgreSQL...' && sleep 3 && cd '$PROJECT_ROOT/crates/tracks' && RUST_LOG=info DATABASE_URL='postgres://tracks_user:tracks_password@localhost:5432/tracks_db' cargo run 2>&1 | tee '$BACKEND_LOG'"
 
 # Split the right pane vertically for frontend
 tmux split-window -v -t "$SESSION_NAME:dev.1" \
-    "echo '=== Frontend (port 3000) ===' && echo 'Waiting for backend...' && sleep 5 && cd '$PROJECT_ROOT' && npm run dev 2>&1 | tee '$FRONTEND_LOG'; read"
+    "echo '=== Frontend (port 3000) ===' && echo 'Waiting for backend...' && sleep 5 && cd '$PROJECT_ROOT' && npm run dev 2>&1 | tee '$FRONTEND_LOG'"
+
+# Keep panes alive after process exits (allows Ctrl-C then respawn)
+tmux set-option -t "$SESSION_NAME" remain-on-exit on
 
 # Adjust pane sizes (make left pane narrower for postgres)
 tmux select-layout -t "$SESSION_NAME:dev" main-vertical

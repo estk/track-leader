@@ -26,23 +26,26 @@ tail -f logs/backend_latest.log
 tail -f logs/frontend_latest.log
 
 # Check tmux pane output directly
-tmux capture-pane -t track-leader:0.1 -p | tail -20  # Backend pane
-tmux capture-pane -t track-leader:0.2 -p | tail -20  # Frontend pane
+tmux capture-pane -t track-leader:dev.1 -p | tail -20  # Backend pane
+tmux capture-pane -t track-leader:dev.2 -p | tail -20  # Frontend pane
 ```
 
 ### Restarting Components
 
-If a component crashes or needs restart:
+Panes are configured with `remain-on-exit on`, so after Ctrl-C the pane stays open (shows "Pane is dead"). To restart:
 
 ```bash
-# Restart backend (pane 1)
-tmux send-keys -t track-leader:0.1 C-c
-tmux send-keys -t track-leader:0.1 "cd /Users/estk/git/tl-ws1/crates/tracks && RUST_LOG=info DATABASE_URL='postgres://tracks_user:tracks_password@localhost:5432/tracks_db' cargo run" Enter
+# Respawn backend pane - reruns the original command
+tmux respawn-pane -t track-leader:dev.1
 
-# Restart frontend (pane 2)
-tmux send-keys -t track-leader:0.2 C-c
-tmux send-keys -t track-leader:0.2 "cd /Users/estk/git/tl-ws1 && npm run dev" Enter
+# Respawn frontend pane
+tmux respawn-pane -t track-leader:dev.2
+
+# Respawn postgres pane
+tmux respawn-pane -t track-leader:dev.0
 ```
+
+Or interactively: attach to the session, select the dead pane, and press `Ctrl+b` then type `:respawn-pane`
 
 ### Stopping Everything
 
