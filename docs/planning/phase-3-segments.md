@@ -22,11 +22,11 @@
 ### 1.1 Database Schema
 
 **Tasks:**
-- [ ] Create segments table
-- [ ] Create segment_efforts table
-- [ ] Create segment_stars table
-- [ ] Add spatial indexes
-- [ ] Run migration
+- [x] Create segments table
+- [x] Create segment_efforts table
+- [x] Create segment_stars table
+- [x] Add spatial indexes
+- [x] Run migration
 
 **Schema:**
 ```sql
@@ -90,19 +90,19 @@ CREATE TABLE segment_stars (
 ### 1.2 Backend Models
 
 **Tasks:**
-- [ ] Create Segment model
-- [ ] Create SegmentEffort model
-- [ ] Add database methods
-- [ ] Add PostGIS query helpers
+- [x] Create Segment model
+- [x] Create SegmentEffort model
+- [x] Add database methods
+- [x] Add PostGIS query helpers
 
 ### 1.3 Segment Metrics Calculation
 
 **Tasks:**
-- [ ] Calculate distance from LineString
-- [ ] Calculate elevation gain/loss
+- [x] Calculate distance from LineString
+- [x] Calculate elevation gain/loss
 - [ ] Calculate average/max grade
 - [ ] Determine climb category
-- [ ] Pre-compute on segment creation
+- [x] Pre-compute on segment creation
 
 **Climb Categories:**
 | Category | Points | Criteria |
@@ -122,13 +122,13 @@ Points = elevation_gain * length_km * grade_factor
 ### 2.1 Segment Creation UI
 
 **Tasks:**
-- [ ] Add "Create Segment" button to activity detail
-- [ ] Create segment editor component
-- [ ] Allow selecting start/end points on map
-- [ ] Preview segment as user selects
+- [x] Add "Create Segment" button to activity detail
+- [x] Create segment editor component
+- [x] Allow selecting start/end points on elevation profile
+- [x] Preview segment as user selects
 - [ ] Show calculated metrics in real-time
-- [ ] Name and description input
-- [ ] Submit segment creation
+- [x] Name and description input
+- [x] Submit segment creation
 
 **UI Flow:**
 1. User views activity
@@ -143,11 +143,11 @@ Points = elevation_gain * length_km * grade_factor
 ### 2.2 Backend Segment Creation
 
 **Tasks:**
-- [ ] Implement `POST /segments` endpoint
-- [ ] Extract segment geometry from activity
-- [ ] Calculate segment metrics
-- [ ] Store in database
-- [ ] Return created segment
+- [x] Implement `POST /segments` endpoint
+- [x] Extract segment geometry from activity
+- [x] Calculate segment metrics
+- [x] Store in database
+- [x] Return created segment
 
 **Request:**
 ```typescript
@@ -172,9 +172,9 @@ interface CreateSegmentRequest {
 ### 2.4 Creator's First Effort
 
 **Tasks:**
-- [ ] Auto-create first effort from creator's activity
-- [ ] Set as baseline for segment
-- [ ] Calculate PR rank
+- [x] Auto-create first effort from creator's activity
+- [x] Set as baseline for segment
+- [x] Calculate PR rank
 
 ---
 
@@ -246,18 +246,18 @@ WHERE t.activity_id = $1 AND s.id = $2;
 ### 4.1 Segment Detail Page
 
 **Tasks:**
-- [ ] Create `/segments/[id]` route
-- [ ] Display segment on map
-- [ ] Show segment statistics
-- [ ] Show elevation profile
+- [x] Create `/segments/[id]` route
+- [x] Display segment on map
+- [x] Show segment statistics
+- [x] Show elevation profile
 - [ ] Display creator info
 - [ ] Star/unstar button
 
 ### 4.2 Segment Leaderboard Preview
 
 **Tasks:**
-- [ ] Show top 10 efforts on segment page
-- [ ] Display rank, user, time, date
+- [x] Show top 10 efforts on segment page
+- [x] Display rank, user, time, date
 - [ ] Link to full leaderboard (Phase 4)
 - [ ] Highlight current user's position
 
@@ -284,7 +284,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 ### 5.1 Segment Browser
 
 **Tasks:**
-- [ ] Create `/segments` route
+- [x] Create `/segments` route
 - [ ] Map-based segment discovery
 - [ ] Show segments as clickable lines
 - [ ] Clustering for dense areas
@@ -320,12 +320,12 @@ WHERE t.activity_id = $1 AND s.id = $2;
 
 ### End of Phase 3 Checklist
 
-- [ ] Segments can be created from activities
-- [ ] Segment matching runs on upload
-- [ ] Segment efforts calculated correctly
-- [ ] PR tracking working
-- [ ] Segment detail page complete
-- [ ] Segment browser/search working
+- [x] Segments can be created from activities
+- [x] Segment matching runs on upload
+- [x] Segment efforts calculated correctly
+- [x] PR tracking working
+- [x] Segment detail page complete
+- [ ] Segment browser/search working (basic list done, no search/filter)
 - [ ] Starred segments feature
 - [ ] Segments shown on activity detail
 

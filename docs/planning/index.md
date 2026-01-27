@@ -45,28 +45,29 @@
 
 **Latest Session:** 2026-01-27 - See `docs/session-notes.md` for detailed fixes and learnings.
 
-### Phase 3 Progress (In Progress)
+### Phase 3 Progress (Nearly Complete)
 
 | Task | Status | Notes |
 |------|--------|-------|
 | Segments database schema | Done | Migration 003 with PostGIS geometry |
 | Segment models | Done | Segment, SegmentEffort structs |
-| Segment API endpoints | Done | Create, get, list, leaderboard, reprocess |
-| Segments list page | Done | Shows public segments |
-| Segment detail page | Done | Shows stats and leaderboard |
-| Segment creation from activities | Pending | Need UI to select portion of activity |
-| **Automatic segment matching** | **Done** | PostGIS ST_DWithin + ST_LineLocatePoint |
-| **Personal records tracking** | **Done** | update_personal_records() marks fastest effort |
-| **Track geometry storage** | **Done** | LINESTRING in tracks table with GIST index |
-| **Timing extraction from GPX** | **Done** | Interpolates timestamps at match positions |
-| **Auto-reprocess on segment create** | **Done** | Finds existing activities when segment created |
+| Segment API endpoints | Done | Create, get, list, leaderboard, track, reprocess |
+| Segments list page | Done | Shows public segments with stats |
+| Segment detail page | Done | Map, elevation profile, stats, leaderboard with PRs |
+| Segment creation UI | Done | Click elevation profile to select start/end points |
+| Automatic segment matching | Done | PostGIS ST_DWithin + ST_LineLocatePoint |
+| Personal records tracking | Done | update_personal_records() + PR badges on leaderboard |
+| Track geometry storage | Done | LINESTRING in tracks table with GIST index |
+| Auto-reprocess on segment create | Done | Finds existing activities when segment created |
+| Starred segments | Partial | DB schema exists, no API/UI yet |
+| Segments on activity detail | Pending | Should show matched segments user completed |
+| Segment search/filters | Pending | Basic list only, no filtering yet |
 
-**Segment Matching Implementation Notes:**
-- Uses 50m tolerance for start/end point matching
-- Direction verified via ST_LineLocatePoint (start_fraction < end_fraction)
-- Timing extracted by interpolating GPX timestamps at fractional positions
-- Idempotent: checks segment_effort_exists() before creating duplicates
-- New endpoint: POST /segments/{id}/reprocess for manual reprocessing
+**Remaining for Phase 3:**
+- Star/unstar API endpoints and UI
+- Show matched segments on activity detail page
+- Segment search and filtering
+- Map-based segment discovery
 
 ---
 
