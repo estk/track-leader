@@ -388,10 +388,9 @@ pub async fn create_segment(
     // Resolve activity_type: inherit from source activity if provided, otherwise require in request
     // Also store the source activity for later use (to save track geometry if needed)
     let (activity_type, source_activity) = if let Some(source_id) = req.source_activity_id {
-        let activity = db
-            .get_activity(source_id)
-            .await?
-            .ok_or_else(|| AppError::InvalidInput(format!("Source activity {source_id} not found")))?;
+        let activity = db.get_activity(source_id).await?.ok_or_else(|| {
+            AppError::InvalidInput(format!("Source activity {source_id} not found"))
+        })?;
         let activity_type = activity.activity_type.clone();
         (activity_type, Some(activity))
     } else {
@@ -436,7 +435,13 @@ pub async fn create_segment(
     if let Some(activity) = &source_activity {
         let source_id = activity.id;
         // Check if track already exists
-        if db.get_track_geometry(source_id).await.ok().flatten().is_none() {
+        if db
+            .get_track_geometry(source_id)
+            .await
+            .ok()
+            .flatten()
+            .is_none()
+        {
             // Track not in database, try to save it
             if let Ok(file_bytes) = store.get_file(&activity.object_store_path).await {
                 if let Ok(gpx) = gpx::read(std::io::BufReader::new(file_bytes.as_ref())) {
@@ -449,9 +454,7 @@ pub async fn create_segment(
                                 "Failed to save track geometry for source activity {source_id}: {e}"
                             );
                         } else {
-                            tracing::info!(
-                                "Saved track geometry for source activity {source_id}"
-                            );
+                            tracing::info!("Saved track geometry for source activity {source_id}");
                         }
                     }
                 }
@@ -983,7 +986,9 @@ pub async fn star_segment(
     Path(segment_id): Path<Uuid>,
 ) -> Result<Json<StarResponse>, AppError> {
     // Verify segment exists
-    db.get_segment(segment_id).await?.ok_or(AppError::NotFound)?;
+    db.get_segment(segment_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     db.star_segment(claims.sub, segment_id).await?;
     Ok(Json(StarResponse { starred: true }))

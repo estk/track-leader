@@ -200,7 +200,10 @@ async fn process_segment_match(
                 timing.moving_time_seconds
             );
             // Update effort count
-            if let Err(e) = db.increment_segment_effort_count(segment_match.segment_id).await {
+            if let Err(e) = db
+                .increment_segment_effort_count(segment_match.segment_id)
+                .await
+            {
                 tracing::error!("Failed to increment effort count: {e}");
             }
             // Update personal records

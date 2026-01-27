@@ -639,7 +639,7 @@ impl Database {
         segment_id: Uuid,
         activity_id: Uuid,
     ) -> Result<bool, AppError> {
-        let row: Option<(i64,)> = sqlx::query_as(
+        let row: Option<(i32,)> = sqlx::query_as(
             r#"
             SELECT 1 FROM segment_efforts
             WHERE segment_id = $1 AND activity_id = $2
@@ -820,7 +820,7 @@ impl Database {
         user_id: Uuid,
         segment_id: Uuid,
     ) -> Result<bool, AppError> {
-        let row: Option<(i64,)> = sqlx::query_as(
+        let row: Option<(i32,)> = sqlx::query_as(
             r#"
             SELECT 1 FROM segment_stars
             WHERE user_id = $1 AND segment_id = $2

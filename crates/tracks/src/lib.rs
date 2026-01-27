@@ -76,7 +76,10 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
                 .delete(unstar_segment),
         )
         .route("/segments/starred", get(get_starred_segments))
-        .route("/segments/starred/efforts", get(get_starred_segment_efforts))
+        .route(
+            "/segments/starred/efforts",
+            get(get_starred_segment_efforts),
+        )
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))
