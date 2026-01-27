@@ -69,6 +69,17 @@ function sortSegments(segments: Segment[], sortBy: SortOption): Segment[] {
   }
 }
 
+type DistanceFilter = "all" | "under1k" | "1k-5k" | "5k-10k" | "10k-20k" | "over20k";
+
+const DISTANCE_FILTERS: { value: DistanceFilter; label: string; min: number; max: number }[] = [
+  { value: "all", label: "Any distance", min: 0, max: Infinity },
+  { value: "under1k", label: "< 1 km", min: 0, max: 1000 },
+  { value: "1k-5k", label: "1-5 km", min: 1000, max: 5000 },
+  { value: "5k-10k", label: "5-10 km", min: 5000, max: 10000 },
+  { value: "10k-20k", label: "10-20 km", min: 10000, max: 20000 },
+  { value: "over20k", label: "> 20 km", min: 20000, max: Infinity },
+];
+
 export default function SegmentsPage() {
   const router = useRouter();
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -79,6 +90,7 @@ export default function SegmentsPage() {
   const [activityTypeFilter, setActivityTypeFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>("all");
 
   useEffect(() => {
     const hasToken = !!api.getToken();
@@ -142,6 +154,17 @@ export default function SegmentsPage() {
             </option>
           ))}
         </select>
+        <select
+          value={distanceFilter}
+          onChange={(e) => setDistanceFilter(e.target.value as DistanceFilter)}
+          className="px-3 py-2 border rounded-md bg-background text-sm"
+        >
+          {DISTANCE_FILTERS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {!showStarred && (
@@ -172,25 +195,29 @@ export default function SegmentsPage() {
           <Skeleton className="h-32 w-full" />
         </div>
       ) : (() => {
+        const distFilter = DISTANCE_FILTERS.find((f) => f.value === distanceFilter) || DISTANCE_FILTERS[0];
         const filteredSegments = sortSegments(
-          segments.filter((s) =>
-            s.name.toLowerCase().includes(searchQuery.toLowerCase())
-          ),
+          segments.filter((s) => {
+            const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesDistance = s.distance_meters >= distFilter.min && s.distance_meters < distFilter.max;
+            return matchesSearch && matchesDistance;
+          }),
           sortBy
         );
+        const hasFilters = searchQuery || distanceFilter !== "all";
         return filteredSegments.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">
-              {searchQuery
-                ? "No segments match your search"
+              {hasFilters
+                ? "No segments match your filters"
                 : showStarred
                 ? "No starred segments"
                 : "No segments yet"}
             </p>
             <p className="text-sm text-muted-foreground">
-              {searchQuery
-                ? "Try a different search term."
+              {hasFilters
+                ? "Try adjusting your search or filters."
                 : showStarred
                 ? "Star segments from their detail pages to see them here."
                 : "Segments can be created from activity detail pages."}
