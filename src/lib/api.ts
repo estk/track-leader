@@ -40,6 +40,41 @@ export interface TrackData {
   bounds: TrackBounds;
 }
 
+export interface Segment {
+  id: string;
+  creator_id: string;
+  name: string;
+  description: string | null;
+  activity_type: string;
+  distance_meters: number;
+  elevation_gain_meters: number | null;
+  elevation_loss_meters: number | null;
+  visibility: 'public' | 'private';
+  created_at: string;
+}
+
+export interface SegmentEffort {
+  id: string;
+  segment_id: string;
+  activity_id: string;
+  user_id: string;
+  started_at: string;
+  elapsed_time_seconds: number;
+  moving_time_seconds: number | null;
+  average_speed_mps: number | null;
+  max_speed_mps: number | null;
+  is_personal_record: boolean;
+  created_at: string;
+}
+
+export interface CreateSegmentRequest {
+  name: string;
+  description?: string;
+  activity_type: string;
+  points: { lat: number; lon: number; ele?: number }[];
+  visibility?: 'public' | 'private';
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -176,6 +211,27 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  // Segment endpoints
+  async listSegments(activityType?: string): Promise<Segment[]> {
+    const params = activityType ? `?activity_type=${activityType}` : '';
+    return this.request<Segment[]>(`/segments${params}`);
+  }
+
+  async getSegment(id: string): Promise<Segment> {
+    return this.request<Segment>(`/segments/${id}`);
+  }
+
+  async getSegmentLeaderboard(id: string): Promise<SegmentEffort[]> {
+    return this.request<SegmentEffort[]>(`/segments/${id}/leaderboard`);
+  }
+
+  async createSegment(data: CreateSegmentRequest): Promise<Segment> {
+    return this.request<Segment>('/segments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 }
 

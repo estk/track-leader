@@ -97,3 +97,44 @@ pub struct Scores {
     pub duration: f64,
     pub elevation_gain: f64,
 }
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Segment {
+    pub id: Uuid,
+    pub creator_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub activity_type: ActivityType,
+    pub distance_meters: f64,
+    pub elevation_gain_meters: Option<f64>,
+    pub elevation_loss_meters: Option<f64>,
+    pub visibility: String,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct SegmentEffort {
+    pub id: Uuid,
+    pub segment_id: Uuid,
+    pub activity_id: Uuid,
+    pub user_id: Uuid,
+    #[serde(with = "rfc3339")]
+    pub started_at: OffsetDateTime,
+    pub elapsed_time_seconds: f64,
+    pub moving_time_seconds: Option<f64>,
+    pub average_speed_mps: Option<f64>,
+    pub max_speed_mps: Option<f64>,
+    pub is_personal_record: bool,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SegmentWithStats {
+    #[serde(flatten)]
+    pub segment: Segment,
+    pub effort_count: i64,
+    pub athlete_count: i64,
+    pub creator_name: String,
+}
