@@ -88,9 +88,9 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-4 text-sm text-muted-foreground">
+      <div className="flex flex-wrap gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground">
         <span>Distance: {totalDistance.toFixed(2)} km</span>
-        <span>Elevation Gain: {totalGain.toFixed(0)} m</span>
+        <span>Gain: {totalGain.toFixed(0)} m</span>
         <span>
           Range: {minEle.toFixed(0)}m - {maxEle.toFixed(0)}m
         </span>

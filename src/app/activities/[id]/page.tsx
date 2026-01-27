@@ -134,7 +134,7 @@ export default function ActivityDetailPage() {
     <div className="space-y-6">
       {/* Edit Modal */}
       {editOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>Edit Activity</CardTitle>
@@ -214,7 +214,7 @@ export default function ActivityDetailPage() {
 
       {/* Delete Confirmation Modal */}
       {deleteOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>Delete Activity</CardTitle>
@@ -247,15 +247,15 @@ export default function ActivityDetailPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">{activity.name}</h1>
-          <div className="flex items-center gap-4 mt-2">
+          <h1 className="text-2xl md:text-3xl font-bold">{activity.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2">
             <Badge variant="secondary">{activity.activity_type}</Badge>
             <Badge variant={activity.visibility === "private" ? "outline" : "default"}>
               {activity.visibility === "private" ? "Private" : "Public"}
             </Badge>
-            <span className="text-muted-foreground">
+            <span className="text-sm md:text-base text-muted-foreground">
               {new Date(activity.submitted_at).toLocaleDateString(undefined, {
                 weekday: "long",
                 year: "numeric",
@@ -265,18 +265,20 @@ export default function ActivityDetailPage() {
             </span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => router.push("/activities")}
           >
             Back
           </Button>
-          <Button variant="outline" onClick={handleEdit}>
+          <Button variant="outline" size="sm" onClick={handleEdit}>
             Edit
           </Button>
           <Button
             variant="outline"
+            size="sm"
             onClick={() =>
               window.open(`/api/activities/${activityId}/download`, "_blank")
             }
@@ -285,6 +287,7 @@ export default function ActivityDetailPage() {
           </Button>
           <Button
             variant="destructive"
+            size="sm"
             onClick={() => setDeleteOpen(true)}
           >
             Delete

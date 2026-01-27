@@ -139,7 +139,7 @@ export function ActivityMap({ trackData, highlightIndex, onHover }: ActivityMapP
   return (
     <div
       ref={mapContainer}
-      className="w-full h-[400px] rounded-lg overflow-hidden"
+      className="w-full h-[300px] md:h-[400px] rounded-lg overflow-hidden"
     />
   );
 }
