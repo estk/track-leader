@@ -238,6 +238,59 @@ export interface DistanceLeaderEntry {
   rank: number;
 }
 
+// Social types (follows, notifications)
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+  follower_count: number;
+  following_count: number;
+  gender: string | null;
+  birth_year: number | null;
+  weight_kg: number | null;
+  country: string | null;
+  region: string | null;
+}
+
+export interface UserSummary {
+  id: string;
+  name: string;
+  follower_count: number;
+  following_count: number;
+  followed_at: string;
+}
+
+export interface FollowListResponse {
+  users: UserSummary[];
+  total_count: number;
+}
+
+export interface FollowStatusResponse {
+  is_following: boolean;
+}
+
+export type NotificationType = 'follow' | 'kudos' | 'comment' | 'crown_achieved' | 'crown_lost' | 'pr';
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  notification_type: NotificationType;
+  actor_id: string | null;
+  actor_name: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  message: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[];
+  unread_count: number;
+  total_count: number;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -518,6 +571,65 @@ class ApiClient {
     const queryString = params.toString();
     const path = `/leaderboards/distance${queryString ? `?${queryString}` : ''}`;
     return this.request<DistanceLeaderEntry[]>(path);
+  }
+
+  // Social endpoints (follows)
+  async getUserProfile(userId: string): Promise<UserProfile> {
+    return this.request<UserProfile>(`/users/${userId}/profile`);
+  }
+
+  async followUser(userId: string): Promise<void> {
+    await this.request<void>(`/users/${userId}/follow`, {
+      method: 'POST',
+    });
+  }
+
+  async unfollowUser(userId: string): Promise<void> {
+    await this.request<void>(`/users/${userId}/follow`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getFollowStatus(userId: string): Promise<boolean> {
+    const result = await this.request<FollowStatusResponse>(`/users/${userId}/follow`);
+    return result.is_following;
+  }
+
+  async getFollowers(userId: string, limit?: number, offset?: number): Promise<FollowListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    return this.request<FollowListResponse>(`/users/${userId}/followers${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getFollowing(userId: string, limit?: number, offset?: number): Promise<FollowListResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    return this.request<FollowListResponse>(`/users/${userId}/following${queryString ? `?${queryString}` : ''}`);
+  }
+
+  // Notification endpoints
+  async getNotifications(limit?: number, offset?: number): Promise<NotificationsResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    return this.request<NotificationsResponse>(`/notifications${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async markNotificationRead(notificationId: string): Promise<void> {
+    await this.request<void>(`/notifications/${notificationId}/read`, {
+      method: 'POST',
+    });
+  }
+
+  async markAllNotificationsRead(): Promise<{ marked_count: number }> {
+    return this.request<{ marked_count: number }>('/notifications/read-all', {
+      method: 'POST',
+    });
   }
 }
 

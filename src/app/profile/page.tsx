@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity } from "@/lib/api";
+import { api, Activity, UserProfile } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FollowStats } from "@/components/social/follow-stats";
 
 export default function ProfilePage() {
   const router = useRouter();
   const { user, loading: authLoading, logout } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,8 +23,14 @@ export default function ProfilePage() {
     }
 
     if (user) {
-      api.getUserActivities(user.id)
-        .then(setActivities)
+      Promise.all([
+        api.getUserActivities(user.id),
+        api.getUserProfile(user.id),
+      ])
+        .then(([activitiesData, profileData]) => {
+          setActivities(activitiesData);
+          setProfile(profileData);
+        })
         .catch(() => {})
         .finally(() => setLoading(false));
     }
@@ -66,6 +74,13 @@ export default function ProfilePage() {
             <div>
               <h2 className="text-xl font-semibold">{user.name}</h2>
               <p className="text-muted-foreground">{user.email}</p>
+              {profile && (
+                <FollowStats
+                  userId={user.id}
+                  followerCount={profile.follower_count}
+                  followingCount={profile.following_count}
+                />
+              )}
             </div>
           </div>
         </CardContent>
