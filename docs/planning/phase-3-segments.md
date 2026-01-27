@@ -251,7 +251,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] Show segment statistics
 - [x] Show elevation profile
 - [ ] Display creator info
-- [ ] Star/unstar button
+- [x] Star/unstar button
 
 ### 4.2 Segment Leaderboard Preview
 
@@ -272,9 +272,9 @@ WHERE t.activity_id = $1 AND s.id = $2;
 ### 4.4 Segment on Activity
 
 **Tasks:**
-- [ ] Show matched segments on activity detail
-- [ ] Display segment time and rank
-- [ ] Link to segment page
+- [x] Show matched segments on activity detail
+- [x] Display segment time and rank
+- [x] Link to segment page
 - [ ] Highlight segment on map
 
 ---
@@ -310,8 +310,8 @@ WHERE t.activity_id = $1 AND s.id = $2;
 ### 5.4 Starred Segments
 
 **Tasks:**
-- [ ] Star/unstar functionality
-- [ ] Starred segments page
+- [x] Star/unstar functionality
+- [ ] Starred segments page (API exists, needs UI)
 - [ ] Track starred segment efforts
 
 ---
@@ -326,8 +326,8 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] PR tracking working
 - [x] Segment detail page complete
 - [ ] Segment browser/search working (basic list done, no search/filter)
-- [ ] Starred segments feature
-- [ ] Segments shown on activity detail
+- [x] Starred segments feature (API + button on detail page)
+- [x] Segments shown on activity detail
 
 ### API Endpoints
 
