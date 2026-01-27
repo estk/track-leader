@@ -9,11 +9,15 @@
 
 ## Objectives
 
+### Core (Weeks 1-3)
 1. Follow system for users
 2. Activity feed from followed users
 3. Kudos and comments on activities
-4. Share functionality
-5. Notifications system
+4. Notifications system
+
+### Stretch Goals (Week 4+)
+5. Teams - Create teams, publish to teams, team feeds
+6. Share functionality with social previews
 
 ---
 
@@ -29,6 +33,7 @@
 
 **Schema:**
 ```sql
+-- Migration 011_social_follows.sql
 CREATE TABLE follows (
     follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     following_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -43,6 +48,7 @@ CREATE INDEX idx_follows_follower ON follows(follower_id);
 ALTER TABLE users ADD COLUMN follower_count INTEGER DEFAULT 0;
 ALTER TABLE users ADD COLUMN following_count INTEGER DEFAULT 0;
 
+-- Migration 012_notifications.sql
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -76,15 +82,6 @@ CREATE INDEX idx_notifications_unread ON notifications(user_id) WHERE read_at IS
 - [ ] Show follower/following counts
 - [ ] Followers list page
 - [ ] Following list page
-- [ ] Follow suggestions (based on activity overlap)
-
-### 1.4 Privacy Considerations
-
-**Tasks:**
-- [ ] Respect user privacy settings
-- [ ] Option to require follow approval
-- [ ] Block user functionality
-- [ ] Hide from search option
 
 ---
 
@@ -96,7 +93,6 @@ CREATE INDEX idx_notifications_unread ON notifications(user_id) WHERE read_at IS
 - [ ] Design feed query
 - [ ] Include followed users' activities
 - [ ] Include segment efforts from followed users
-- [ ] Include crowned segments
 - [ ] Chronological ordering (v1)
 
 **Feed Query:**
@@ -140,14 +136,6 @@ LIMIT $2 OFFSET $3;
 - [ ] Infinite scroll
 - [ ] Pull-to-refresh on mobile
 
-### 2.3 Feed Personalization (Future)
-
-**Placeholder for future:**
-- Relevance scoring
-- Popular activities boost
-- PR/achievement highlighting
-- "Suggested for you" section
-
 ---
 
 ## Week 3: Kudos & Comments
@@ -156,6 +144,7 @@ LIMIT $2 OFFSET $3;
 
 **Database:**
 ```sql
+-- Migration 013_kudos_comments.sql
 CREATE TABLE kudos (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
@@ -212,7 +201,6 @@ ALTER TABLE activities ADD COLUMN comment_count INTEGER DEFAULT 0;
 - [ ] Implement `DELETE /comments/{id}` (author only)
 - [ ] Support threaded replies (parent_id)
 - [ ] Create comment notification
-- [ ] Mention parsing (@username)
 
 ### 3.4 Comments UI
 
@@ -222,27 +210,12 @@ ALTER TABLE activities ADD COLUMN comment_count INTEGER DEFAULT 0;
 - [ ] Display comments threaded
 - [ ] Reply button
 - [ ] Delete own comments
-- [ ] @mention autocomplete
 
 ---
 
-## Week 4: Sharing & Notifications
+## Week 4: Notifications & Sharing
 
-### 4.1 Share Functionality
-
-**Tasks:**
-- [ ] Generate shareable activity links
-- [ ] Generate shareable segment links
-- [ ] Copy link button
-- [ ] Social share buttons:
-  - Twitter/X
-  - Facebook
-  - LinkedIn
-  - Email
-- [ ] Open Graph meta tags for previews
-- [ ] Activity embed code (iframe)
-
-### 4.2 Notifications System
+### 4.1 Notifications System
 
 **Tasks:**
 - [ ] Implement `GET /notifications`
@@ -253,12 +226,11 @@ ALTER TABLE activities ADD COLUMN comment_count INTEGER DEFAULT 0;
   - Kudos received
   - Comment on activity
   - Reply to comment
-  - Mention
   - Crown achieved
   - Crown lost
   - PR achieved
 
-### 4.3 Notifications UI
+### 4.2 Notifications UI
 
 **Tasks:**
 - [ ] Notification bell icon in header
@@ -266,16 +238,143 @@ ALTER TABLE activities ADD COLUMN comment_count INTEGER DEFAULT 0;
 - [ ] Notification dropdown/panel
 - [ ] Mark as read on view
 - [ ] Notification preferences page
-- [ ] Email notification option (future)
 
-### 4.4 Push Notifications (PWA)
+### 4.3 Share Functionality
 
 **Tasks:**
-- [ ] Register service worker
-- [ ] Request notification permission
-- [ ] Store push subscription
-- [ ] Backend push service
-- [ ] Notification categories
+- [ ] Generate shareable activity links
+- [ ] Generate shareable segment links
+- [ ] Copy link button
+- [ ] Open Graph meta tags for previews
+
+---
+
+## Stretch Goals
+
+### Teams (Phase 5 Extension)
+
+Teams allow users to form groups and share content within the team. This is a significant feature that could be Week 4+ or deferred to Phase 7.
+
+**Database:**
+```sql
+-- Migration 014_teams.sql
+CREATE TABLE teams (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    description TEXT,
+    avatar_url TEXT,
+    visibility TEXT DEFAULT 'public',  -- 'public', 'private', 'invite_only'
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE team_members (
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT DEFAULT 'member',  -- 'owner', 'admin', 'member'
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE TABLE team_publications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id),
+    content_type TEXT NOT NULL,  -- 'activity', 'segment', 'route'
+    content_id UUID NOT NULL,
+    published_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_team_publications_team ON team_publications(team_id, published_at DESC);
+```
+
+**API:**
+- `POST /teams` - Create team
+- `GET /teams/{id}` - Get team details
+- `GET /teams/{id}/members` - List members
+- `POST /teams/{id}/members` - Invite/add member
+- `DELETE /teams/{id}/members/{user_id}` - Remove member
+- `POST /teams/{id}/publish` - Publish content to team
+- `GET /teams/{id}/feed` - Team activity feed
+
+**UI:**
+- Team creation page
+- Team home page with feed
+- Team members list
+- Publish to team option on activities/segments
+- Team selector in navigation
+
+### Synthetic Test Data
+
+For testing with realistic data volumes:
+
+**Options:**
+1. **GPX repository** - Download public GPX files from sources like:
+   - OpenStreetMap GPS traces
+   - Wikiloc public routes
+   - Strava's public segment data (careful with ToS)
+
+2. **Synthetic generation** - Script to generate fake GPX with:
+   - Realistic coordinate sequences
+   - Varied activity types
+   - Multiple users with demographics
+   - Segment efforts with realistic times
+
+3. **Data import tool** - CLI command to:
+   - Load GPX files from a directory
+   - Create users with varied demographics
+   - Auto-create segments from activities
+   - Generate effort history
+
+**Implementation:**
+```bash
+# Proposed CLI commands
+cargo run --bin generate-test-data -- --users 100 --activities 1000 --segments 50
+cargo run --bin import-gpx -- --dir ./test-data/gpx --user test@example.com
+```
+
+### API Type Generation
+
+For type-safe Rust-Node interface:
+
+**Option 1: OpenAPI/Swagger**
+- Generate OpenAPI spec from Rust handlers (utoipa crate)
+- Generate TypeScript types from OpenAPI (openapi-typescript)
+- Pros: Standard, good tooling
+- Cons: Runtime overhead, manual sync
+
+**Option 2: Protobuf**
+- Define .proto files for API messages
+- Generate Rust and TypeScript from protos
+- Pros: Efficient, strongly typed
+- Cons: Adds complexity, changes API format
+
+**Recommendation:** Start with OpenAPI/Swagger since we already have REST API. Add utoipa to Rust handlers, generate TypeScript types.
+
+### Enhanced Leaderboard Filters
+
+Add more athlete-based filters to leaderboards:
+
+- **Weight class** - Light (<60kg), Medium (60-80kg), Heavy (>80kg)
+- **Equipment type** - Acoustic bike, eMTB, gravel, etc.
+- **Power-to-weight** - If users add FTP
+
+### GPS Data Quality
+
+Track and use GPS data quality for better segment matching:
+
+**Track metadata:**
+```sql
+ALTER TABLE tracks ADD COLUMN gps_sample_rate_hz FLOAT;  -- Points per second
+ALTER TABLE tracks ADD COLUMN gps_accuracy_meters FLOAT;  -- Average HDOP
+ALTER TABLE tracks ADD COLUMN point_count INTEGER;
+```
+
+**Segment matching tolerance:**
+- High quality (1Hz+, <5m accuracy): 10m tolerance
+- Medium quality (0.5Hz, 5-15m accuracy): 25m tolerance
+- Low quality (<0.5Hz, >15m accuracy): 50m tolerance or reject
 
 ---
 
@@ -283,17 +382,20 @@ ALTER TABLE activities ADD COLUMN comment_count INTEGER DEFAULT 0;
 
 ### End of Phase 5 Checklist
 
+**Core (Required):**
 - [ ] Follow/unfollow users
 - [ ] View followers/following lists
 - [ ] Activity feed from followed users
 - [ ] Give/remove kudos
 - [ ] Post/delete comments
-- [ ] Threaded comment replies
-- [ ] @mentions working
-- [ ] Share activities/segments
 - [ ] Notification center
-- [ ] Notification preferences
 - [ ] Unread notification count
+- [ ] Share links with OG previews
+
+**Stretch (If Time Permits):**
+- [ ] Teams creation and management
+- [ ] Team feeds
+- [ ] Publish to team functionality
 
 ### API Endpoints
 
@@ -316,55 +418,11 @@ ALTER TABLE activities ADD COLUMN comment_count INTEGER DEFAULT 0;
 
 ---
 
-## Social Graph Considerations
-
-### Spam Prevention
-
-- Rate limit follows (50/day)
-- Rate limit comments (100/day)
-- Report button on comments
-- Block functionality
-- Auto-flag suspicious activity
-
-### Content Moderation
-
-- Comment content filtering (profanity, spam)
-- Report comment flow
-- Admin review queue (future)
-- Shadow banning capability
-
-### Privacy
-
-- Respect activity visibility
-- Don't leak private activity in notifications
-- Allow disabling notifications
-- GDPR: export/delete social data
-
----
-
-## Feed Performance
-
-### Caching Strategy
-
-- Cache feed per user (5 minute TTL)
-- Invalidate on new activity from followed
-- Paginate with cursor, not offset
-- Pre-compute feed for active users
-
-### Query Optimization
-
-- Index on (user_id, submitted_at) for feed
-- Denormalize counts (kudos, comments)
-- Batch fetch related data
-- Limit feed to 7 days for inactive users
-
----
-
 ## Success Criteria
 
 1. **Follow works:** Can follow/unfollow users
 2. **Feed works:** Shows activities from followed users
 3. **Kudos works:** Can give/remove kudos
 4. **Comments work:** Can comment and reply
-5. **Sharing works:** Can share to social platforms
-6. **Notifications work:** Receive and manage notifications
+5. **Notifications work:** Receive and manage notifications
+6. **Sharing works:** Can share with social previews
