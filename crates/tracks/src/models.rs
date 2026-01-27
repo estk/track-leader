@@ -66,7 +66,7 @@ pub struct Activity {
     pub visibility: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "activity_type", rename_all = "snake_case")]
 pub enum ActivityType {
     Walking,

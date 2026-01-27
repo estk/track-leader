@@ -6,6 +6,7 @@ pub mod handlers;
 pub mod models;
 pub mod object_store_service;
 pub mod scoring;
+pub mod segment_matching;
 
 use axum::{
     Extension, Router,
@@ -21,8 +22,9 @@ use crate::{
     database::Database,
     handlers::{
         all_users, create_segment, delete_activity, download_gpx_file, get_activity,
-        get_activity_track, get_segment, get_segment_leaderboard, get_user_activities,
-        health_check, list_segments, new_activity, new_user, update_activity,
+        get_activity_track, get_segment, get_segment_leaderboard, get_segment_track,
+        get_user_activities, health_check, list_segments, new_activity, new_user,
+        reprocess_segment, update_activity,
     },
     object_store_service::ObjectStoreService,
 };
@@ -60,7 +62,9 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         // Segment routes
         .route("/segments", get(list_segments).post(create_segment))
         .route("/segments/{id}", get(get_segment))
+        .route("/segments/{id}/track", get(get_segment_track))
         .route("/segments/{id}/leaderboard", get(get_segment_leaderboard))
+        .route("/segments/{id}/reprocess", post(reprocess_segment))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

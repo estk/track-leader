@@ -9,9 +9,17 @@ interface ActivityMapProps {
   trackData: TrackData;
   highlightIndex?: number;
   onHover?: (index: number | null) => void;
+  selectionStart?: number | null;
+  selectionEnd?: number | null;
 }
 
-export function ActivityMap({ trackData, highlightIndex, onHover }: ActivityMapProps) {
+export function ActivityMap({
+  trackData,
+  highlightIndex,
+  onHover,
+  selectionStart,
+  selectionEnd,
+}: ActivityMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -135,6 +143,60 @@ export function ActivityMap({ trackData, highlightIndex, onHover }: ActivityMapP
       markerRef.current.setLngLat([point.lon, point.lat]);
     }
   }, [highlightIndex, loaded, trackData.points]);
+
+  // Update selection segment layer
+  useEffect(() => {
+    if (!map.current || !loaded) return;
+
+    const hasSelection =
+      selectionStart !== null &&
+      selectionStart !== undefined &&
+      selectionEnd !== null &&
+      selectionEnd !== undefined;
+
+    // Remove existing selection layer and source
+    if (map.current.getLayer("selection-route")) {
+      map.current.removeLayer("selection-route");
+    }
+    if (map.current.getSource("selection")) {
+      map.current.removeSource("selection");
+    }
+
+    if (hasSelection) {
+      const startIdx = Math.min(selectionStart, selectionEnd);
+      const endIdx = Math.max(selectionStart, selectionEnd);
+      const selectedPoints = trackData.points.slice(startIdx, endIdx + 1);
+      const coordinates = selectedPoints.map((p) => [p.lon, p.lat]);
+
+      if (coordinates.length >= 2) {
+        map.current.addSource("selection", {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates,
+            },
+          },
+        });
+
+        map.current.addLayer({
+          id: "selection-route",
+          type: "line",
+          source: "selection",
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": "#22c55e",
+            "line-width": 6,
+          },
+        });
+      }
+    }
+  }, [selectionStart, selectionEnd, loaded, trackData.points]);
 
   return (
     <div

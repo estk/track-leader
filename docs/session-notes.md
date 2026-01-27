@@ -1,11 +1,12 @@
 # Session Notes - January 26-27, 2026
 
-**Last verified:** 2026-01-27 - All Phase 2 features working after dev server restart.
+**Last verified:** 2026-01-27 - Phase 3 segment creation working with map and elevation profile.
 
 ## Current Status
 
 **Phase 1:** Complete (except staging deployment)
 **Phase 2:** Complete
+**Phase 3:** In Progress - Segment creation from activities complete
 
 ### What's Working
 
@@ -15,55 +16,67 @@
 4. **Activity Detail Page:**
    - Interactive map with OpenTopoMap tiles (contour lines, hill shading)
    - Elevation profile chart (Recharts) with distance/gain/range stats
+   - Hover sync between elevation profile and map (orange marker)
    - Statistics display (points, start/end elevation, bounds)
    - Edit modal (name, activity type, visibility)
    - Delete with confirmation
    - Download GPX button
-   - Public/Private visibility badge
-5. **User Profile Page** - Shows user info, activity summary (total/public/private counts)
-6. **Mobile Responsive** - Hamburger menu, responsive layouts, touch-friendly
-7. **Styling** - Tailwind CSS with shadcn/ui-style components
+   - **Segment creation mode** - select start/end points on elevation profile
+5. **Segments:**
+   - Create segment from activity by selecting portion on elevation profile
+   - Segment list page
+   - Segment detail page with map, elevation profile, statistics, leaderboard
+   - Hover sync between elevation profile and map on segment pages
+6. **User Profile Page** - Shows user info, activity summary (total/public/private counts)
+7. **Mobile Responsive** - Hamburger menu, responsive layouts, touch-friendly
+8. **Styling** - Tailwind CSS with shadcn/ui-style components
 
-### Key Fixes Made This Session
+### Phase 3 Progress (Segments)
 
-1. **PostCSS Config Missing** - Created `postcss.config.js` in project root. Without this, Tailwind CSS doesn't process.
+**Done:**
+- [x] Database schema for segments (migration 003)
+- [x] 3D geometry support for elevation (migration 004)
+- [x] Segment and SegmentEffort models
+- [x] Segment API endpoints (create, get, list, leaderboard, track)
+- [x] Segments list page
+- [x] Segment detail page with map, elevation profile, leaderboard
+- [x] Segment creation UI from activity detail page
+- [x] Hover sync on segment pages
 
-2. **SQLx Compile-Time Macros** - Converted `sqlx::query!` and `sqlx::query_as!` macros to runtime versions (`sqlx::query`, `sqlx::query_as`) to avoid needing DATABASE_URL at compile time.
+**Remaining:**
+- [ ] Automatic segment matching on upload (PostGIS spatial query)
+- [ ] Personal records tracking (mark PRs on efforts)
+- [ ] Segment editing/deletion
 
-3. **Date Serialization** - Added `#[serde(with = "rfc3339")]` to `OffsetDateTime` fields in `models.rs` so dates serialize as ISO strings instead of arrays.
+### Key Fixes Made This Session (Jan 27)
 
-4. **Activity Type Enum Mismatch** - Frontend was sending lowercase values ("run", "ride") but backend expects PascalCase ("Running", "RoadCycling"). Fixed in upload and edit pages.
+1. **Elevation Profile Click Handler** - Changed from using `activePayload` (unreliable) to storing hovered index in a ref and using it on click.
 
-5. **GPX MIME Type** - Browsers send GPX files as `application/octet-stream`. Updated `object_store_service.rs` to treat octet-stream as GPX.
+2. **React Render Loop Warning** - The Tooltip content was calling `onHover` during render causing "Cannot update a component while rendering" warning. Fixed by using `queueMicrotask()` to defer state updates.
 
-6. **Database Column Mismatch** - `get_activity` query referenced non-existent columns (filename, distance, etc.). Fixed to match actual schema.
+3. **Tokio Runtime Panic** - `ActivityQueue` was creating a nested tokio runtime with `Runtime::new()`. Changed to use `Handle::current()` to get a handle to the existing runtime.
 
-7. **Map Tiles** - Changed from MapLibre demo tiles to OpenTopoMap for proper topo maps with contour lines.
+4. **Segment Auth** - `create_segment` handler had placeholder `Uuid::nil()` for creator_id. Added `AuthUser` extractor to get real user ID from JWT.
 
-8. **Docker PostGIS** - Updated `docker-compose.yml` to use `postgis/postgis:15-3.3` image instead of plain postgres.
+5. **PostGIS 3D Geometry** - Segments need elevation data. Changed from `LINESTRING` to `LINESTRING Z` format and altered column with migration 004.
 
-### Files Changed This Session
+6. **Segment Track Endpoint** - Added `/segments/{id}/track` to return segment geometry with elevation for map and elevation profile display.
+
+### Files Changed This Session (Jan 27)
 
 **Backend (crates/tracks/src/):**
-- `models.rs` - Added rfc3339 serde for dates
-- `database.rs` - Fixed queries, converted to runtime sqlx
-- `handlers.rs` - Added track data endpoint, update/delete handlers
-- `object_store_service.rs` - Fixed MIME type handling, removed panic
-- `lib.rs` - Added new routes, CORS for PATCH/DELETE
-- `auth.rs` - Fixed me() to return User instead of Claims
+- `activity_queue.rs` - Fixed tokio runtime issue (use Handle::current() not Runtime::new())
+- `handlers.rs` - Added AuthUser to create_segment, added get_segment_track endpoint, store 3D coordinates
+- `database.rs` - Added get_segment_geometry() method
+- `lib.rs` - Added /segments/{id}/track route
+
+**Backend (crates/tracks/migrations/):**
+- `004_segments_z.sql` - Alter geo column to support Z dimension
 
 **Frontend (src/):**
-- `components/activity/activity-map.tsx` - OpenTopoMap tiles
-- `components/activity/elevation-profile.tsx` - Recharts chart
-- `app/activities/[id]/page.tsx` - Detail page with edit/delete
-- `app/activities/upload/page.tsx` - Fixed activity types
-- `lib/api.ts` - Added track, update, delete endpoints
-- `lib/auth-context.tsx` - Auth state management
-- `postcss.config.js` - **Created** (was missing!)
-
-**Config:**
-- `docker-compose.yml` - PostGIS image
-- `.github/workflows/ci.yml` - CI pipeline
+- `components/activity/elevation-profile.tsx` - Fixed click handler and hover state management
+- `app/segments/[id]/page.tsx` - Added map, elevation profile, hover sync
+- `lib/api.ts` - Added SegmentTrackData interface and getSegmentTrack method
 
 ### Running the App
 
@@ -74,7 +87,7 @@ docker-compose up postgres
 
 # Terminal 2 - Backend
 cd crates/tracks
-DATABASE_URL="postgres://tracks_user:tracks_password@localhost:5432/tracks_db" cargo run
+RUST_LOG=info DATABASE_URL="postgres://tracks_user:tracks_password@localhost:5432/tracks_db" cargo run
 
 # Terminal 3 - Frontend
 npm run dev
@@ -82,25 +95,30 @@ npm run dev
 
 Open http://localhost:3000
 
-### Phase 3 Progress (Segments)
+### How to Continue Phase 3
 
-**Done:**
-- [x] Database schema for segments (migration 003)
-- [x] Segment and SegmentEffort models
-- [x] Segment API endpoints (create, get, list, leaderboard)
-- [x] Segments list page
-- [x] Segment detail page with leaderboard
+**Next task: Automatic Segment Matching**
 
-**Remaining:**
-- [ ] Segment creation UI from activity portions
-- [ ] Automatic segment matching on upload
-- [ ] Personal records tracking
+When a user uploads an activity, detect if they rode/ran through any existing segments and create SegmentEffort records automatically.
 
-### Phase 3 Details (Segments)
+Implementation approach:
+1. In `handlers.rs` `new_activity`, after saving the activity, query for segments that the track passes through
+2. Use PostGIS `ST_DWithin` or `ST_Intersects` to find segments near the activity track
+3. For matching segments, extract the portion of the activity track that covers the segment
+4. Calculate elapsed time for that portion
+5. Create SegmentEffort record
 
-- Segment creation from activities
-- Segment matching
-- Segment leaderboards
+Key PostGIS functions:
+- `ST_DWithin(geog1, geog2, distance_meters)` - check if geometries are within distance
+- `ST_Intersects(geog1, geog2)` - check if geometries intersect
+- `ST_LineLocatePoint(line, point)` - find position along line (0-1) where point is closest
+
+**Personal Records Tracking**
+
+After creating a SegmentEffort:
+1. Query user's previous best time on that segment
+2. If new effort is faster, mark it as `is_personal_record = true`
+3. Update previous PR to `is_personal_record = false`
 
 ## Important Context Not in Code
 
@@ -113,12 +131,13 @@ Open http://localhost:3000
 - Address user as "PrimusMan" or "JagulonPrime"
 
 ### Browser Testing
-- Chrome automation available via `/chrome` or `mcp__claude-in-chrome__*` tools
+- Chrome automation available via `mcp__claude-in-chrome__*` tools
 - Can take screenshots, navigate, click to verify UI changes
 
 ### Test User Created
-- Email: evan (visible in screenshots)
+- Email: evan
 - Has one activity: "reno tour" (MountainBiking, 107km near Reno NV)
+- Has created at least one segment from that activity
 
 ## Architecture Notes
 
@@ -136,3 +155,9 @@ GPX files stored locally in `./uploads` directory, organized as `activities/{use
 2. Token stored in localStorage
 3. AuthContext manages state, auto-fetches user on page load
 4. Protected routes redirect to /login if not authenticated
+5. Backend handlers use `AuthUser` extractor for authenticated endpoints
+
+### Component Reuse
+- `ActivityMap` and `ElevationProfile` components are reused for both activities and segments
+- Convert `SegmentTrackData` to `TrackData` format by adding `time: null` to each point
+- Pass `highlightIndex` and `onHover` props to enable hover sync between map and elevation profile

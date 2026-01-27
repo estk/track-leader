@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -8,12 +8,18 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  ReferenceArea,
+  ReferenceLine,
 } from "recharts";
 import { TrackPoint } from "@/lib/api";
 
 interface ElevationProfileProps {
   points: TrackPoint[];
   onHover?: (index: number | null) => void;
+  selectionMode?: boolean;
+  selectionStart?: number | null;
+  selectionEnd?: number | null;
+  onPointClick?: (index: number) => void;
 }
 
 function calculateDistance(
@@ -35,8 +41,21 @@ function calculateDistance(
   return R * c;
 }
 
-export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
+export function ElevationProfile({
+  points,
+  onHover,
+  selectionMode,
+  selectionStart,
+  selectionEnd,
+  onPointClick,
+}: ElevationProfileProps) {
   const lastHoveredIndex = useRef<number | null>(null);
+  const [currentHoverIndex, setCurrentHoverIndex] = useState<number | null>(null);
+
+  // Use effect to propagate hover state changes to parent
+  useEffect(() => {
+    onHover?.(currentHoverIndex);
+  }, [currentHoverIndex, onHover]);
 
   const chartData = useMemo(() => {
     let cumulativeDistance = 0;
@@ -86,6 +105,19 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
     };
   }, [chartData]);
 
+  // Find the distances for selection markers
+  const selectionDistances = useMemo(() => {
+    if (selectionStart === null && selectionEnd === null) return null;
+
+    const startData = chartData.find((d) => d.originalIndex === selectionStart);
+    const endData = chartData.find((d) => d.originalIndex === selectionEnd);
+
+    return {
+      start: startData?.distance ?? null,
+      end: endData?.distance ?? null,
+    };
+  }, [chartData, selectionStart, selectionEnd]);
+
   if (chartData.length === 0) {
     return (
       <div className="h-[200px] flex items-center justify-center text-muted-foreground">
@@ -107,11 +139,21 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
         <AreaChart
           data={chartData}
           onMouseLeave={() => onHover?.(null)}
+          onClick={() => {
+            if (selectionMode && lastHoveredIndex.current !== null) {
+              onPointClick?.(lastHoveredIndex.current);
+            }
+          }}
+          style={{ cursor: selectionMode ? "crosshair" : "default" }}
         >
           <defs>
             <linearGradient id="elevationGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
               <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1} />
+            </linearGradient>
+            <linearGradient id="selectionGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#22c55e" stopOpacity={0.6} />
+              <stop offset="95%" stopColor="#22c55e" stopOpacity={0.2} />
             </linearGradient>
           </defs>
           <XAxis
@@ -131,10 +173,10 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
               if (active && payload && payload[0]) {
                 const data = payload[0].payload;
                 const idx = data.originalIndex;
-                // Only call onHover when index changes to avoid render loops
+                // Schedule hover update for after render completes
                 if (lastHoveredIndex.current !== idx) {
                   lastHoveredIndex.current = idx;
-                  setTimeout(() => onHover?.(idx), 0);
+                  queueMicrotask(() => setCurrentHoverIndex(idx));
                 }
                 return (
                   <div className="bg-background border rounded-md p-2 shadow-md">
@@ -144,17 +186,53 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
                     <p className="text-xs text-muted-foreground">
                       {data.distance.toFixed(2)} km
                     </p>
+                    {selectionMode && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Click to select
+                      </p>
+                    )}
                   </div>
                 );
               }
               // Clear hover when tooltip is not active
               if (!active && lastHoveredIndex.current !== null) {
                 lastHoveredIndex.current = null;
-                setTimeout(() => onHover?.(null), 0);
+                queueMicrotask(() => setCurrentHoverIndex(null));
               }
               return null;
             }}
           />
+          {/* Selection range highlight */}
+          {selectionDistances &&
+            selectionDistances.start !== null &&
+            selectionDistances.end !== null && (
+              <ReferenceArea
+                x1={Math.min(selectionDistances.start, selectionDistances.end)}
+                x2={Math.max(selectionDistances.start, selectionDistances.end)}
+                fill="#22c55e"
+                fillOpacity={0.3}
+                stroke="#22c55e"
+                strokeOpacity={0.8}
+              />
+            )}
+          {/* Start marker */}
+          {selectionDistances && selectionDistances.start !== null && (
+            <ReferenceLine
+              x={selectionDistances.start}
+              stroke="#22c55e"
+              strokeWidth={2}
+              label={{ value: "Start", position: "top", fill: "#22c55e", fontSize: 12 }}
+            />
+          )}
+          {/* End marker */}
+          {selectionDistances && selectionDistances.end !== null && (
+            <ReferenceLine
+              x={selectionDistances.end}
+              stroke="#ef4444"
+              strokeWidth={2}
+              label={{ value: "End", position: "top", fill: "#ef4444", fontSize: 12 }}
+            />
+          )}
           <Area
             type="monotone"
             dataKey="elevation"

@@ -1,5 +1,6 @@
 use crate::errors::AppError;
 use crate::models::{Activity, ActivityType, Scores, Segment, SegmentEffort, User};
+use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -454,5 +455,240 @@ impl Database {
         .await?;
 
         Ok(efforts)
+    }
+
+    pub async fn get_segment_geometry(&self, id: Uuid) -> Result<Option<String>, AppError> {
+        let row: Option<(String,)> = sqlx::query_as(
+            r#"
+            SELECT ST_AsGeoJSON(geo)::text
+            FROM segments
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|(geojson,)| geojson))
+    }
+
+    // Track geometry methods
+
+    pub async fn save_track_geometry(
+        &self,
+        user_id: Uuid,
+        activity_id: Uuid,
+        geo_wkt: &str,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            INSERT INTO tracks (user_id, activity_id, geo, created_at)
+            VALUES ($1, $2, ST_GeogFromText($3), NOW())
+            ON CONFLICT (activity_id) DO UPDATE
+            SET geo = ST_GeogFromText($3)
+            "#,
+        )
+        .bind(user_id)
+        .bind(activity_id)
+        .bind(geo_wkt)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_track_geometry(&self, activity_id: Uuid) -> Result<Option<String>, AppError> {
+        let row: Option<(String,)> = sqlx::query_as(
+            r#"
+            SELECT ST_AsGeoJSON(geo)::text
+            FROM tracks
+            WHERE activity_id = $1
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|(geojson,)| geojson))
+    }
+
+    // Segment matching methods
+
+    /// Find segments that the activity track passes through.
+    /// Uses PostGIS to check if track passes within 50m of both segment endpoints
+    /// and verifies direction (start before end along the track).
+    pub async fn find_matching_segments(
+        &self,
+        activity_id: Uuid,
+        activity_type: &ActivityType,
+    ) -> Result<Vec<SegmentMatch>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct MatchRow {
+            id: Uuid,
+            distance_meters: f64,
+            start_pos: f64,
+            end_pos: f64,
+        }
+
+        let rows: Vec<MatchRow> = sqlx::query_as(
+            r#"
+            SELECT s.id,
+                   s.distance_meters,
+                   ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry) as start_pos,
+                   ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry) as end_pos
+            FROM segments s
+            JOIN tracks t ON t.activity_id = $1
+            WHERE s.deleted_at IS NULL
+              AND s.activity_type = $2
+              AND ST_DWithin(t.geo, s.start_point, 50)
+              AND ST_DWithin(t.geo, s.end_point, 50)
+              AND ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry)
+                  < ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry)
+            "#,
+        )
+        .bind(activity_id)
+        .bind(activity_type)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| SegmentMatch {
+                segment_id: r.id,
+                distance_meters: r.distance_meters,
+                start_fraction: r.start_pos,
+                end_fraction: r.end_pos,
+            })
+            .collect())
+    }
+
+    /// Check if a segment effort already exists for a given segment and activity.
+    pub async fn segment_effort_exists(
+        &self,
+        segment_id: Uuid,
+        activity_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let row: Option<(i64,)> = sqlx::query_as(
+            r#"
+            SELECT 1 FROM segment_efforts
+            WHERE segment_id = $1 AND activity_id = $2
+            LIMIT 1
+            "#,
+        )
+        .bind(segment_id)
+        .bind(activity_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    /// Update personal records for a user on a segment.
+    /// Marks the fastest effort as PR and clears PR flag from all others.
+    pub async fn update_personal_records(
+        &self,
+        segment_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<(), AppError> {
+        // Clear all PR flags for this user on this segment
+        sqlx::query(
+            r#"
+            UPDATE segment_efforts
+            SET is_personal_record = FALSE
+            WHERE segment_id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(segment_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        // Set PR flag on the fastest effort
+        sqlx::query(
+            r#"
+            UPDATE segment_efforts
+            SET is_personal_record = TRUE
+            WHERE id = (
+                SELECT id FROM segment_efforts
+                WHERE segment_id = $1 AND user_id = $2
+                ORDER BY elapsed_time_seconds ASC
+                LIMIT 1
+            )
+            "#,
+        )
+        .bind(segment_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get all activities with their track geometry for reprocessing.
+    pub async fn get_activities_with_tracks(
+        &self,
+        activity_type: &ActivityType,
+    ) -> Result<Vec<(Uuid, Uuid)>, AppError> {
+        let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
+            r#"
+            SELECT a.id, a.user_id
+            FROM activities a
+            JOIN tracks t ON t.activity_id = a.id
+            WHERE a.deleted_at IS NULL
+              AND a.activity_type = $1
+            "#,
+        )
+        .bind(activity_type)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Find all activities that match a specific segment.
+    /// Returns activity_id, user_id, and the fractional positions along each track.
+    pub async fn find_matching_activities_for_segment(
+        &self,
+        segment_id: Uuid,
+    ) -> Result<Vec<ActivityMatch>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct MatchRow {
+            activity_id: Uuid,
+            user_id: Uuid,
+            start_pos: f64,
+            end_pos: f64,
+        }
+
+        let rows: Vec<MatchRow> = sqlx::query_as(
+            r#"
+            SELECT t.activity_id,
+                   t.user_id,
+                   ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry) as start_pos,
+                   ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry) as end_pos
+            FROM segments s
+            JOIN tracks t ON ST_DWithin(t.geo, s.start_point, 50)
+                         AND ST_DWithin(t.geo, s.end_point, 50)
+            JOIN activities a ON a.id = t.activity_id
+            WHERE s.id = $1
+              AND s.deleted_at IS NULL
+              AND a.deleted_at IS NULL
+              AND a.activity_type = s.activity_type
+              AND ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry)
+                  < ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry)
+            "#,
+        )
+        .bind(segment_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| ActivityMatch {
+                activity_id: r.activity_id,
+                user_id: r.user_id,
+                start_fraction: r.start_pos,
+                end_fraction: r.end_pos,
+            })
+            .collect())
     }
 }

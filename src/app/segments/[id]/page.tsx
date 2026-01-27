@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, Segment, SegmentEffort } from "@/lib/api";
+import { api, Segment, SegmentEffort, SegmentTrackData, TrackData } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ActivityMap } from "@/components/activity/activity-map";
+import { ElevationProfile } from "@/components/activity/elevation-profile";
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   Running: "Run",
@@ -44,9 +46,11 @@ export default function SegmentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [segment, setSegment] = useState<Segment | null>(null);
+  const [trackData, setTrackData] = useState<SegmentTrackData | null>(null);
   const [efforts, setEfforts] = useState<SegmentEffort[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
 
   const segmentId = params.id as string;
 
@@ -54,16 +58,32 @@ export default function SegmentDetailPage() {
     if (segmentId) {
       Promise.all([
         api.getSegment(segmentId),
+        api.getSegmentTrack(segmentId),
         api.getSegmentLeaderboard(segmentId),
       ])
-        .then(([seg, eff]) => {
+        .then(([seg, track, eff]) => {
           setSegment(seg);
+          setTrackData(track);
           setEfforts(eff);
         })
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
     }
   }, [segmentId]);
+
+  // Convert segment track data to the format expected by ActivityMap/ElevationProfile
+  const convertedTrackData: TrackData | null = useMemo(() => {
+    if (!trackData) return null;
+    return {
+      points: trackData.points.map((p) => ({
+        lat: p.lat,
+        lon: p.lon,
+        ele: p.ele,
+        time: null,
+      })),
+      bounds: trackData.bounds,
+    };
+  }, [trackData]);
 
   if (loading) {
     return (
@@ -112,6 +132,34 @@ export default function SegmentDetailPage() {
         <Card>
           <CardContent className="py-4">
             <p className="text-muted-foreground">{segment.description}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {convertedTrackData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Route</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ActivityMap
+              trackData={convertedTrackData}
+              highlightIndex={highlightIndex ?? undefined}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {convertedTrackData && convertedTrackData.points.some((p) => p.ele !== null) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Elevation Profile</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ElevationProfile
+              points={convertedTrackData.points}
+              onHover={setHighlightIndex}
+            />
           </CardContent>
         </Card>
       )}

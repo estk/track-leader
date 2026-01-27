@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     activity_queue::ActivityQueue,
+    auth::AuthUser,
     database::Database,
     errors::AppError,
     models::{Activity, ActivityType, Segment, SegmentEffort, User},
@@ -124,8 +125,14 @@ pub async fn new_activity(
         visibility: params.visibility.unwrap_or_else(|| "public".to_string()),
     };
 
-    aq.submit(params.user_id, activity.id, file_type, file_bytes)
-        .map_err(AppError::Queue)?;
+    aq.submit(
+        params.user_id,
+        activity.id,
+        file_type,
+        file_bytes,
+        activity.activity_type,
+    )
+    .map_err(AppError::Queue)?;
 
     db.save_activity(&activity).await?;
     Ok(Json(activity))
@@ -290,22 +297,36 @@ pub struct SegmentPoint {
 
 pub async fn create_segment(
     Extension(db): Extension<Database>,
+    Extension(store): Extension<ObjectStoreService>,
+    AuthUser(claims): AuthUser,
     Json(req): Json<CreateSegmentRequest>,
-    // In real app, get user_id from auth middleware
 ) -> Result<Json<Segment>, AppError> {
+    use crate::segment_matching;
+
     if req.points.len() < 2 {
         return Err(AppError::InvalidInput(
             "Segment must have at least 2 points".to_string(),
         ));
     }
 
-    // Build WKT strings for PostGIS
+    // Build WKT strings for PostGIS (include elevation if available)
+    let has_elevation = req.points.iter().any(|p| p.ele.is_some());
     let coords: Vec<String> = req
         .points
         .iter()
-        .map(|p| format!("{} {}", p.lon, p.lat))
+        .map(|p| {
+            if has_elevation {
+                format!("{} {} {}", p.lon, p.lat, p.ele.unwrap_or(0.0))
+            } else {
+                format!("{} {}", p.lon, p.lat)
+            }
+        })
         .collect();
-    let geo_wkt = format!("LINESTRING({})", coords.join(", "));
+    let geo_wkt = if has_elevation {
+        format!("LINESTRING Z({})", coords.join(", "))
+    } else {
+        format!("LINESTRING({})", coords.join(", "))
+    };
 
     let start = &req.points[0];
     let end = &req.points[req.points.len() - 1];
@@ -318,8 +339,7 @@ pub async fn create_segment(
     // Calculate elevation gain/loss
     let (elevation_gain, elevation_loss) = calculate_elevation_change(&req.points);
 
-    // TODO: Get user_id from auth - using placeholder for now
-    let creator_id = Uuid::nil();
+    let creator_id = claims.sub;
 
     let segment = db
         .create_segment(
@@ -337,6 +357,72 @@ pub async fn create_segment(
             &req.visibility,
         )
         .await?;
+
+    // Automatically find and create efforts for existing activities
+    let segment_id = segment.id;
+    match db.find_matching_activities_for_segment(segment_id).await {
+        Ok(matches) => {
+            for activity_match in matches {
+                // Get the activity to find its GPX file
+                let activity = match db.get_activity(activity_match.activity_id).await {
+                    Ok(Some(a)) => a,
+                    _ => continue,
+                };
+
+                // Fetch and parse the GPX
+                let file_bytes = match store.get_file(&activity.object_store_path).await {
+                    Ok(bytes) => bytes,
+                    Err(_) => continue,
+                };
+
+                let gpx: gpx::Gpx = match gpx::read(std::io::BufReader::new(file_bytes.as_ref())) {
+                    Ok(g) => g,
+                    Err(_) => continue,
+                };
+
+                // Extract timing
+                let timing = match segment_matching::extract_timing_from_gpx(
+                    &gpx,
+                    activity_match.start_fraction,
+                    activity_match.end_fraction,
+                ) {
+                    Some(t) => t,
+                    None => continue,
+                };
+
+                // Create the effort
+                if let Ok(effort) = db
+                    .create_segment_effort(
+                        segment_id,
+                        activity_match.activity_id,
+                        activity_match.user_id,
+                        timing.started_at,
+                        timing.elapsed_time_seconds,
+                        None,
+                        None,
+                        None,
+                    )
+                    .await
+                {
+                    tracing::info!(
+                        "Auto-created effort {} for segment {} from activity {} with time {:.1}s",
+                        effort.id,
+                        segment_id,
+                        activity_match.activity_id,
+                        timing.elapsed_time_seconds
+                    );
+
+                    // Update personal records
+                    let _ = db
+                        .update_personal_records(segment_id, activity_match.user_id)
+                        .await;
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to find matching activities for new segment: {e}");
+        }
+    }
 
     Ok(Json(segment))
 }
@@ -428,4 +514,202 @@ pub async fn get_segment_leaderboard(
 ) -> Result<Json<Vec<SegmentEffort>>, AppError> {
     let efforts = db.get_segment_efforts(id, 100).await?;
     Ok(Json(efforts))
+}
+
+#[derive(Debug, Serialize)]
+pub struct SegmentTrackData {
+    pub points: Vec<SegmentTrackPoint>,
+    pub bounds: TrackBounds,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SegmentTrackPoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub ele: Option<f64>,
+}
+
+pub async fn get_segment_track(
+    Extension(db): Extension<Database>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SegmentTrackData>, AppError> {
+    let geojson = db
+        .get_segment_geometry(id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    // Parse GeoJSON to extract coordinates
+    let parsed: serde_json::Value =
+        serde_json::from_str(&geojson).map_err(|_| AppError::Internal)?;
+
+    let coords = parsed["coordinates"].as_array().ok_or(AppError::Internal)?;
+
+    let points: Vec<SegmentTrackPoint> = coords
+        .iter()
+        .filter_map(|c| {
+            let arr = c.as_array()?;
+            Some(SegmentTrackPoint {
+                lon: arr.first()?.as_f64()?,
+                lat: arr.get(1)?.as_f64()?,
+                ele: arr.get(2).and_then(|v| v.as_f64()),
+            })
+        })
+        .collect();
+
+    if points.is_empty() {
+        return Err(AppError::NotFound);
+    }
+
+    let min_lat = points.iter().map(|p| p.lat).fold(f64::INFINITY, f64::min);
+    let max_lat = points
+        .iter()
+        .map(|p| p.lat)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let min_lon = points.iter().map(|p| p.lon).fold(f64::INFINITY, f64::min);
+    let max_lon = points
+        .iter()
+        .map(|p| p.lon)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    Ok(Json(SegmentTrackData {
+        points,
+        bounds: TrackBounds {
+            min_lat,
+            max_lat,
+            min_lon,
+            max_lon,
+        },
+    }))
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReprocessResult {
+    pub segment_id: Uuid,
+    pub activities_checked: usize,
+    pub efforts_created: usize,
+}
+
+/// Reprocess all activities to find matches for a specific segment.
+/// This is useful when a new segment is created and we want to find
+/// all existing activities that pass through it.
+pub async fn reprocess_segment(
+    Extension(db): Extension<Database>,
+    Extension(store): Extension<ObjectStoreService>,
+    Path(segment_id): Path<Uuid>,
+) -> Result<Json<ReprocessResult>, AppError> {
+    use crate::segment_matching;
+
+    // Verify segment exists
+    let segment = db
+        .get_segment(segment_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    // Find all activities that match this segment
+    let matches = db.find_matching_activities_for_segment(segment_id).await?;
+
+    let activities_checked = matches.len();
+    let mut efforts_created = 0;
+
+    for activity_match in matches {
+        // Check if effort already exists
+        if db
+            .segment_effort_exists(segment_id, activity_match.activity_id)
+            .await?
+        {
+            continue;
+        }
+
+        // Get the activity to find its GPX file
+        let activity = match db.get_activity(activity_match.activity_id).await? {
+            Some(a) => a,
+            None => continue,
+        };
+
+        // Fetch and parse the GPX
+        let file_bytes = match store.get_file(&activity.object_store_path).await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to fetch GPX for activity {}: {e}",
+                    activity_match.activity_id
+                );
+                continue;
+            }
+        };
+
+        let gpx: gpx::Gpx = match gpx::read(std::io::BufReader::new(file_bytes.as_ref())) {
+            Ok(g) => g,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to parse GPX for activity {}: {e}",
+                    activity_match.activity_id
+                );
+                continue;
+            }
+        };
+
+        // Extract timing
+        let timing = match segment_matching::extract_timing_from_gpx(
+            &gpx,
+            activity_match.start_fraction,
+            activity_match.end_fraction,
+        ) {
+            Some(t) => t,
+            None => {
+                tracing::warn!(
+                    "Could not extract timing for activity {} on segment {}",
+                    activity_match.activity_id,
+                    segment_id
+                );
+                continue;
+            }
+        };
+
+        // Create the effort
+        match db
+            .create_segment_effort(
+                segment_id,
+                activity_match.activity_id,
+                activity_match.user_id,
+                timing.started_at,
+                timing.elapsed_time_seconds,
+                None,
+                None,
+                None,
+            )
+            .await
+        {
+            Ok(effort) => {
+                tracing::info!(
+                    "Created segment effort {} for segment {} from activity {} with time {:.1}s",
+                    effort.id,
+                    segment_id,
+                    activity_match.activity_id,
+                    timing.elapsed_time_seconds
+                );
+                efforts_created += 1;
+
+                // Update personal records
+                if let Err(e) = db
+                    .update_personal_records(segment_id, activity_match.user_id)
+                    .await
+                {
+                    tracing::error!("Failed to update personal records: {e}");
+                }
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Failed to create segment effort for activity {}: {e}",
+                    activity_match.activity_id
+                );
+            }
+        }
+    }
+
+    Ok(Json(ReprocessResult {
+        segment_id: segment.id,
+        activities_checked,
+        efforts_created,
+    }))
 }

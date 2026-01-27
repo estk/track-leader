@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityMap } from "@/components/activity/activity-map";
 import { ElevationProfile } from "@/components/activity/elevation-profile";
+import { Textarea } from "@/components/ui/textarea";
 
 const ACTIVITY_TYPES = [
   { value: "Running", label: "Run" },
@@ -42,6 +43,15 @@ export default function ActivityDetailPage() {
   // Delete modal state
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Segment creation state
+  const [segmentMode, setSegmentMode] = useState(false);
+  const [segmentStart, setSegmentStart] = useState<number | null>(null);
+  const [segmentEnd, setSegmentEnd] = useState<number | null>(null);
+  const [segmentModalOpen, setSegmentModalOpen] = useState(false);
+  const [segmentName, setSegmentName] = useState("");
+  const [segmentDescription, setSegmentDescription] = useState("");
+  const [creatingSegment, setCreatingSegment] = useState(false);
 
   const activityId = params.id as string;
 
@@ -104,6 +114,66 @@ export default function ActivityDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to delete");
       setDeleting(false);
     }
+  };
+
+  const handleSegmentPointClick = (index: number) => {
+    if (!segmentMode) return;
+
+    if (segmentStart === null) {
+      setSegmentStart(index);
+    } else if (segmentEnd === null) {
+      // Ensure start < end
+      if (index < segmentStart) {
+        setSegmentEnd(segmentStart);
+        setSegmentStart(index);
+      } else {
+        setSegmentEnd(index);
+      }
+    } else {
+      // Reset and start over
+      setSegmentStart(index);
+      setSegmentEnd(null);
+    }
+  };
+
+  const handleCreateSegment = async () => {
+    if (!activity || !trackData || segmentStart === null || segmentEnd === null) return;
+
+    const startIdx = Math.min(segmentStart, segmentEnd);
+    const endIdx = Math.max(segmentStart, segmentEnd);
+    const segmentPoints = trackData.points.slice(startIdx, endIdx + 1);
+
+    if (segmentPoints.length < 2) {
+      setError("Segment must have at least 2 points");
+      return;
+    }
+
+    setCreatingSegment(true);
+    try {
+      const segment = await api.createSegment({
+        name: segmentName || `${activity.name} segment`,
+        description: segmentDescription || undefined,
+        activity_type: activity.activity_type,
+        points: segmentPoints.map((p) => ({
+          lat: p.lat,
+          lon: p.lon,
+          ele: p.ele ?? undefined,
+        })),
+        visibility: "public",
+      });
+      router.push(`/segments/${segment.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create segment");
+      setCreatingSegment(false);
+    }
+  };
+
+  const cancelSegmentMode = () => {
+    setSegmentMode(false);
+    setSegmentStart(null);
+    setSegmentEnd(null);
+    setSegmentName("");
+    setSegmentDescription("");
   };
 
   if (authLoading || loading) {
@@ -247,6 +317,101 @@ export default function ActivityDetailPage() {
         </div>
       )}
 
+      {/* Segment Creation Modal */}
+      {segmentModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Create Segment</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="segment-name">Name</Label>
+                <Input
+                  id="segment-name"
+                  placeholder="Segment name"
+                  value={segmentName}
+                  onChange={(e) => setSegmentName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="segment-description">Description (optional)</Label>
+                <Textarea
+                  id="segment-description"
+                  placeholder="Describe this segment..."
+                  value={segmentDescription}
+                  onChange={(e) => setSegmentDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {trackData && segmentStart !== null && segmentEnd !== null && (
+                  <p>
+                    Selected {Math.abs(segmentEnd - segmentStart) + 1} points
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setSegmentModalOpen(false)}
+                  disabled={creatingSegment}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleCreateSegment}
+                  disabled={creatingSegment || !segmentName.trim()}
+                >
+                  {creatingSegment ? "Creating..." : "Create Segment"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Segment Mode Banner */}
+      {segmentMode && (
+        <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+          <CardContent className="py-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <p className="font-medium text-blue-900 dark:text-blue-100">
+                  Segment Creation Mode
+                </p>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  {segmentStart === null
+                    ? "Click on the elevation profile to select the start point"
+                    : segmentEnd === null
+                    ? "Click to select the end point"
+                    : "Segment selected! Click 'Create' to continue or click again to reset"}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {segmentStart !== null && segmentEnd !== null && (
+                  <Button
+                    size="sm"
+                    onClick={() => setSegmentModalOpen(true)}
+                  >
+                    Create
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cancelSegmentMode}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">{activity.name}</h1>
@@ -285,6 +450,23 @@ export default function ActivityDetailPage() {
           >
             Download
           </Button>
+          {!segmentMode ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSegmentMode(true)}
+            >
+              Create Segment
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancelSegmentMode}
+            >
+              Cancel Segment
+            </Button>
+          )}
           <Button
             variant="destructive"
             size="sm"
@@ -303,6 +485,8 @@ export default function ActivityDetailPage() {
           <ActivityMap
             trackData={trackData}
             highlightIndex={highlightIndex ?? undefined}
+            selectionStart={segmentStart}
+            selectionEnd={segmentEnd}
           />
         </CardContent>
       </Card>
@@ -315,6 +499,10 @@ export default function ActivityDetailPage() {
           <ElevationProfile
             points={trackData.points}
             onHover={setHighlightIndex}
+            selectionMode={segmentMode}
+            selectionStart={segmentStart}
+            selectionEnd={segmentEnd}
+            onPointClick={handleSegmentPointClick}
           />
         </CardContent>
       </Card>

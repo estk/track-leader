@@ -75,6 +75,22 @@ export interface CreateSegmentRequest {
   visibility?: 'public' | 'private';
 }
 
+export interface SegmentTrackPoint {
+  lat: number;
+  lon: number;
+  ele: number | null;
+}
+
+export interface SegmentTrackData {
+  points: SegmentTrackPoint[];
+  bounds: {
+    min_lat: number;
+    max_lat: number;
+    min_lon: number;
+    max_lon: number;
+  };
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -225,6 +241,10 @@ class ApiClient {
 
   async getSegmentLeaderboard(id: string): Promise<SegmentEffort[]> {
     return this.request<SegmentEffort[]>(`/segments/${id}/leaderboard`);
+  }
+
+  async getSegmentTrack(id: string): Promise<SegmentTrackData> {
+    return this.request<SegmentTrackData>(`/segments/${id}/track`);
   }
 
   async createSegment(data: CreateSegmentRequest): Promise<Segment> {
