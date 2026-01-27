@@ -452,3 +452,29 @@ WHERE ST_DWithin(t.geo, s.start_point, 50)  -- 50m tolerance
 **Files Added:**
 - `migrations/005_tracks_spatial_index.sql` - GIST index + unique constraint
 - `segment_matching.rs` - SegmentMatch, ActivityMatch, timing extraction
+
+---
+
+## Known Issues
+
+### BUG: Original activity not counted as segment effort on segment creation
+
+**Reported:** 2026-01-26
+
+**Symptom:** When creating a segment from an activity, the original activity is not automatically counted as a segment effort.
+
+**Possible causes to investigate:**
+1. **Track not in `tracks` table** - The background queue may not have finished processing the activity's track geometry before the segment was created
+2. **Activity type mismatch** - The activity type might not match the segment's activity type
+3. **Spatial matching failure** - The PostGIS query might not be finding the match due to tolerance issues or direction check
+
+**Where to look:**
+- `handlers.rs::create_segment()` - Calls `find_matching_activities_for_segment()` after segment creation
+- `database.rs::find_matching_activities_for_segment()` - PostGIS query that finds matching activities
+- `activity_queue.rs` - Where `save_track_geometry()` is called (timing issue?)
+
+**Debug steps:**
+1. Check if the activity's track exists in the `tracks` table
+2. Verify activity type matches segment activity type
+3. Run the matching query manually to see if it returns results
+4. Check server logs for errors during segment creation
