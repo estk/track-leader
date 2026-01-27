@@ -139,6 +139,36 @@ pub async fn get_activity(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateActivityRequest {
+    pub name: Option<String>,
+    pub activity_type: Option<ActivityType>,
+}
+
+pub async fn update_activity(
+    Extension(db): Extension<Database>,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateActivityRequest>,
+) -> Result<Json<Activity>, AppError> {
+    let activity = db
+        .update_activity(id, req.name.as_deref(), req.activity_type.as_ref())
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    Ok(Json(activity))
+}
+
+pub async fn delete_activity(
+    Extension(db): Extension<Database>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    if db.delete_activity(id).await? {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(AppError::NotFound)
+    }
+}
+
 #[derive(Deserialize)]
 pub struct UserActivitiesQuery {}
 

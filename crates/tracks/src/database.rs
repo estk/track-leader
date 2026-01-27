@@ -66,6 +66,39 @@ impl Database {
         Ok(activities)
     }
 
+    pub async fn update_activity(
+        &self,
+        id: Uuid,
+        name: Option<&str>,
+        activity_type: Option<&crate::models::ActivityType>,
+    ) -> Result<Option<Activity>, AppError> {
+        let activity = sqlx::query_as(
+            r#"
+            UPDATE activities
+            SET name = COALESCE($2, name),
+                activity_type = COALESCE($3, activity_type)
+            WHERE id = $1
+            RETURNING id, user_id, activity_type, name, object_store_path, submitted_at
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(activity_type.map(|at| at as &crate::models::ActivityType))
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(activity)
+    }
+
+    pub async fn delete_activity(&self, id: Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query("DELETE FROM activities WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn new_user(&self, user: &User) -> Result<(), AppError> {
         sqlx::query!(
             r#"

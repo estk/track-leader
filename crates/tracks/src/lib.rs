@@ -20,8 +20,8 @@ use crate::{
     auth::{login, me, register},
     database::Database,
     handlers::{
-        all_users, download_gpx_file, get_activity, get_activity_track, get_user_activities,
-        health_check, new_activity, new_user,
+        all_users, delete_activity, download_gpx_file, get_activity, get_activity_track,
+        get_user_activities, health_check, new_activity, new_user, update_activity,
     },
     object_store_service::ObjectStoreService,
 };
@@ -32,7 +32,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
     let store = ObjectStoreService::new_local(object_store_path);
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
         .allow_headers(Any)
         .allow_origin(Any);
 
@@ -47,7 +47,12 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/users", get(all_users))
         // Activity routes
         .route("/activities/new", post(new_activity))
-        .route("/activities/{id}", get(get_activity))
+        .route(
+            "/activities/{id}",
+            get(get_activity)
+                .patch(update_activity)
+                .delete(delete_activity),
+        )
         .route("/activities/{id}/track", get(get_activity_track))
         .route("/activities/{id}/download", get(download_gpx_file))
         .route("/users/{id}/activities", get(get_user_activities))

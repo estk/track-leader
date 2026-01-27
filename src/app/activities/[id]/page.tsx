@@ -7,9 +7,20 @@ import { api, Activity, TrackData } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityMap } from "@/components/activity/activity-map";
 import { ElevationProfile } from "@/components/activity/elevation-profile";
+
+const ACTIVITY_TYPES = [
+  { value: "running", label: "Run" },
+  { value: "road_cycling", label: "Road Cycling" },
+  { value: "mountain_biking", label: "Mountain Biking" },
+  { value: "hiking", label: "Hike" },
+  { value: "walking", label: "Walk" },
+  { value: "unknown", label: "Other" },
+];
 
 export default function ActivityDetailPage() {
   const params = useParams();
@@ -20,6 +31,16 @@ export default function ActivityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+
+  // Edit modal state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Delete modal state
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const activityId = params.id as string;
 
@@ -42,6 +63,45 @@ export default function ActivityDetailPage() {
         .finally(() => setLoading(false));
     }
   }, [user, authLoading, activityId, router]);
+
+  const handleEdit = () => {
+    if (activity) {
+      setEditName(activity.name);
+      setEditType(activity.activity_type);
+      setEditOpen(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!activity) return;
+
+    setSaving(true);
+    try {
+      const updated = await api.updateActivity(activity.id, {
+        name: editName !== activity.name ? editName : undefined,
+        activity_type: editType !== activity.activity_type ? editType : undefined,
+      });
+      setActivity(updated);
+      setEditOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!activity) return;
+
+    setDeleting(true);
+    try {
+      await api.deleteActivity(activity.id);
+      router.push("/activities");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
+      setDeleting(false);
+    }
+  };
 
   if (authLoading || loading) {
     return (
@@ -69,6 +129,94 @@ export default function ActivityDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* Edit Modal */}
+      {editOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Edit Activity</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-type">Activity Type</Label>
+                <select
+                  id="edit-type"
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value)}
+                  className="w-full h-10 px-3 py-2 border rounded-md bg-background"
+                >
+                  {ACTIVITY_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setEditOpen(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleSaveEdit}
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Delete Activity</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p>
+                Are you sure you want to delete <strong>{activity.name}</strong>?
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">{activity.name}</h1>
@@ -89,7 +237,10 @@ export default function ActivityDetailPage() {
             variant="outline"
             onClick={() => router.push("/activities")}
           >
-            Back to Activities
+            Back
+          </Button>
+          <Button variant="outline" onClick={handleEdit}>
+            Edit
           </Button>
           <Button
             variant="outline"
@@ -97,7 +248,13 @@ export default function ActivityDetailPage() {
               window.open(`/api/activities/${activityId}/download`, "_blank")
             }
           >
-            Download GPX
+            Download
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => setDeleteOpen(true)}
+          >
+            Delete
           </Button>
         </div>
       </div>

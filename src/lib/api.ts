@@ -126,6 +126,22 @@ class ApiClient {
     return this.request<TrackData>(`/activities/${id}/track`);
   }
 
+  async updateActivity(
+    id: string,
+    data: { name?: string; activity_type?: string }
+  ): Promise<Activity> {
+    return this.request<Activity>(`/activities/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteActivity(id: string): Promise<void> {
+    await this.request<void>(`/activities/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   async uploadActivity(
     userId: string,
     file: File,

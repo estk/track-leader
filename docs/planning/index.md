@@ -34,8 +34,8 @@
 | Elevation profile component | Done | Syncs with map on hover |
 | Activity detail page | Done | Shows map, elevation, stats |
 | Activity cards clickable | Done | Navigate to detail page |
-| Activity edit | Pending | |
-| Activity delete | Pending | |
+| Activity edit | Done | PATCH endpoint + edit modal |
+| Activity delete | Done | DELETE endpoint + confirmation dialog |
 | Privacy controls | Pending | |
 | User profile page | Pending | |
 | Mobile responsive | Pending | |
