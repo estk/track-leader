@@ -2,6 +2,7 @@
 
 **Date:** 2026-01-27
 **Purpose:** Architecture analysis for Leaderboards implementation
+**Status:** Implementation largely complete - see `docs/sessions/session-4-leaderboards/session-summary.md`
 
 ---
 
@@ -146,33 +147,36 @@ Available: TanStack Query, Zustand (installed but unused)
 
 ## Files to Create for Phase 4
 
-### Backend (New)
+### Backend (New) - COMPLETE
 
-1. `migrations/008_add_demographics.sql` - User demographic fields
-2. `migrations/009_leaderboard_cache.sql` - Cache table
-3. `migrations/010_achievements.sql` - KOM/QOM tracking
-4. `src/leaderboard_service.rs` - Computation logic
-5. `src/achievements_service.rs` - Crown tracking
+1. `migrations/008_add_demographics.sql` - User demographic fields [DONE]
+2. `migrations/009_leaderboard_cache.sql` - Cache table [DONE]
+3. `migrations/010_achievements.sql` - KOM/QOM tracking [DONE]
+4. `src/leaderboard_service.rs` - Computation logic [DEFERRED - logic in database.rs]
+5. `src/achievements_service.rs` - Crown tracking [DEFERRED - logic in database.rs]
 
-### Backend (Modify)
+### Backend (Modify) - COMPLETE
 
-1. `src/lib.rs` - Add new routes
-2. `src/handlers.rs` - Enhance leaderboard handler, add new handlers
-3. `src/database.rs` - Add filtered leaderboard queries
-4. `src/models.rs` - Add LeaderboardEntry, Achievement structs
-5. `src/activity_queue.rs` - Trigger cache invalidation
+1. `src/lib.rs` - Add new routes [DONE]
+2. `src/handlers.rs` - Enhance leaderboard handler, add new handlers [DONE]
+3. `src/database.rs` - Add filtered leaderboard queries [DONE]
+4. `src/models.rs` - Add LeaderboardEntry, Achievement structs [DONE]
+5. `src/activity_queue.rs` - Trigger cache invalidation [PENDING - SSE work]
+6. `src/object_store_service.rs` - Fixed directory auto-creation bug [DONE]
 
-### Frontend (New)
+### Frontend (New) - COMPLETE
 
-1. `src/app/leaderboards/page.tsx` - Global leaderboards
-2. `src/app/segments/[id]/leaderboard/page.tsx` - Full leaderboard page
-3. `src/app/profile/[username]/rankings/page.tsx` - Personal rankings
-4. `src/components/leaderboard/` - Leaderboard table, filters, crown icons
+1. `src/app/leaderboards/page.tsx` - Global leaderboards [DONE]
+2. `src/app/segments/[id]/leaderboard/page.tsx` - Full leaderboard page [DONE]
+3. `src/app/profile/rankings/page.tsx` - Personal rankings [DONE]
+4. `src/app/profile/settings/page.tsx` - Demographics form [DONE]
+5. `src/app/profile/achievements/page.tsx` - Crown gallery [DONE]
+6. `src/components/leaderboard/` - Leaderboard table, filters, crown icons [DONE]
 
-### Frontend (Modify)
+### Frontend (Modify) - COMPLETE
 
-1. `src/lib/api.ts` - Add leaderboard endpoints with filters
-2. `src/app/segments/[id]/page.tsx` - Enhance leaderboard display
+1. `src/lib/api.ts` - Add leaderboard endpoints with filters [DONE]
+2. `src/app/segments/[id]/page.tsx` - Enhance leaderboard display [DONE]
 
 ---
 

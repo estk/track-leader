@@ -1,12 +1,13 @@
 # Session Notes - January 27, 2026
 
-**Last verified:** 2026-01-27 - Phase 3 segments COMPLETE.
+**Last verified:** 2026-01-27 - Phase 4 leaderboards IN PROGRESS.
 
 ## Current Status
 
 **Phase 1:** Complete (except staging deployment)
 **Phase 2:** Complete
 **Phase 3:** Complete
+**Phase 4:** In Progress (Weeks 1-3 complete, Week 4 partial)
 
 ### What's Working
 
@@ -68,7 +69,33 @@
 - [x] PR history chart
 - [x] Nearby segments feature ("Near Me" with geolocation)
 
-### Key Fixes Made This Session (Jan 27)
+### Phase 4 Progress (Leaderboards) - IN PROGRESS
+
+**Backend Complete:**
+- [x] Database migrations (008_add_demographics, 009_leaderboard_cache, 010_achievements)
+- [x] Models: Gender, LeaderboardScope, AgeGroup, LeaderboardEntry, Achievement types
+- [x] Enhanced leaderboard endpoint with filters (scope, gender, age_group, limit, offset)
+- [x] Demographics update endpoint (PATCH /users/me/demographics)
+- [x] Achievement endpoints (user achievements, segment achievements)
+- [x] Global leaderboards (crowns, distance)
+- [x] Fix: LocalFileSystem directory auto-creation in object_store_service.rs
+
+**Frontend Complete:**
+- [x] API client updates in src/lib/api.ts
+- [x] Leaderboard components (leaderboard-table, leaderboard-filters, crown-badge)
+- [x] Segment leaderboard page (/segments/[id]/leaderboard)
+- [x] Profile settings page (/profile/settings)
+- [x] Profile achievements page (/profile/achievements)
+- [x] Profile rankings page (/profile/rankings)
+- [x] Global leaderboards page (/leaderboards)
+
+**Remaining:**
+- [ ] SSE real-time leaderboard updates
+- [ ] Achievement processing integration with activity_queue
+- [ ] Local Legend calculation (90-day effort window)
+- [ ] Manual testing of all new pages
+
+### Key Fixes Made This Session (Jan 27) - Phase 3
 
 1. **Elevation Profile Click Handler** - Changed from using `activePayload` (unreliable) to storing hovered index in a ref and using it on click.
 
@@ -85,6 +112,14 @@
 7. **Starred Segments Race Condition** - Frontend was using `isLoggedIn` state which wasn't set yet when useEffect ran. Changed to use synchronous `api.getToken()` check instead.
 
 8. **INT4/INT8 Type Mismatch** - `SELECT 1` returns INT4 in PostgreSQL but Rust code expected `i64` (INT8). Changed `segment_effort_exists()` and `is_segment_starred()` to use `i32` instead.
+
+### Key Fixes Made - Phase 4
+
+9. **LocalFileSystem Directory Creation** - `object_store::local::LocalFileSystem::new(path)` fails if directory doesn't exist. Added `std::fs::create_dir_all()` before initialization in `object_store_service.rs`.
+
+10. **Axum Route Ordering** - Specific routes must be registered before wildcard routes. `/segments/{id}/leaderboard` must come before `/segments/{id}` or the wildcard captures "leaderboard" as an ID.
+
+11. **LeaderboardEntry Clone Derive** - Filtered leaderboard results needed to be cloned for pagination. Added `#[derive(Clone)]` to `LeaderboardEntry` struct.
 
 ### Files Changed This Session (Jan 27)
 

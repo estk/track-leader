@@ -1,16 +1,23 @@
 # Track Leader - Current State Analysis
 
 **Date:** January 2026
-**Status:** Early Development / Prototype
+**Last Updated:** January 27, 2026
+**Status:** Active Development - Phase 4 (Leaderboards) In Progress
 
 ## Executive Summary
 
 Track Leader is a GPS activity tracking application with aspirations to become an open leaderboard platform for trail segments, competing with Strava's segment feature. The project consists of:
 
 1. **A functional Rust backend** - Well-architected Axum service with PostgreSQL/PostGIS
-2. **A broken Next.js frontend** - Imports non-existent modules; not integrated with backend
+2. **A functional Next.js frontend** - Integrated with backend, mobile responsive
 
-The backend provides a solid foundation, but significant work is needed to realize the vision of an open segment leaderboard platform.
+**Current Phase:** Phase 4 (Leaderboards) - Weeks 1-3 complete, Week 4 in progress
+
+**Completed Phases:**
+- Phase 1: Foundation (Auth, Activity Upload, Basic UI)
+- Phase 2: Core Features (Activity Management, Maps, Profiles)
+- Phase 3: Segments (Creation, Matching, PRs, Starring)
+- Phase 4: Leaderboards (Filters, Demographics, Achievements) - In Progress
 
 ---
 
@@ -45,121 +52,117 @@ The backend provides a solid foundation, but significant work is needed to reali
 - Extension-based dependency injection
 - Error type with HTTP response mapping
 
-### What's Missing
+### What's Been Added (Phases 1-4)
 
-- Authentication/authorization
-- Tracks table not populated (activities stored but not converted to PostGIS tracks)
-- Leaderboards (core feature not started)
-- Segments (core feature not started)
-- User preferences
+- Authentication/authorization (JWT + argon2)
+- Tracks table populated with PostGIS geometry
+- Segments (creation, matching, PRs, starring)
+- Leaderboards with demographic filters
+- User demographics (gender, birth year, weight, location)
+- Achievement system (KOM/QOM/Local Legend)
+- Global leaderboards (crowns, distance)
+
+### What's Still Missing
+
+- SSE real-time leaderboard updates
+- Achievement processing automation
+- Social features (following, kudos, comments)
 - Activity-to-route promotion
-- Score categorization (by time/location/user demographics)
 
 ---
 
 ## Frontend Status
 
-### Critical Issue: Missing Modules
+### Current State: Functional
 
-The frontend imports from modules that **do not exist**:
+The frontend has been completely rebuilt and integrated with the Rust backend.
 
-```typescript
-import { db } from '@/lib/database'      // FILE DOES NOT EXIST
-import { parseGPX } from '@/lib/gpx-parser'  // FILE DOES NOT EXIST
-import { Track } from '@/lib/database'   // FILE DOES NOT EXIST
-```
+### Tech Stack
 
-The frontend **cannot run** in its current state.
+- Next.js 14 (App Router)
+- React 18 + TypeScript
+- Tailwind CSS + CVA (class-variance-authority)
+- MapLibre GL v5.16 with react-map-gl
+- Recharts v3.7
+- TanStack Query v5 (available)
+- Zustand v4.5 (available)
 
-### Evidence of Abandoned SQLite Approach
+### Working Features
 
-- `package.json` includes `sqlite3` dependency
-- `.gitignore` ignores `*.db`, `*.sqlite`, `*.sqlite3`
-- File `tracks.db` exists in project root
-- Frontend was apparently written to use SQLite directly, then abandoned when Rust backend was built
+| Feature | Status |
+|---------|--------|
+| Authentication | Login, register, logout with JWT |
+| Activity Upload | GPX upload with activity type selection |
+| Activity List | Cards with private indicator |
+| Activity Detail | Map, elevation profile, hover sync, edit/delete |
+| Segment Creation | Select start/end on elevation profile |
+| Segments List | Search, filters, sorting, starring |
+| Segment Detail | Map, stats, leaderboard, user efforts |
+| Leaderboard | Filtered by scope, gender, age group |
+| Profile | User info, activity counts |
+| Profile Settings | Demographics form |
+| Achievements | Crown gallery with filters |
+| Rankings | Personal segment rankings |
+| Global Leaderboards | Crown count, distance rankings |
+| Mobile Responsive | Hamburger menu, touch-friendly |
 
-### What Exists (Non-Functional)
+### Key Frontend Files
 
-| Component | File | Status |
-|-----------|------|--------|
-| Home Page | `app/page.tsx` | Imports broken modules |
-| Track List | `components/TrackList.tsx` | UI exists, no data source |
-| Track Upload | `components/TrackUpload.tsx` | Posts to `/api/tracks` (wrong endpoint) |
-| Track Map | `components/TrackMap.tsx` | Leaflet integration exists |
-| Track Detail | `components/TrackDetail.tsx` | UI exists, no data source |
-| API Routes | `app/api/tracks/` | Reference non-existent db module |
-
-### UI Components Quality Assessment
-
-**TrackList.tsx:**
-- Basic table layout
-- No pagination
-- No sorting controls
-- Minimal styling
-
-**TrackUpload.tsx:**
-- Drag-and-drop exists
-- Icon sizing broken (`h-1 w-1` for upload icon)
-- Uses `alert()` for feedback (poor UX)
-
-**TrackMap.tsx:**
-- Basic Leaflet Polyline
-- No interactivity
-- Static zoom level
-- No route start/end markers
-
-**TrackDetail.tsx:**
-- Basic stats display
-- Icon sizing broken (`w-44 h-44` for back chevron)
-- Calorie calculation is naive (distance * 65)
+| File | Purpose |
+|------|---------|
+| `src/lib/api.ts` | Centralized API client |
+| `src/lib/auth-context.tsx` | Auth state provider |
+| `src/components/leaderboard/` | Leaderboard table, filters, badges |
+| `src/components/activity/` | Map, elevation profile |
+| `src/components/ui/` | Shadcn-style primitives |
 
 ---
 
 ## Database Schema Analysis
 
-### Current Schema (001_init.sql)
+### Current Schema (Migrations 001-010)
 
-```
-users
-├── id (UUID, PK)
-├── email (TEXT, UNIQUE)
-├── name (TEXT)
-└── created_at (TIMESTAMPTZ)
+**Users** (001, 002, 008)
+- Core: id, email, name, password_hash, auth_provider, avatar_url, bio
+- Demographics (008): gender, birth_year, weight_kg, country, region
 
-activities
-├── id (UUID, PK)
-├── user_id (UUID)
-├── activity_type (ENUM)
-├── name (TEXT)
-├── object_store_path (TEXT)
-└── submitted_at (TIMESTAMPTZ)
+**Activities** (001)
+- id, user_id, activity_type, name, visibility, object_store_path, submitted_at
 
-tracks (UNUSED)
-├── id (UUID, PK)
-├── user_id (UUID)
-├── activity_id (UUID)
-├── created_at (TIMESTAMPTZ)
-└── geo (GEOGRAPHY LineString)
+**Tracks** (001, 005)
+- id, user_id, activity_id, geo (GEOGRAPHY LineString Z)
+- GIST spatial index
 
-scores
-├── id (UUID, PK)
-├── user_id (UUID)
-├── activity_id (UUID)
-├── distance (FLOAT)
-├── duration (FLOAT)
-├── elevation_gain (FLOAT)
-└── created_at (TIMESTAMPTZ)
-```
+**Scores** (001)
+- id, user_id, activity_id, distance, duration, elevation_gain
 
-### Missing Tables for Full Vision
+**Segments** (003, 004, 006)
+- id, name, description, activity_type, creator_id
+- Geometry: geo, start_point, end_point (all GEOGRAPHY)
+- Metrics: distance_meters, elevation_gain, elevation_loss, max_grade, average_grade, climb_category
+- Counters: effort_count
 
-- `segments` - Defined portions of trails for competition
-- `segment_efforts` - User attempts on segments
-- `trails` - Named trail routes
-- `leaderboards` - Aggregated rankings
-- `user_preferences` - Settings and demographics
+**Segment Efforts** (003, 007)
+- id, segment_id, activity_id, user_id
+- Timing: started_at, elapsed_time_seconds, moving_time_seconds
+- Performance: average_speed_mps, is_personal_record
+- Position: start_index, end_index (for map highlighting)
+
+**Starred Segments** (003)
+- user_id, segment_id, starred_at
+
+**Leaderboard Cache** (009)
+- id, segment_id, scope, filter_key, entries (JSONB), computed_at, expires_at
+
+**Achievements** (010)
+- id, user_id, segment_id, achievement_type, scope, effort_id, achieved_at, lost_at
+
+### Tables Still Needed (Future Phases)
+
 - `follows` - Social connections
-- `kudos` / `comments` - Social engagement
+- `kudos` - Activity likes
+- `comments` - Activity comments
+- `notifications` - In-app notifications
 
 ---
 
@@ -167,13 +170,21 @@ scores
 
 ```
 track-leader/
-├── app/                    # Next.js app (BROKEN)
-│   ├── api/tracks/         # API routes (import missing modules)
-│   ├── tracks/[id]/        # Dynamic track page
-│   ├── layout.tsx          # Root layout
-│   └── page.tsx            # Home page
-├── components/             # React components (UI only)
-├── crates/tracks/          # Rust backend (FUNCTIONAL)
+├── src/                    # Next.js frontend
+│   ├── app/                # App Router pages
+│   │   ├── activities/     # Activity pages
+│   │   ├── segments/       # Segment pages (including [id]/leaderboard)
+│   │   ├── profile/        # Profile, settings, achievements, rankings
+│   │   ├── leaderboards/   # Global leaderboards
+│   │   └── ...
+│   ├── components/         # React components
+│   │   ├── activity/       # Map, elevation profile
+│   │   ├── leaderboard/    # Table, filters, badges
+│   │   └── ui/             # Shadcn-style primitives
+│   └── lib/                # Utilities
+│       ├── api.ts          # API client
+│       └── auth-context.tsx
+├── crates/tracks/          # Rust backend
 │   ├── src/
 │   │   ├── main.rs         # Entry point
 │   │   ├── lib.rs          # Router setup
@@ -185,62 +196,61 @@ track-leader/
 │   │   ├── object_store_service.rs # File storage
 │   │   └── errors.rs       # Error handling
 │   └── migrations/
-│       └── 001_init.sql    # Database schema
-├── tracks.db               # Abandoned SQLite database
-├── package.json            # Node dependencies
-└── Cargo.toml              # (in crates/tracks)
+│       ├── 001_init.sql through 010_achievements.sql
+├── docs/                   # Documentation
+│   ├── sessions/           # Session summaries
+│   ├── planning/           # Phase plans
+│   └── architecture/       # Technical specs
+├── scripts/                # Dev scripts
+│   ├── start-dev.sh
+│   ├── stop-dev.sh
+│   └── watch-logs.sh
+└── package.json            # Node dependencies
 ```
 
 ---
 
-## Recommendations
+## Next Steps
 
-### Immediate Actions
+### Immediate (Complete Phase 4)
 
-1. **Delete the frontend** - It cannot be salvaged. The architecture (SQLite + Next.js API routes) conflicts with the Rust backend.
+1. **SSE Real-time Updates** - Implement `/segments/{id}/leaderboard/stream` endpoint
+2. **Achievement Processing** - Hook into activity_queue to auto-award KOM/QOM
+3. **Manual Testing** - Verify all new pages work with real data
 
-2. **Build new frontend** - Choose between:
-   - Next.js App Router with server actions calling Rust API
-   - SPA (React/Vue/Svelte) consuming Rust REST API
-   - HTMX + server-rendered templates from Rust
+### Phase 5: Social Features
 
-3. **Complete backend fundamentals:**
-   - User authentication (OAuth2 or email/password)
-   - Activity → Track conversion (populate `tracks` table with PostGIS)
-   - Basic user profile API
+- Following/followers
+- Activity feed
+- Kudos and comments
+- Notifications
 
-### Medium-term Goals
+### Phase 6: Polish
 
-4. **Implement segments:**
-   - Define segment as polyline subset
-   - Match activities to segments
-   - Calculate segment times
+- Performance optimization
+- Mobile app (React Native or PWA)
+- OAuth providers (Strava, Google)
+- Staging deployment
 
-5. **Build leaderboards:**
-   - Per-segment rankings
-   - Filtering by demographics/time
+### Architecture Decisions Made
 
-6. **Trail management:**
-   - Split activities into trail sections
-   - Crowdsourced trail definitions
-
-### Architecture Decisions Needed
-
-| Decision | Options | Recommendation |
-|----------|---------|----------------|
-| Frontend framework | Next.js, SvelteKit, HTMX | SvelteKit (modern, fast, good DX) |
-| Auth system | OAuth only, Email+OAuth, Custom | OAuth2 (Google/Strava) + email |
-| API style | REST, GraphQL, tRPC | REST (simple, cacheable) |
-| Real-time | WebSockets, SSE, Polling | SSE for leaderboard updates |
-| Hosting | Self-hosted, Fly.io, Railway | Fly.io (Postgres + Rust support) |
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Frontend framework | Next.js 14 | React ecosystem, App Router, good DX |
+| Auth system | Email + JWT | Simple to start, OAuth can be added |
+| API style | REST | Simple, cacheable |
+| Real-time | SSE (planned) | Simpler than WebSockets for read-only updates |
+| Maps | MapLibre GL | Open source, performant |
 
 ---
 
 ## Conclusion
 
-Track Leader has a solid backend foundation but requires:
-1. Complete frontend rewrite
-2. Authentication implementation
-3. Core segment/leaderboard features
+Track Leader has evolved from a prototype to a functional application with:
+- Complete authentication system
+- Full activity management
+- Segment creation and matching
+- Filtered leaderboards with demographics
+- Achievement system foundation
 
-The 6-month development plan in `docs/planning/` outlines how to transform this prototype into a legitimate Strava segments competitor.
+The remaining Phase 4 work (SSE, achievement automation) and future phases will complete the vision of a Strava segments competitor.
