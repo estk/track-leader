@@ -1,12 +1,10 @@
 use axum::{
-    extract::{Multipart, Path, Query},
-    http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Json, Response},
     Extension,
+    extract::{Multipart, Path, Query},
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Json, Response},
 };
-use axum_extra::{
-    headers::{ContentType, HeaderMapExt, Mime},
-};
+use axum_extra::headers::{ContentType, HeaderMapExt, Mime};
 use bytes::BytesMut;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -34,9 +32,7 @@ pub async fn new_user(
     Ok(Json(user))
 }
 
-pub async fn all_users(
-    Extension(db): Extension<Database>,
-) -> Result<Json<Vec<User>>, AppError> {
+pub async fn all_users(Extension(db): Extension<Database>) -> Result<Json<Vec<User>>, AppError> {
     let users = db.all_users().await?;
     Ok(Json(users))
 }
@@ -58,7 +54,6 @@ pub async fn new_activity(
     let activity_id = Uuid::new_v4();
     let name = params.name;
     let activity_type = params.activity_type;
-
 
     let (mime_hdr, file_bytes) =
         {
@@ -105,13 +100,8 @@ pub async fn new_activity(
         object_store_path,
     };
 
-    aq.submit(
-        params.user_id,
-        activity.id,
-        file_type,
-        file_bytes,
-    )
-    .map_err(AppError::Queue)?;
+    aq.submit(params.user_id, activity.id, file_type, file_bytes)
+        .map_err(AppError::Queue)?;
 
     db.save_activity(&activity).await?;
     Ok(Json(activity))
@@ -128,8 +118,7 @@ pub async fn get_activity(
 }
 
 #[derive(Deserialize)]
-pub struct UserActivitiesQuery {
-}
+pub struct UserActivitiesQuery {}
 
 pub async fn get_user_activities(
     Extension(db): Extension<Database>,

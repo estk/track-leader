@@ -1,6 +1,6 @@
 use axum_extra::headers::Mime;
 use bytes::Bytes;
-use object_store::{local::LocalFileSystem, path::Path, ObjectStore, PutOptions};
+use object_store::{ObjectStore, PutOptions, local::LocalFileSystem, path::Path};
 use std::sync::Arc;
 use uuid::Uuid;
 

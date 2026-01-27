@@ -7,9 +7,7 @@ use bytes::{Buf as _, Bytes};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use crate::{
-    database::Database, object_store_service::FileType, scoring,
-};
+use crate::{database::Database, object_store_service::FileType, scoring};
 
 #[derive(Clone)]
 pub struct ActivityQueue {
@@ -42,13 +40,7 @@ impl ActivityQueue {
             done_tx: tx,
         }
     }
-    pub fn submit(
-        &self,
-        uid: Uuid,
-        id: Uuid,
-        ft: FileType,
-        bytes: Bytes,
-    ) -> anyhow::Result<()> {
+    pub fn submit(&self, uid: Uuid, id: Uuid, ft: FileType, bytes: Bytes) -> anyhow::Result<()> {
         assert!(matches!(ft, FileType::Gpx));
 
         self.activities.lock().unwrap().insert(id);

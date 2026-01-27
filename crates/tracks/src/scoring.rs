@@ -1,7 +1,7 @@
-use geo::{geometry::Point, Distance as _, Haversine};
+use geo::{Distance as _, Haversine, geometry::Point};
 use gpx::Gpx;
 
-use crate::models::{Scores, };
+use crate::models::Scores;
 
 type TrackPoint = gpx::Waypoint;
 
@@ -11,7 +11,7 @@ pub trait TrackMetric {
     fn finish(&mut self) -> Self::Score;
 }
 
-pub fn score_track( track: &Gpx) -> Scores {
+pub fn score_track(track: &Gpx) -> Scores {
     let mut acc = Metrics::new();
 
     // todo: revisit

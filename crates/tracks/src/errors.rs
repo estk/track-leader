@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde_json::json;
 use thiserror::Error;
@@ -24,6 +24,9 @@ pub enum AppError {
     #[error("Not found")]
     NotFound,
 
+    #[error("Unauthorized")]
+    Unauthorized,
+
     #[error("Internal server error")]
     Internal,
 
@@ -45,6 +48,7 @@ impl IntoResponse for AppError {
             }
             AppError::InvalidInput(ref msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
             AppError::NotFound => (StatusCode::NOT_FOUND, "Not found"),
+            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error"),
             AppError::Queue(e) => {
                 error!("Queue error: {}", e);

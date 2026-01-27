@@ -1,0 +1,405 @@
+# Phase 3: Segments
+
+**Duration:** Month 3 (4-5 weeks)
+**Goal:** Implement the core segment system - the heart of Track Leader
+
+> **Claude Agents:** Use `/feature-dev` for segment matching algorithm and PostGIS queries. Use `/frontend-design` for segment creation UI and discovery pages.
+
+---
+
+## Objectives
+
+1. Segment creation from activity portions
+2. Automatic segment matching on activity upload
+3. Segment detail pages with effort history
+4. Personal records tracking
+5. Segment discovery and search
+
+---
+
+## Week 1: Segment Data Model
+
+### 1.1 Database Schema
+
+**Tasks:**
+- [ ] Create segments table
+- [ ] Create segment_efforts table
+- [ ] Create segment_stars table
+- [ ] Add spatial indexes
+- [ ] Run migration
+
+**Schema:**
+```sql
+CREATE TABLE segments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    description TEXT,
+    activity_type activity_type NOT NULL,
+    geo GEOGRAPHY(LineString, 4326) NOT NULL,
+    distance FLOAT NOT NULL,
+    elevation_gain FLOAT,
+    elevation_loss FLOAT,
+    average_grade FLOAT,
+    max_grade FLOAT,
+    climb_category INTEGER,  -- 0=NC, 1-5, 5=HC
+    is_hazardous BOOLEAN DEFAULT false,
+    is_public BOOLEAN DEFAULT true,
+    star_count INTEGER DEFAULT 0,
+    effort_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_segments_geo ON segments USING GIST (geo);
+CREATE INDEX idx_segments_creator ON segments(creator_id);
+CREATE INDEX idx_segments_type ON segments(activity_type);
+
+CREATE TABLE segment_efforts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    segment_id UUID NOT NULL REFERENCES segments(id),
+    activity_id UUID NOT NULL REFERENCES activities(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    elapsed_time FLOAT NOT NULL,
+    moving_time FLOAT,
+    start_index INTEGER NOT NULL,
+    end_index INTEGER NOT NULL,
+    average_speed FLOAT,
+    max_speed FLOAT,
+    average_hr INTEGER,
+    max_hr INTEGER,
+    average_power INTEGER,
+    pr_rank INTEGER,  -- 1, 2, 3 for personal top 3
+    started_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_efforts_segment ON segment_efforts(segment_id);
+CREATE INDEX idx_efforts_user ON segment_efforts(user_id);
+CREATE INDEX idx_efforts_segment_time ON segment_efforts(segment_id, elapsed_time);
+CREATE INDEX idx_efforts_user_segment ON segment_efforts(user_id, segment_id);
+
+CREATE TABLE segment_stars (
+    user_id UUID NOT NULL REFERENCES users(id),
+    segment_id UUID NOT NULL REFERENCES segments(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, segment_id)
+);
+```
+
+### 1.2 Backend Models
+
+**Tasks:**
+- [ ] Create Segment model
+- [ ] Create SegmentEffort model
+- [ ] Add database methods
+- [ ] Add PostGIS query helpers
+
+### 1.3 Segment Metrics Calculation
+
+**Tasks:**
+- [ ] Calculate distance from LineString
+- [ ] Calculate elevation gain/loss
+- [ ] Calculate average/max grade
+- [ ] Determine climb category
+- [ ] Pre-compute on segment creation
+
+**Climb Categories:**
+| Category | Points | Criteria |
+|----------|--------|----------|
+| 4 | 20-39 | Short climbs |
+| 3 | 40-79 | Medium climbs |
+| 2 | 80-159 | Significant climbs |
+| 1 | 160-319 | Major climbs |
+| HC | 320+ | Epic climbs |
+
+Points = elevation_gain * length_km * grade_factor
+
+---
+
+## Week 2: Segment Creation
+
+### 2.1 Segment Creation UI
+
+**Tasks:**
+- [ ] Add "Create Segment" button to activity detail
+- [ ] Create segment editor component
+- [ ] Allow selecting start/end points on map
+- [ ] Preview segment as user selects
+- [ ] Show calculated metrics in real-time
+- [ ] Name and description input
+- [ ] Submit segment creation
+
+**UI Flow:**
+1. User views activity
+2. Clicks "Create Segment"
+3. Map enters selection mode
+4. User clicks start point
+5. User clicks end point (or drags range)
+6. Preview shows segment stats
+7. User enters name, description
+8. User submits
+
+### 2.2 Backend Segment Creation
+
+**Tasks:**
+- [ ] Implement `POST /segments` endpoint
+- [ ] Extract segment geometry from activity
+- [ ] Calculate segment metrics
+- [ ] Store in database
+- [ ] Return created segment
+
+**Request:**
+```typescript
+interface CreateSegmentRequest {
+  activity_id: string;
+  name: string;
+  description?: string;
+  start_index: number;
+  end_index: number;
+}
+```
+
+### 2.3 Segment Validation
+
+**Tasks:**
+- [ ] Minimum segment length (100m)
+- [ ] Maximum segment length (50km)
+- [ ] Minimum point count (10 points)
+- [ ] No duplicate segments (fuzzy match)
+- [ ] Activity type inheritance
+
+### 2.4 Creator's First Effort
+
+**Tasks:**
+- [ ] Auto-create first effort from creator's activity
+- [ ] Set as baseline for segment
+- [ ] Calculate PR rank
+
+---
+
+## Week 3: Segment Matching
+
+### 3.1 Matching Algorithm
+
+**Tasks:**
+- [ ] Implement segment matching service
+- [ ] Use PostGIS spatial queries
+- [ ] Define match criteria:
+  - Start point within tolerance
+  - End point within tolerance
+  - Path similarity threshold
+- [ ] Return matched segments with confidence
+
+**Algorithm Overview:**
+```
+1. Find candidate segments near activity bounding box
+2. For each candidate:
+   a. Find closest activity point to segment start
+   b. Find closest activity point to segment end
+   c. Check path similarity (Fréchet distance or similar)
+   d. If above threshold, record match
+3. Return matches with start/end indices
+```
+
+### 3.2 PostGIS Queries
+
+**Key Queries:**
+```sql
+-- Find segments near activity
+SELECT s.* FROM segments s
+WHERE ST_DWithin(
+    s.geo,
+    (SELECT geo FROM tracks WHERE activity_id = $1),
+    100  -- meters
+);
+
+-- Find closest point on activity to segment start
+SELECT
+    ST_LineLocatePoint(t.geo, ST_StartPoint(s.geo)) as position,
+    ST_Distance(t.geo, ST_StartPoint(s.geo)) as distance
+FROM tracks t, segments s
+WHERE t.activity_id = $1 AND s.id = $2;
+```
+
+### 3.3 Background Matching Job
+
+**Tasks:**
+- [ ] Integrate matching into activity queue
+- [ ] After scoring, run segment matching
+- [ ] Create segment_efforts for matches
+- [ ] Calculate PR ranks
+- [ ] Update segment effort_count
+
+### 3.4 Effort Calculation
+
+**Tasks:**
+- [ ] Extract time from start_index to end_index
+- [ ] Calculate moving time (exclude stops)
+- [ ] Calculate average/max speed for segment
+- [ ] Determine PR rank (compare to user's other efforts)
+
+---
+
+## Week 4: Segment UI
+
+### 4.1 Segment Detail Page
+
+**Tasks:**
+- [ ] Create `/segments/[id]` route
+- [ ] Display segment on map
+- [ ] Show segment statistics
+- [ ] Show elevation profile
+- [ ] Display creator info
+- [ ] Star/unstar button
+
+### 4.2 Segment Leaderboard Preview
+
+**Tasks:**
+- [ ] Show top 10 efforts on segment page
+- [ ] Display rank, user, time, date
+- [ ] Link to full leaderboard (Phase 4)
+- [ ] Highlight current user's position
+
+### 4.3 Personal Efforts
+
+**Tasks:**
+- [ ] Show user's efforts on segment
+- [ ] PR history chart
+- [ ] Effort comparison
+- [ ] Link to source activity
+
+### 4.4 Segment on Activity
+
+**Tasks:**
+- [ ] Show matched segments on activity detail
+- [ ] Display segment time and rank
+- [ ] Link to segment page
+- [ ] Highlight segment on map
+
+---
+
+## Week 5: Segment Discovery
+
+### 5.1 Segment Browser
+
+**Tasks:**
+- [ ] Create `/segments` route
+- [ ] Map-based segment discovery
+- [ ] Show segments as clickable lines
+- [ ] Clustering for dense areas
+- [ ] Popup on hover
+
+### 5.2 Segment Search
+
+**Tasks:**
+- [ ] Search by name
+- [ ] Filter by activity type
+- [ ] Filter by distance range
+- [ ] Filter by climb category
+- [ ] Sort by popularity, distance, elevation
+
+### 5.3 Nearby Segments
+
+**Tasks:**
+- [ ] "Segments near me" feature
+- [ ] Request location permission
+- [ ] Find segments within radius
+- [ ] Show on map and list
+
+### 5.4 Starred Segments
+
+**Tasks:**
+- [ ] Star/unstar functionality
+- [ ] Starred segments page
+- [ ] Track starred segment efforts
+
+---
+
+## Deliverables
+
+### End of Phase 3 Checklist
+
+- [ ] Segments can be created from activities
+- [ ] Segment matching runs on upload
+- [ ] Segment efforts calculated correctly
+- [ ] PR tracking working
+- [ ] Segment detail page complete
+- [ ] Segment browser/search working
+- [ ] Starred segments feature
+- [ ] Segments shown on activity detail
+
+### API Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/segments` | Yes | Create segment |
+| GET | `/segments` | No | List/search segments |
+| GET | `/segments/{id}` | No | Get segment detail |
+| PATCH | `/segments/{id}` | Yes | Update segment (creator only) |
+| DELETE | `/segments/{id}` | Yes | Delete segment (creator only) |
+| POST | `/segments/{id}/star` | Yes | Star segment |
+| DELETE | `/segments/{id}/star` | Yes | Unstar segment |
+| GET | `/segments/{id}/efforts` | No | Get segment efforts |
+| GET | `/segments/nearby` | No | Find nearby segments |
+| GET | `/users/{id}/starred-segments` | Mixed | User's starred segments |
+
+---
+
+## Matching Algorithm Details
+
+### Tolerance Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Start tolerance | 50m | How close activity must be to segment start |
+| End tolerance | 50m | How close activity must be to segment end |
+| Path tolerance | 30m | How far activity can deviate from segment |
+| Min overlap | 90% | Minimum segment coverage required |
+
+### Match Quality Score
+
+```
+score = (
+    0.4 * start_proximity_score +
+    0.4 * end_proximity_score +
+    0.2 * path_similarity_score
+)
+```
+
+Only create effort if score > 0.8
+
+### Edge Cases
+
+| Case | Handling |
+|------|----------|
+| Activity crosses segment multiple times | Create effort for best (fastest) crossing |
+| Activity goes wrong direction | No match (direction matters) |
+| Activity stops mid-segment | Create effort if > 90% complete |
+| GPS drift | Use path tolerance buffer |
+
+---
+
+## Performance Considerations
+
+### Matching Performance
+- Use spatial indexes effectively
+- Limit candidate segments with bounding box
+- Parallelize matching with Rayon
+- Cache frequently-matched segments
+
+### Storage Considerations
+- Simplify segment geometry for storage
+- Store detailed geometry separately
+- Index by activity type for faster queries
+
+---
+
+## Success Criteria
+
+1. **Creation works:** Can create segment from any activity
+2. **Matching works:** Activities match to relevant segments
+3. **Efforts work:** Times calculated correctly
+4. **PRs work:** Personal records tracked
+5. **Discovery works:** Can find segments on map and search
+6. **Stars work:** Can favorite segments
