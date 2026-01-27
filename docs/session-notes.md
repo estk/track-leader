@@ -82,12 +82,16 @@
 
 6. **Segment Track Endpoint** - Added `/segments/{id}/track` to return segment geometry with elevation for map and elevation profile display.
 
+7. **Starred Segments Race Condition** - Frontend was using `isLoggedIn` state which wasn't set yet when useEffect ran. Changed to use synchronous `api.getToken()` check instead.
+
+8. **INT4/INT8 Type Mismatch** - `SELECT 1` returns INT4 in PostgreSQL but Rust code expected `i64` (INT8). Changed `segment_effort_exists()` and `is_segment_starred()` to use `i32` instead.
+
 ### Files Changed This Session (Jan 27)
 
 **Backend (crates/tracks/src/):**
 - `activity_queue.rs` - Fixed tokio runtime issue (use Handle::current() not Runtime::new())
 - `handlers.rs` - Added AuthUser to create_segment, added get_segment_track endpoint, store 3D coordinates
-- `database.rs` - Added get_segment_geometry() method
+- `database.rs` - Added get_segment_geometry() method, fixed INT4/INT8 type mismatch in existence checks
 - `lib.rs` - Added /segments/{id}/track route
 
 **Backend (crates/tracks/migrations/):**
@@ -96,6 +100,7 @@
 **Frontend (src/):**
 - `components/activity/elevation-profile.tsx` - Fixed click handler and hover state management
 - `app/segments/[id]/page.tsx` - Added map, elevation profile, hover sync
+- `app/segments/page.tsx` - Fixed starred segments race condition (use api.getToken() instead of isLoggedIn state)
 - `lib/api.ts` - Added SegmentTrackData interface and getSegmentTrack method
 
 ### Running the App
@@ -155,9 +160,15 @@ After creating a SegmentEffort:
 - Can take screenshots, navigate, click to verify UI changes
 
 ### Test User Created
-- Email: evan
-- Has one activity: "reno tour" (MountainBiking, 107km near Reno NV)
-- Has created at least one segment from that activity
+- Email: esims89+1@gmail.com (display name: evan)
+- Password: password
+- User ID: 4b5f1cde-e8b5-4baa-9cad-1834011aaefa
+- Has one activity: "reno tour" (MountainBiking, ~107km near Reno NV)
+  - Activity ID: f18ab674-b4a9-4f44-9501-59167e461bb7
+  - GPX file: `crates/tracks/uploads/activities/{user_id}/{activity_id}`
+- Has 3 segments: verdi climb, pvc, pea climb (all MountainBiking)
+- Has segment efforts on all 3 segments (all PRs)
+- Track geometry stored in `tracks` table (4042 points)
 
 ## Architecture Notes
 
@@ -181,3 +192,39 @@ GPX files stored locally in `./uploads` directory, organized as `activities/{use
 - `ActivityMap` and `ElevationProfile` components are reused for both activities and segments
 - Convert `SegmentTrackData` to `TrackData` format by adding `time: null` to each point
 - Pass `highlightIndex` and `onHover` props to enable hover sync between map and elevation profile
+
+## Learnings & Gotchas
+
+### PostgreSQL/PostGIS
+- `SELECT 1` returns INT4 (32-bit), not INT8 (64-bit). Use `i32` in Rust, not `i64`.
+- `COUNT(*)` returns INT8 (BIGINT), so `i64` is correct for count queries.
+- PostGIS LINESTRING Z format: `LINESTRING Z(lon lat elev, lon lat elev, ...)`
+- `ST_LineLocatePoint` returns 0-1 fraction for position along line.
+
+### React/Next.js
+- Auth state (`isLoggedIn`) may not be set when useEffect runs on page load.
+- Use synchronous `api.getToken()` for immediate auth checks in useEffect.
+- Recharts Tooltip `content` function runs during render - use `queueMicrotask()` to defer state updates.
+
+### Rust/Axum
+- Don't create nested tokio runtimes with `Runtime::new()`. Use `Handle::current()` to get existing runtime handle.
+- `AuthUser` extractor pulls user ID from JWT for authenticated endpoints.
+
+### Testing Segment Matching
+To manually test segment matching without uploading new activities:
+1. Insert track geometry: Extract coords from GPX, build WKT LINESTRING, insert into `tracks` table
+2. Call `/segments/{id}/reprocess` for each segment to create efforts
+3. Verify in `segment_efforts` table
+
+### Useful SQL Queries
+```sql
+-- Check tracks table
+SELECT id, activity_id, ST_NPoints(geo::geometry) as points FROM tracks;
+
+-- Check segment efforts
+SELECT se.id, s.name, se.elapsed_time_seconds, se.is_personal_record
+FROM segment_efforts se JOIN segments s ON s.id = se.segment_id;
+
+-- Check segments schema
+\d segments
+```
