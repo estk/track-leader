@@ -295,7 +295,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 **Tasks:**
 - [x] Search by name
 - [x] Filter by activity type
-- [ ] Filter by distance range
+- [x] Filter by distance range
 - [ ] Filter by climb category
 - [x] Sort by name, distance, elevation, date
 
