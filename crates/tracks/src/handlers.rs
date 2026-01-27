@@ -724,3 +724,52 @@ pub async fn reprocess_segment(
         efforts_created,
     }))
 }
+
+// Segment star handlers
+
+#[derive(Debug, Serialize)]
+pub struct StarResponse {
+    pub starred: bool,
+}
+
+/// Star a segment for the authenticated user.
+pub async fn star_segment(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(segment_id): Path<Uuid>,
+) -> Result<Json<StarResponse>, AppError> {
+    // Verify segment exists
+    db.get_segment(segment_id).await?.ok_or(AppError::NotFound)?;
+
+    db.star_segment(claims.sub, segment_id).await?;
+    Ok(Json(StarResponse { starred: true }))
+}
+
+/// Unstar a segment for the authenticated user.
+pub async fn unstar_segment(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(segment_id): Path<Uuid>,
+) -> Result<Json<StarResponse>, AppError> {
+    db.unstar_segment(claims.sub, segment_id).await?;
+    Ok(Json(StarResponse { starred: false }))
+}
+
+/// Check if a segment is starred by the authenticated user.
+pub async fn is_segment_starred(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(segment_id): Path<Uuid>,
+) -> Result<Json<StarResponse>, AppError> {
+    let starred = db.is_segment_starred(claims.sub, segment_id).await?;
+    Ok(Json(StarResponse { starred }))
+}
+
+/// Get all segments starred by the authenticated user.
+pub async fn get_starred_segments(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+) -> Result<Json<Vec<Segment>>, AppError> {
+    let segments = db.get_user_starred_segments(claims.sub).await?;
+    Ok(Json(segments))
+}

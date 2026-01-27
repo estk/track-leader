@@ -269,6 +269,28 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // Segment star endpoints
+  async isSegmentStarred(id: string): Promise<boolean> {
+    const result = await this.request<{ starred: boolean }>(`/segments/${id}/star`);
+    return result.starred;
+  }
+
+  async starSegment(id: string): Promise<void> {
+    await this.request<{ starred: boolean }>(`/segments/${id}/star`, {
+      method: 'POST',
+    });
+  }
+
+  async unstarSegment(id: string): Promise<void> {
+    await this.request<{ starred: boolean }>(`/segments/${id}/star`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getStarredSegments(): Promise<Segment[]> {
+    return this.request<Segment[]>('/segments/starred');
+  }
 }
 
 export const api = new ApiClient();

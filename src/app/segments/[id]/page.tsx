@@ -51,6 +51,9 @@ export default function SegmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+  const [starred, setStarred] = useState(false);
+  const [starLoading, setStarLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const segmentId = params.id as string;
 
@@ -68,8 +71,34 @@ export default function SegmentDetailPage() {
         })
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
+
+      // Check starred status if logged in
+      if (api.getToken()) {
+        setIsLoggedIn(true);
+        api.isSegmentStarred(segmentId)
+          .then(setStarred)
+          .catch(() => setStarred(false));
+      }
     }
   }, [segmentId]);
+
+  const handleStarToggle = async () => {
+    if (!isLoggedIn || starLoading) return;
+    setStarLoading(true);
+    try {
+      if (starred) {
+        await api.unstarSegment(segmentId);
+        setStarred(false);
+      } else {
+        await api.starSegment(segmentId);
+        setStarred(true);
+      }
+    } catch (err) {
+      console.error("Failed to toggle star:", err);
+    } finally {
+      setStarLoading(false);
+    }
+  };
 
   // Convert segment track data to the format expected by ActivityMap/ElevationProfile
   const convertedTrackData: TrackData | null = useMemo(() => {
@@ -123,9 +152,20 @@ export default function SegmentDetailPage() {
             </span>
           </div>
         </div>
-        <Button variant="outline" onClick={() => router.push("/segments")}>
-          Back to Segments
-        </Button>
+        <div className="flex gap-2">
+          {isLoggedIn && (
+            <Button
+              variant={starred ? "default" : "outline"}
+              onClick={handleStarToggle}
+              disabled={starLoading}
+            >
+              {starred ? "★ Starred" : "☆ Star"}
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => router.push("/segments")}>
+            Back to Segments
+          </Button>
+        </div>
       </div>
 
       {segment.description && (

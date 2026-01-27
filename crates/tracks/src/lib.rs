@@ -23,8 +23,9 @@ use crate::{
     handlers::{
         all_users, create_segment, delete_activity, download_gpx_file, get_activity,
         get_activity_segments, get_activity_track, get_segment, get_segment_leaderboard,
-        get_segment_track, get_user_activities, health_check, list_segments, new_activity,
-        new_user, reprocess_segment, update_activity,
+        get_segment_track, get_starred_segments, get_user_activities, health_check,
+        is_segment_starred, list_segments, new_activity, new_user, reprocess_segment,
+        star_segment, unstar_segment, update_activity,
     },
     object_store_service::ObjectStoreService,
 };
@@ -66,6 +67,13 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/segments/{id}/track", get(get_segment_track))
         .route("/segments/{id}/leaderboard", get(get_segment_leaderboard))
         .route("/segments/{id}/reprocess", post(reprocess_segment))
+        .route(
+            "/segments/{id}/star",
+            get(is_segment_starred)
+                .post(star_segment)
+                .delete(unstar_segment),
+        )
+        .route("/segments/starred", get(get_starred_segments))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

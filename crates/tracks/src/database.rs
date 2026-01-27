@@ -726,4 +726,80 @@ impl Database {
             })
             .collect())
     }
+
+    // Segment star methods
+
+    /// Star a segment for a user.
+    pub async fn star_segment(&self, user_id: Uuid, segment_id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            INSERT INTO segment_stars (user_id, segment_id, created_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id, segment_id) DO NOTHING
+            "#,
+        )
+        .bind(user_id)
+        .bind(segment_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Unstar a segment for a user.
+    pub async fn unstar_segment(&self, user_id: Uuid, segment_id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            DELETE FROM segment_stars
+            WHERE user_id = $1 AND segment_id = $2
+            "#,
+        )
+        .bind(user_id)
+        .bind(segment_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Check if a segment is starred by a user.
+    pub async fn is_segment_starred(
+        &self,
+        user_id: Uuid,
+        segment_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let row: Option<(i64,)> = sqlx::query_as(
+            r#"
+            SELECT 1 FROM segment_stars
+            WHERE user_id = $1 AND segment_id = $2
+            LIMIT 1
+            "#,
+        )
+        .bind(user_id)
+        .bind(segment_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    /// Get all segments starred by a user.
+    pub async fn get_user_starred_segments(&self, user_id: Uuid) -> Result<Vec<Segment>, AppError> {
+        let segments: Vec<Segment> = sqlx::query_as(
+            r#"
+            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type,
+                   s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                   s.visibility, s.created_at
+            FROM segments s
+            JOIN segment_stars ss ON ss.segment_id = s.id
+            WHERE ss.user_id = $1 AND s.deleted_at IS NULL
+            ORDER BY ss.created_at DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(segments)
+    }
 }
