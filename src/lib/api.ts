@@ -126,8 +126,6 @@ export interface StarredSegmentEffort {
   leader_time_seconds: number | null;
 }
 
-<<<<<<< conflict 1 of 2
-+++++++ xokmunky c48f825f "wip phase 4" (rebase destination)
 // Leaderboard types
 export type LeaderboardScope = 'all_time' | 'year' | 'month' | 'week';
 export type GenderFilter = 'all' | 'male' | 'female';
@@ -238,42 +236,6 @@ export interface DistanceLeaderEntry {
   total_distance_meters: number;
   activity_count: number;
   rank: number;
-}
-
-// Achievement types
-export type AchievementType = 'kom' | 'qom' | 'local_legend' | 'course_record';
-
-export interface Achievement {
-  id: string;
-  user_id: string;
-  segment_id: string;
-  effort_id: string | null;
-  achievement_type: AchievementType;
-  earned_at: string;
-  lost_at: string | null;
-  effort_count: number | null;
-}
-
-export interface AchievementWithSegment extends Achievement {
-  segment_name: string;
-  segment_distance_meters: number;
-  segment_activity_type: string;
-}
-
-export interface AchievementHolder {
-  user_id: string;
-  user_name: string;
-  achievement_type: AchievementType;
-  earned_at: string;
-  elapsed_time_seconds: number | null;
-  effort_count: number | null;
-}
-
-export interface SegmentAchievements {
-  segment_id: string;
-  kom: AchievementHolder | null;
-  qom: AchievementHolder | null;
-  local_legend: AchievementHolder | null;
 }
 
 class ApiClient {
@@ -524,6 +486,20 @@ class ApiClient {
     });
   }
 
+  // Achievement endpoints
+  async getMyAchievements(includeLost?: boolean): Promise<AchievementWithSegment[]> {
+    const params = includeLost !== undefined ? `?include_lost=${includeLost}` : '';
+    return this.request<AchievementWithSegment[]>(`/users/me/achievements${params}`);
+  }
+
+  async getUserAchievements(userId: string, includeLost?: boolean): Promise<AchievementWithSegment[]> {
+    const params = includeLost !== undefined ? `?include_lost=${includeLost}` : '';
+    return this.request<AchievementWithSegment[]>(`/users/${userId}/achievements${params}`);
+  }
+
+  async getSegmentAchievements(segmentId: string): Promise<SegmentAchievements> {
+    return this.request<SegmentAchievements>(`/segments/${segmentId}/achievements`);
+  }
 
   // Global leaderboard endpoints
   async getCrownLeaderboard(limit?: number, offset?: number): Promise<CrownCountEntry[]> {
@@ -542,21 +518,6 @@ class ApiClient {
     const queryString = params.toString();
     const path = `/leaderboards/distance${queryString ? `?${queryString}` : ''}`;
     return this.request<DistanceLeaderEntry[]>(path);
-  }
-
-  // Achievement endpoints
-  async getMyAchievements(includeLost?: boolean): Promise<AchievementWithSegment[]> {
-    const params = includeLost !== undefined ? `?include_lost=${includeLost}` : '';
-    return this.request<AchievementWithSegment[]>(`/users/me/achievements${params}`);
-  }
-
-  async getUserAchievements(userId: string, includeLost?: boolean): Promise<AchievementWithSegment[]> {
-    const params = includeLost !== undefined ? `?include_lost=${includeLost}` : '';
-    return this.request<AchievementWithSegment[]>(`/users/${userId}/achievements${params}`);
-  }
-
-  async getSegmentAchievements(segmentId: string): Promise<SegmentAchievements> {
-    return this.request<SegmentAchievements>(`/segments/${segmentId}/achievements`);
   }
 }
 

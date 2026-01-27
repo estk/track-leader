@@ -49,6 +49,8 @@ pub struct ObjectStoreService {
 
 impl ObjectStoreService {
     pub fn new_local(base_path: String) -> Self {
+        // Ensure the directory exists before creating the LocalFileSystem
+        std::fs::create_dir_all(&base_path).expect("Failed to create uploads directory");
         let store = Arc::new(LocalFileSystem::new_with_prefix(&base_path).unwrap());
         Self {
             store,
