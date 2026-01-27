@@ -7,8 +7,8 @@
 ### Starting the Dev Environment
 
 ```bash
-# From project root - runs in background, creates persistent tmux session
-./scripts/start-dev.sh &
+# From project root - creates detached tmux session and returns immediately
+./scripts/start-dev.sh
 ```
 
 The script creates a tmux session named `track-leader` with 3 panes:

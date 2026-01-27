@@ -89,7 +89,3 @@ echo ""
 echo "Monitor logs with:"
 echo "  tail -f $LOG_DIR/backend_latest.log"
 echo "  tail -f $LOG_DIR/frontend_latest.log"
-echo ""
-
-# Attach to the session
-tmux attach -t "$SESSION_NAME"
