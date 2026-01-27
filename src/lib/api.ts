@@ -20,6 +20,25 @@ export interface Activity {
   submitted_at: string;
 }
 
+export interface TrackPoint {
+  lat: number;
+  lon: number;
+  ele: number | null;
+  time: string | null;
+}
+
+export interface TrackBounds {
+  min_lat: number;
+  max_lat: number;
+  min_lon: number;
+  max_lon: number;
+}
+
+export interface TrackData {
+  points: TrackPoint[];
+  bounds: TrackBounds;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -95,15 +114,20 @@ class ApiClient {
   }
 
   // Activity endpoints
-  async getActivities(): Promise<Activity[]> {
-    return this.request<Activity[]>('/activities');
+  async getUserActivities(userId: string): Promise<Activity[]> {
+    return this.request<Activity[]>(`/users/${userId}/activities`);
   }
 
   async getActivity(id: string): Promise<Activity> {
     return this.request<Activity>(`/activities/${id}`);
   }
 
+  async getActivityTrack(id: string): Promise<TrackData> {
+    return this.request<TrackData>(`/activities/${id}/track`);
+  }
+
   async uploadActivity(
+    userId: string,
     file: File,
     name: string,
     activityType: string
@@ -113,7 +137,7 @@ class ApiClient {
     formData.append('file', file);
 
     const response = await fetch(
-      `${API_BASE}/activities/new?user_id=${encodeURIComponent('placeholder')}&activity_type=${encodeURIComponent(activityType)}&name=${encodeURIComponent(name)}`,
+      `${API_BASE}/activities/new?user_id=${encodeURIComponent(userId)}&activity_type=${encodeURIComponent(activityType)}&name=${encodeURIComponent(name)}`,
       {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},

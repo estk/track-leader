@@ -2,10 +2,10 @@
 
 ## Implementation Progress
 
-**Current Phase:** Phase 1 - Foundation & Authentication
+**Current Phase:** Phase 2 - Core Features
 **Started:** 2026-01-26
 
-### Phase 1 Progress
+### Phase 1 Progress (Complete except staging deploy)
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -22,6 +22,23 @@
 | Fix database constraints | Done | Migration 002 created |
 | Set up CI/CD | Done | GitHub Actions workflow for Rust + Next.js |
 | Deploy staging | Pending | Requires Fly.io/infrastructure setup |
+
+### Phase 2 Progress
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Install MapLibre GL | Done | maplibre-gl + react-map-gl |
+| Install Recharts | Done | For elevation profile |
+| Activity track API endpoint | Done | GET /activities/{id}/track returns parsed GPX |
+| Activity map component | Done | Interactive route with start/end markers |
+| Elevation profile component | Done | Syncs with map on hover |
+| Activity detail page | Done | Shows map, elevation, stats |
+| Activity cards clickable | Done | Navigate to detail page |
+| Activity edit | Pending | |
+| Activity delete | Pending | |
+| Privacy controls | Pending | |
+| User profile page | Pending | |
+| Mobile responsive | Pending | |
 
 ---
 

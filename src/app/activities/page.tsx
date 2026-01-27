@@ -23,7 +23,7 @@ export default function ActivitiesPage() {
     }
 
     if (user) {
-      api.getActivities()
+      api.getUserActivities(user.id)
         .then(setActivities)
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
@@ -73,7 +73,11 @@ export default function ActivitiesPage() {
       ) : (
         <div className="space-y-4">
           {activities.map((activity) => (
-            <Card key={activity.id} className="hover:bg-muted/50 cursor-pointer transition-colors">
+            <Card
+              key={activity.id}
+              className="hover:bg-muted/50 cursor-pointer transition-colors"
+              onClick={() => router.push(`/activities/${activity.id}`)}
+            >
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{activity.name}</CardTitle>

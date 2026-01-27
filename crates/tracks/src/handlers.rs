@@ -6,7 +6,7 @@ use axum::{
 };
 use axum_extra::headers::{ContentType, HeaderMapExt, Mime};
 use bytes::BytesMut;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -16,6 +16,28 @@ use crate::{
     models::{Activity, ActivityType, User},
     object_store_service::{FileType, ObjectStoreService},
 };
+
+#[derive(Debug, Serialize)]
+pub struct TrackPoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub ele: Option<f64>,
+    pub time: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TrackData {
+    pub points: Vec<TrackPoint>,
+    pub bounds: TrackBounds,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TrackBounds {
+    pub min_lat: f64,
+    pub max_lat: f64,
+    pub min_lon: f64,
+    pub max_lon: f64,
+}
 
 #[derive(Deserialize)]
 pub struct NewUserQuery {
@@ -148,6 +170,57 @@ pub async fn download_gpx_file(
     );
 
     Ok((headers, file_bytes).into_response())
+}
+
+pub async fn get_activity_track(
+    Extension(db): Extension<Database>,
+    Extension(store): Extension<ObjectStoreService>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<TrackData>, AppError> {
+    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+    let file_bytes = store.get_file(&activity.object_store_path).await?;
+
+    let gpx: gpx::Gpx = gpx::read(std::io::BufReader::new(file_bytes.as_ref()))
+        .map_err(|e| AppError::InvalidInput(format!("Failed to parse GPX: {e}")))?;
+
+    let mut points = Vec::new();
+    let mut min_lat = f64::MAX;
+    let mut max_lat = f64::MIN;
+    let mut min_lon = f64::MAX;
+    let mut max_lon = f64::MIN;
+
+    for track in &gpx.tracks {
+        for segment in &track.segments {
+            for pt in &segment.points {
+                let lat = pt.point().y();
+                let lon = pt.point().x();
+                let ele = pt.elevation;
+                let time = pt.time.as_ref().map(|t| t.format().unwrap_or_default());
+
+                min_lat = min_lat.min(lat);
+                max_lat = max_lat.max(lat);
+                min_lon = min_lon.min(lon);
+                max_lon = max_lon.max(lon);
+
+                points.push(TrackPoint {
+                    lat,
+                    lon,
+                    ele,
+                    time,
+                });
+            }
+        }
+    }
+
+    Ok(Json(TrackData {
+        points,
+        bounds: TrackBounds {
+            min_lat,
+            max_lat,
+            min_lon,
+            max_lon,
+        },
+    }))
 }
 
 pub async fn health_check() -> StatusCode {

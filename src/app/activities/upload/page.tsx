@@ -60,8 +60,13 @@ export default function UploadActivityPage() {
 
     setUploading(true);
 
+    if (!user) {
+      setError("Not authenticated");
+      return;
+    }
+
     try {
-      await api.uploadActivity(file, name, activityType);
+      await api.uploadActivity(user.id, file, name, activityType);
       router.push("/activities");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
