@@ -516,3 +516,127 @@ pub struct DistanceLeaderEntry {
     pub activity_count: i64,
     pub rank: i64,
 }
+
+// ============================================================================
+// Social Models (Follows, Notifications)
+// ============================================================================
+
+/// A follow relationship between two users
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Follow {
+    pub follower_id: Uuid,
+    pub following_id: Uuid,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// User profile with follow counts for display
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct UserProfile {
+    pub id: Uuid,
+    pub email: String,
+    pub name: String,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+    pub follower_count: i32,
+    pub following_count: i32,
+    // Demographics
+    pub gender: Option<Gender>,
+    pub birth_year: Option<i32>,
+    pub weight_kg: Option<f64>,
+    pub country: Option<String>,
+    pub region: Option<String>,
+}
+
+/// Summary of a user for follower/following lists
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct UserSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub follower_count: i32,
+    pub following_count: i32,
+    #[serde(with = "rfc3339")]
+    pub followed_at: OffsetDateTime,
+}
+
+/// Type of notification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationType {
+    Follow,
+    Kudos,
+    Comment,
+    CrownAchieved,
+    CrownLost,
+    PersonalRecord,
+}
+
+impl NotificationType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NotificationType::Follow => "follow",
+            NotificationType::Kudos => "kudos",
+            NotificationType::Comment => "comment",
+            NotificationType::CrownAchieved => "crown_achieved",
+            NotificationType::CrownLost => "crown_lost",
+            NotificationType::PersonalRecord => "pr",
+        }
+    }
+}
+
+impl std::str::FromStr for NotificationType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "follow" => Ok(NotificationType::Follow),
+            "kudos" => Ok(NotificationType::Kudos),
+            "comment" => Ok(NotificationType::Comment),
+            "crown_achieved" => Ok(NotificationType::CrownAchieved),
+            "crown_lost" => Ok(NotificationType::CrownLost),
+            "pr" => Ok(NotificationType::PersonalRecord),
+            _ => Err(format!("unknown notification type: {s}")),
+        }
+    }
+}
+
+/// A notification for a user
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Notification {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub notification_type: String,
+    pub actor_id: Option<Uuid>,
+    pub target_type: Option<String>,
+    pub target_id: Option<Uuid>,
+    pub message: Option<String>,
+    #[serde(with = "rfc3339::option")]
+    pub read_at: Option<OffsetDateTime>,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Notification with actor details for display
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct NotificationWithActor {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub notification_type: String,
+    pub actor_id: Option<Uuid>,
+    pub actor_name: Option<String>,
+    pub target_type: Option<String>,
+    pub target_id: Option<Uuid>,
+    pub message: Option<String>,
+    #[serde(with = "rfc3339::option")]
+    pub read_at: Option<OffsetDateTime>,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Response for notifications list with unread count
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NotificationsResponse {
+    pub notifications: Vec<NotificationWithActor>,
+    pub unread_count: i64,
+    pub total_count: i64,
+}

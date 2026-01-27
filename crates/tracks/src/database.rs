@@ -2,8 +2,9 @@ use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
     ActivitySegmentEffort, ActivityType, CrownCountEntry, DistanceLeaderEntry, GenderFilter,
-    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Scores, Segment, SegmentEffort,
-    UpdateDemographicsRequest, User, UserWithDemographics,
+    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Notification, NotificationWithActor,
+    Scores, Segment, SegmentEffort, UpdateDemographicsRequest, User, UserProfile, UserSummary,
+    UserWithDemographics,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use serde::Serialize;
@@ -1583,5 +1584,340 @@ impl Database {
         .await?;
 
         Ok(entries)
+    }
+
+    // ========================================================================
+    // Social Methods (Follows, Notifications)
+    // ========================================================================
+
+    /// Follow a user.
+    pub async fn follow_user(&self, follower_id: Uuid, following_id: Uuid) -> Result<(), AppError> {
+        // Insert follow relationship
+        sqlx::query(
+            r#"
+            INSERT INTO follows (follower_id, following_id, created_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (follower_id, following_id) DO NOTHING
+            "#,
+        )
+        .bind(follower_id)
+        .bind(following_id)
+        .execute(&self.pool)
+        .await?;
+
+        // Update counts
+        sqlx::query(
+            r#"
+            UPDATE users SET following_count = following_count + 1 WHERE id = $1
+            "#,
+        )
+        .bind(follower_id)
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            UPDATE users SET follower_count = follower_count + 1 WHERE id = $1
+            "#,
+        )
+        .bind(following_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Unfollow a user.
+    pub async fn unfollow_user(
+        &self,
+        follower_id: Uuid,
+        following_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM follows
+            WHERE follower_id = $1 AND following_id = $2
+            "#,
+        )
+        .bind(follower_id)
+        .bind(following_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            // Update counts
+            sqlx::query(
+                r#"
+                UPDATE users SET following_count = GREATEST(following_count - 1, 0) WHERE id = $1
+                "#,
+            )
+            .bind(follower_id)
+            .execute(&self.pool)
+            .await?;
+
+            sqlx::query(
+                r#"
+                UPDATE users SET follower_count = GREATEST(follower_count - 1, 0) WHERE id = $1
+                "#,
+            )
+            .bind(following_id)
+            .execute(&self.pool)
+            .await?;
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Check if a user is following another user.
+    pub async fn is_following(&self, follower_id: Uuid, following_id: Uuid) -> Result<bool, AppError> {
+        let row: Option<(i32,)> = sqlx::query_as(
+            r#"
+            SELECT 1 FROM follows
+            WHERE follower_id = $1 AND following_id = $2
+            LIMIT 1
+            "#,
+        )
+        .bind(follower_id)
+        .bind(following_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    /// Get a user's followers.
+    pub async fn get_followers(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::UserSummary>, AppError> {
+        let followers: Vec<crate::models::UserSummary> = sqlx::query_as(
+            r#"
+            SELECT
+                u.id,
+                u.name,
+                u.follower_count,
+                u.following_count,
+                f.created_at as followed_at
+            FROM follows f
+            JOIN users u ON u.id = f.follower_id
+            WHERE f.following_id = $1
+            ORDER BY f.created_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(followers)
+    }
+
+    /// Get users that a user is following.
+    pub async fn get_following(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::UserSummary>, AppError> {
+        let following: Vec<crate::models::UserSummary> = sqlx::query_as(
+            r#"
+            SELECT
+                u.id,
+                u.name,
+                u.follower_count,
+                u.following_count,
+                f.created_at as followed_at
+            FROM follows f
+            JOIN users u ON u.id = f.following_id
+            WHERE f.follower_id = $1
+            ORDER BY f.created_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(following)
+    }
+
+    /// Get follower and following counts for a user.
+    pub async fn get_follow_counts(&self, user_id: Uuid) -> Result<(i32, i32), AppError> {
+        let counts: (i32, i32) = sqlx::query_as(
+            r#"
+            SELECT follower_count, following_count
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(counts)
+    }
+
+    /// Get a user profile with follow counts.
+    pub async fn get_user_profile(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<crate::models::UserProfile>, AppError> {
+        let profile: Option<crate::models::UserProfile> = sqlx::query_as(
+            r#"
+            SELECT
+                id, email, name, created_at,
+                follower_count, following_count,
+                gender, birth_year, weight_kg, country, region
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(profile)
+    }
+
+    /// Get a user by ID (basic info only).
+    pub async fn get_user(&self, user_id: Uuid) -> Result<Option<User>, AppError> {
+        let user: Option<User> = sqlx::query_as(
+            r#"
+            SELECT id, email, name, created_at
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    // ========================================================================
+    // Notification Methods
+    // ========================================================================
+
+    /// Create a notification.
+    pub async fn create_notification(
+        &self,
+        user_id: Uuid,
+        notification_type: &str,
+        actor_id: Option<Uuid>,
+        target_type: Option<&str>,
+        target_id: Option<Uuid>,
+        message: Option<&str>,
+    ) -> Result<crate::models::Notification, AppError> {
+        let notification: crate::models::Notification = sqlx::query_as(
+            r#"
+            INSERT INTO notifications (id, user_id, notification_type, actor_id, target_type, target_id, message, created_at)
+            VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW())
+            RETURNING id, user_id, notification_type, actor_id, target_type, target_id, message, read_at, created_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(notification_type)
+        .bind(actor_id)
+        .bind(target_type)
+        .bind(target_id)
+        .bind(message)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(notification)
+    }
+
+    /// Get notifications for a user.
+    pub async fn get_notifications(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::NotificationWithActor>, AppError> {
+        let notifications: Vec<crate::models::NotificationWithActor> = sqlx::query_as(
+            r#"
+            SELECT
+                n.id,
+                n.user_id,
+                n.notification_type,
+                n.actor_id,
+                u.name as actor_name,
+                n.target_type,
+                n.target_id,
+                n.message,
+                n.read_at,
+                n.created_at
+            FROM notifications n
+            LEFT JOIN users u ON u.id = n.actor_id
+            WHERE n.user_id = $1
+            ORDER BY n.created_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(notifications)
+    }
+
+    /// Get unread notification count for a user.
+    pub async fn get_unread_notification_count(&self, user_id: Uuid) -> Result<i64, AppError> {
+        let count: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM notifications
+            WHERE user_id = $1 AND read_at IS NULL
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(count.0)
+    }
+
+    /// Mark a notification as read.
+    pub async fn mark_notification_read(&self, notification_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE notifications
+            SET read_at = NOW()
+            WHERE id = $1 AND user_id = $2 AND read_at IS NULL
+            "#,
+        )
+        .bind(notification_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Mark all notifications as read for a user.
+    pub async fn mark_all_notifications_read(&self, user_id: Uuid) -> Result<i64, AppError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE notifications
+            SET read_at = NOW()
+            WHERE user_id = $1 AND read_at IS NULL
+            "#,
+        )
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() as i64)
     }
 }

@@ -22,15 +22,16 @@ use crate::{
     auth::{login, me, register},
     database::Database,
     handlers::{
-        all_users, create_segment, delete_activity, download_gpx_file, get_activity,
+        all_users, create_segment, delete_activity, download_gpx_file, follow_user, get_activity,
         get_activity_segments, get_activity_track, get_crown_leaderboard, get_distance_leaderboard,
-        get_filtered_leaderboard, get_leaderboard_position, get_my_achievements,
-        get_my_demographics, get_my_segment_efforts, get_nearby_segments, get_segment,
-        get_segment_achievements, get_segment_leaderboard, get_segment_track,
-        get_starred_segment_efforts, get_starred_segments, get_user_achievements,
-        get_user_activities, health_check, is_segment_starred, list_segments, new_activity,
-        new_user, reprocess_segment, star_segment, unstar_segment, update_activity,
-        update_my_demographics,
+        get_filtered_leaderboard, get_follow_status, get_followers, get_following,
+        get_leaderboard_position, get_my_achievements, get_my_demographics, get_my_segment_efforts,
+        get_nearby_segments, get_notifications, get_segment, get_segment_achievements,
+        get_segment_leaderboard, get_segment_track, get_starred_segment_efforts,
+        get_starred_segments, get_user_achievements, get_user_activities, get_user_profile,
+        health_check, is_segment_starred, list_segments, mark_all_notifications_read,
+        mark_notification_read, new_activity, new_user, reprocess_segment, star_segment,
+        unfollow_user, unstar_segment, update_activity, update_my_demographics,
     },
     object_store_service::ObjectStoreService,
 };
@@ -105,6 +106,20 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         // Global leaderboards
         .route("/leaderboards/crowns", get(get_crown_leaderboard))
         .route("/leaderboards/distance", get(get_distance_leaderboard))
+        // Social routes (follows)
+        .route("/users/{id}/profile", get(get_user_profile))
+        .route(
+            "/users/{id}/follow",
+            get(get_follow_status)
+                .post(follow_user)
+                .delete(unfollow_user),
+        )
+        .route("/users/{id}/followers", get(get_followers))
+        .route("/users/{id}/following", get(get_following))
+        // Notification routes
+        .route("/notifications", get(get_notifications))
+        .route("/notifications/{id}/read", post(mark_notification_read))
+        .route("/notifications/read-all", post(mark_all_notifications_read))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

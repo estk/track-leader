@@ -1236,3 +1236,194 @@ pub async fn get_distance_leaderboard(
         .await?;
     Ok(Json(entries))
 }
+
+// ============================================================================
+// Social Handlers (Follows)
+// ============================================================================
+
+/// Follow a user.
+pub async fn follow_user(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(user_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    // Can't follow yourself
+    if claims.sub == user_id {
+        return Err(AppError::InvalidInput("Cannot follow yourself".to_string()));
+    }
+
+    // Verify target user exists
+    db.get_user(user_id).await?.ok_or(AppError::NotFound)?;
+
+    // Check if already following
+    if db.is_following(claims.sub, user_id).await? {
+        return Ok(StatusCode::OK); // Idempotent
+    }
+
+    db.follow_user(claims.sub, user_id).await?;
+
+    // Create notification for the followed user
+    db.create_notification(
+        user_id,
+        "follow",
+        Some(claims.sub),
+        Some("user"),
+        Some(claims.sub),
+        None,
+    )
+    .await?;
+
+    Ok(StatusCode::CREATED)
+}
+
+/// Unfollow a user.
+pub async fn unfollow_user(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(user_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    let unfollowed = db.unfollow_user(claims.sub, user_id).await?;
+
+    if unfollowed {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Ok(StatusCode::NOT_FOUND)
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct FollowStatusResponse {
+    pub is_following: bool,
+}
+
+/// Check if the authenticated user is following a specific user.
+pub async fn get_follow_status(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<FollowStatusResponse>, AppError> {
+    let is_following = db.is_following(claims.sub, user_id).await?;
+    Ok(Json(FollowStatusResponse { is_following }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FollowListQuery {
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FollowListResponse {
+    pub users: Vec<crate::models::UserSummary>,
+    pub total_count: i32,
+}
+
+/// Get a user's followers.
+pub async fn get_followers(
+    Extension(db): Extension<Database>,
+    Path(user_id): Path<Uuid>,
+    Query(query): Query<FollowListQuery>,
+) -> Result<Json<FollowListResponse>, AppError> {
+    // Get follow counts
+    let (follower_count, _) = db.get_follow_counts(user_id).await?;
+
+    let followers = db
+        .get_followers(user_id, query.limit, query.offset)
+        .await?;
+
+    Ok(Json(FollowListResponse {
+        users: followers,
+        total_count: follower_count,
+    }))
+}
+
+/// Get users that a user is following.
+pub async fn get_following(
+    Extension(db): Extension<Database>,
+    Path(user_id): Path<Uuid>,
+    Query(query): Query<FollowListQuery>,
+) -> Result<Json<FollowListResponse>, AppError> {
+    // Get follow counts
+    let (_, following_count) = db.get_follow_counts(user_id).await?;
+
+    let following = db
+        .get_following(user_id, query.limit, query.offset)
+        .await?;
+
+    Ok(Json(FollowListResponse {
+        users: following,
+        total_count: following_count,
+    }))
+}
+
+/// Get a user's profile with follow counts.
+pub async fn get_user_profile(
+    Extension(db): Extension<Database>,
+    Path(user_id): Path<Uuid>,
+) -> Result<Json<crate::models::UserProfile>, AppError> {
+    let profile = db
+        .get_user_profile(user_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    Ok(Json(profile))
+}
+
+// ============================================================================
+// Notification Handlers
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct NotificationsQuery {
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+/// Get notifications for the authenticated user.
+pub async fn get_notifications(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Query(query): Query<NotificationsQuery>,
+) -> Result<Json<crate::models::NotificationsResponse>, AppError> {
+    let notifications = db
+        .get_notifications(claims.sub, query.limit, query.offset)
+        .await?;
+    let unread_count = db.get_unread_notification_count(claims.sub).await?;
+    let total_count = notifications.len() as i64;
+
+    Ok(Json(crate::models::NotificationsResponse {
+        notifications,
+        unread_count,
+        total_count,
+    }))
+}
+
+/// Mark a notification as read.
+pub async fn mark_notification_read(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(notification_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    let marked = db
+        .mark_notification_read(notification_id, claims.sub)
+        .await?;
+
+    if marked {
+        Ok(StatusCode::OK)
+    } else {
+        Err(AppError::NotFound)
+    }
+}
+
+/// Mark all notifications as read.
+pub async fn mark_all_notifications_read(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let count = db.mark_all_notifications_read(claims.sub).await?;
+    Ok(Json(serde_json::json!({ "marked_count": count })))
+}
