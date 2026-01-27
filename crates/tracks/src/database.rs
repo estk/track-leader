@@ -1,5 +1,7 @@
 use crate::errors::AppError;
-use crate::models::{Activity, ActivityType, Scores, Segment, SegmentEffort, User};
+use crate::models::{
+    Activity, ActivitySegmentEffort, ActivityType, Scores, Segment, SegmentEffort, User,
+};
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -470,6 +472,39 @@ impl Database {
         .await?;
 
         Ok(row.map(|(geojson,)| geojson))
+    }
+
+    /// Get segment efforts for a specific activity, with segment details.
+    pub async fn get_activity_segment_efforts(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Vec<ActivitySegmentEffort>, AppError> {
+        let efforts: Vec<ActivitySegmentEffort> = sqlx::query_as(
+            r#"
+            SELECT
+                e.id as effort_id,
+                e.segment_id,
+                e.elapsed_time_seconds,
+                e.is_personal_record,
+                e.started_at,
+                s.name as segment_name,
+                s.distance_meters as segment_distance,
+                s.activity_type,
+                (SELECT COUNT(*) + 1 FROM segment_efforts e2
+                 WHERE e2.segment_id = e.segment_id
+                 AND e2.elapsed_time_seconds < e.elapsed_time_seconds) as rank
+            FROM segment_efforts e
+            JOIN segments s ON s.id = e.segment_id
+            WHERE e.activity_id = $1
+            AND s.deleted_at IS NULL
+            ORDER BY e.started_at ASC
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(efforts)
     }
 
     // Track geometry methods

@@ -268,6 +268,17 @@ pub async fn get_activity_track(
     }))
 }
 
+pub async fn get_activity_segments(
+    Extension(db): Extension<Database>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<crate::models::ActivitySegmentEffort>>, AppError> {
+    // Verify activity exists
+    db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+
+    let efforts = db.get_activity_segment_efforts(id).await?;
+    Ok(Json(efforts))
+}
+
 pub async fn health_check() -> StatusCode {
     StatusCode::OK
 }

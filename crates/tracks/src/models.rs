@@ -138,3 +138,18 @@ pub struct SegmentWithStats {
     pub athlete_count: i64,
     pub creator_name: String,
 }
+
+/// Segment effort with segment details, for displaying on activity detail page.
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct ActivitySegmentEffort {
+    pub effort_id: Uuid,
+    pub segment_id: Uuid,
+    pub elapsed_time_seconds: f64,
+    pub is_personal_record: bool,
+    #[serde(with = "rfc3339")]
+    pub started_at: OffsetDateTime,
+    pub segment_name: String,
+    pub segment_distance: f64,
+    pub activity_type: ActivityType,
+    pub rank: i64,
+}

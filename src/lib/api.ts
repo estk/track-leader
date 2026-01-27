@@ -75,6 +75,18 @@ export interface CreateSegmentRequest {
   visibility?: 'public' | 'private';
 }
 
+export interface ActivitySegmentEffort {
+  effort_id: string;
+  segment_id: string;
+  elapsed_time_seconds: number;
+  is_personal_record: boolean;
+  started_at: string;
+  segment_name: string;
+  segment_distance: number;
+  activity_type: string;
+  rank: number;
+}
+
 export interface SegmentTrackPoint {
   lat: number;
   lon: number;
@@ -176,6 +188,10 @@ class ApiClient {
 
   async getActivityTrack(id: string): Promise<TrackData> {
     return this.request<TrackData>(`/activities/${id}/track`);
+  }
+
+  async getActivitySegments(id: string): Promise<ActivitySegmentEffort[]> {
+    return this.request<ActivitySegmentEffort[]>(`/activities/${id}/segments`);
   }
 
   async updateActivity(

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData, TrackPoint } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export default function ActivityDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const [activity, setActivity] = useState<Activity | null>(null);
   const [trackData, setTrackData] = useState<TrackData | null>(null);
+  const [segmentEfforts, setSegmentEfforts] = useState<ActivitySegmentEffort[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
@@ -65,10 +66,12 @@ export default function ActivityDetailPage() {
       Promise.all([
         api.getActivity(activityId),
         api.getActivityTrack(activityId),
+        api.getActivitySegments(activityId),
       ])
-        .then(([act, track]) => {
+        .then(([act, track, segments]) => {
           setActivity(act);
           setTrackData(track);
+          setSegmentEfforts(segments);
         })
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
@@ -532,6 +535,46 @@ export default function ActivityDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Matched Segments */}
+      {segmentEfforts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Segments ({segmentEfforts.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {segmentEfforts.map((effort) => (
+                <div
+                  key={effort.effort_id}
+                  className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted cursor-pointer"
+                  onClick={() => router.push(`/segments/${effort.segment_id}`)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{effort.segment_name}</span>
+                      {effort.is_personal_record && (
+                        <Badge variant="secondary" className="text-xs">PR</Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {(effort.segment_distance / 1000).toFixed(2)} km
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-medium">
+                      {formatTime(effort.elapsed_time_seconds)}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      #{effort.rank}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -543,4 +586,15 @@ function StatItem({ label, value }: { label: string; value: string }) {
       <p className="text-sm text-muted-foreground">{label}</p>
     </div>
   );
+}
+
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  if (mins >= 60) {
+    const hours = Math.floor(mins / 60);
+    const remainingMins = mins % 60;
+    return `${hours}:${remainingMins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
