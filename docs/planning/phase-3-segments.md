@@ -325,7 +325,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] Segment efforts calculated correctly
 - [x] PR tracking working
 - [x] Segment detail page complete
-- [ ] Segment browser/search working (basic list done, no search/filter)
+- [x] Segment browser/search working (search, filters, sorting)
 - [x] Starred segments feature (API + button on detail page)
 - [x] Segments shown on activity detail
 
