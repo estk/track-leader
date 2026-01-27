@@ -259,7 +259,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] Show top 10 efforts on segment page
 - [x] Display rank, user, time, date
 - [ ] Link to full leaderboard (Phase 4)
-- [ ] Highlight current user's position
+- [x] Highlight current user's position
 
 ### 4.3 Personal Efforts
 
@@ -267,7 +267,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [ ] Show user's efforts on segment
 - [ ] PR history chart
 - [ ] Effort comparison
-- [ ] Link to source activity
+- [x] Link to source activity (click leaderboard row)
 
 ### 4.4 Segment on Activity
 
@@ -294,7 +294,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 
 **Tasks:**
 - [ ] Search by name
-- [ ] Filter by activity type
+- [x] Filter by activity type
 - [ ] Filter by distance range
 - [ ] Filter by climb category
 - [ ] Sort by popularity, distance, elevation
