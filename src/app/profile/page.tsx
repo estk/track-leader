@@ -102,6 +102,28 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Performance</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => router.push("/profile/achievements")}
+          >
+            Achievements & Crowns
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => router.push("/profile/rankings")}
+          >
+            Segment Rankings
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Account Actions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">

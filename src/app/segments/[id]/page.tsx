@@ -285,8 +285,15 @@ export default function SegmentDetailPage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Leaderboard</CardTitle>
+          <Button
+            variant="link"
+            className="text-sm"
+            onClick={() => router.push(`/segments/${segmentId}/leaderboard`)}
+          >
+            View Full Leaderboard →
+          </Button>
         </CardHeader>
         <CardContent>
           {efforts.length === 0 ? (
