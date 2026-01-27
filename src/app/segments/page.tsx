@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, Segment } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
@@ -33,18 +34,48 @@ export default function SegmentsPage() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showStarred, setShowStarred] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    api.listSegments()
+    const hasToken = !!api.getToken();
+    setIsLoggedIn(hasToken);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    const fetchSegments = showStarred && isLoggedIn
+      ? api.getStarredSegments()
+      : api.listSegments();
+
+    fetchSegments
       .then(setSegments)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [showStarred, isLoggedIn]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Segments</h1>
+        {isLoggedIn && (
+          <div className="flex gap-2">
+            <Button
+              variant={showStarred ? "outline" : "default"}
+              size="sm"
+              onClick={() => setShowStarred(false)}
+            >
+              All
+            </Button>
+            <Button
+              variant={showStarred ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowStarred(true)}
+            >
+              ★ Starred
+            </Button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -62,9 +93,13 @@ export default function SegmentsPage() {
       ) : segments.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">No segments yet</p>
+            <p className="text-muted-foreground mb-4">
+              {showStarred ? "No starred segments" : "No segments yet"}
+            </p>
             <p className="text-sm text-muted-foreground">
-              Segments can be created from activity detail pages.
+              {showStarred
+                ? "Star segments from their detail pages to see them here."
+                : "Segments can be created from activity detail pages."}
             </p>
           </CardContent>
         </Card>
