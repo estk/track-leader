@@ -152,6 +152,9 @@ export default function SegmentDetailPage() {
               {ACTIVITY_TYPE_LABELS[segment.activity_type] || segment.activity_type}
             </Badge>
             <span className="text-sm md:text-base text-muted-foreground">
+              Created by {currentUserId === segment.creator_id ? "you" : `${segment.creator_id.slice(0, 8)}...`}
+            </span>
+            <span className="text-sm md:text-base text-muted-foreground">
               {new Date(segment.created_at).toLocaleDateString()}
             </span>
           </div>
