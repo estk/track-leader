@@ -3,21 +3,24 @@
 ## Current Status
 
 **Phase 1:** Complete (except staging deployment)
-**Phase 2:** In Progress - Core activity features working
+**Phase 2:** Complete
 
 ### What's Working
 
 1. **Authentication** - JWT + argon2, login/register/logout
-2. **Activity Upload** - GPX file upload with activity type selection
-3. **Activity List** - Shows user's activities with clickable cards
+2. **Activity Upload** - GPX file upload with activity type and visibility selection
+3. **Activity List** - Shows user's activities with clickable cards, private indicator
 4. **Activity Detail Page:**
    - Interactive map with OpenTopoMap tiles (contour lines, hill shading)
    - Elevation profile chart (Recharts) with distance/gain/range stats
    - Statistics display (points, start/end elevation, bounds)
-   - Edit modal (name, activity type)
+   - Edit modal (name, activity type, visibility)
    - Delete with confirmation
    - Download GPX button
-5. **Styling** - Tailwind CSS with shadcn/ui-style components
+   - Public/Private visibility badge
+5. **User Profile Page** - Shows user info, activity summary (total/public/private counts)
+6. **Mobile Responsive** - Hamburger menu, responsive layouts, touch-friendly
+7. **Styling** - Tailwind CSS with shadcn/ui-style components
 
 ### Key Fixes Made This Session
 
@@ -77,14 +80,15 @@ npm run dev
 
 Open http://localhost:3000
 
-### What's Next (Phase 2 Remaining)
+### What's Next (Phase 3 - Segments)
 
-- [ ] Privacy controls (public/private activities)
-- [ ] User profile page
-- [ ] Mobile responsive design
-- [ ] Activity list filtering/sorting
+- [ ] Segment creation from activity portions
+- [ ] Automatic segment matching on upload
+- [ ] Segment detail pages
+- [ ] Personal records tracking
+- [ ] Segment discovery/search
 
-### Phase 3 Preview (Segments)
+### Phase 3 Details (Segments)
 
 - Segment creation from activities
 - Segment matching

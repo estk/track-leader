@@ -23,7 +23,7 @@
 | Set up CI/CD | Done | GitHub Actions workflow for Rust + Next.js |
 | Deploy staging | Pending | Requires Fly.io/infrastructure setup |
 
-### Phase 2 Progress
+### Phase 2 Progress (Complete)
 
 | Task | Status | Notes |
 |------|--------|-------|
@@ -39,9 +39,9 @@
 | Fix date serialization | Done | Added rfc3339 serde to OffsetDateTime fields |
 | Fix PostCSS config | Done | Created missing postcss.config.js |
 | Fix activity types | Done | Frontend sends PascalCase to match backend enum |
-| Privacy controls | Pending | |
-| User profile page | Pending | |
-| Mobile responsive | Pending | |
+| Privacy controls | Done | Public/private visibility toggle on upload and edit |
+| User profile page | Done | Shows user info and activity summary |
+| Mobile responsive | Done | Hamburger menu, responsive layouts |
 
 **Latest Session:** 2026-01-27 - See `docs/session-notes.md` for detailed fixes and learnings.
 
