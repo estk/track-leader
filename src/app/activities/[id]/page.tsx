@@ -163,6 +163,7 @@ export default function ActivityDetailPage() {
           ele: p.ele ?? undefined,
         })),
         visibility: "public",
+        source_activity_id: activity.id,
       });
       router.push(`/segments/${segment.id}`);
     } catch (err) {

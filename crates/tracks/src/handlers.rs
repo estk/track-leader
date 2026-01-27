@@ -293,6 +293,9 @@ pub struct CreateSegmentRequest {
     pub points: Vec<SegmentPoint>,
     #[serde(default = "default_visibility")]
     pub visibility: String,
+    /// Optional: the activity this segment was created from.
+    /// If provided, guarantees that activity gets the first effort.
+    pub source_activity_id: Option<Uuid>,
 }
 
 fn default_visibility() -> String {
@@ -369,10 +372,44 @@ pub async fn create_segment(
         )
         .await?;
 
+    // If source_activity_id provided, ensure its track is in the database
+    // (it might not be if the activity was uploaded before track storage was implemented)
+    if let Some(source_id) = req.source_activity_id {
+        if let Ok(Some(activity)) = db.get_activity(source_id).await {
+            // Check if track already exists
+            if db.get_track_geometry(source_id).await.ok().flatten().is_none() {
+                // Track not in database, try to save it
+                if let Ok(file_bytes) = store.get_file(&activity.object_store_path).await {
+                    if let Ok(gpx) = gpx::read(std::io::BufReader::new(file_bytes.as_ref())) {
+                        if let Some(wkt) = build_track_wkt(&gpx) {
+                            if let Err(e) = db
+                                .save_track_geometry(activity.user_id, source_id, &wkt)
+                                .await
+                            {
+                                tracing::warn!(
+                                    "Failed to save track geometry for source activity {source_id}: {e}"
+                                );
+                            } else {
+                                tracing::info!(
+                                    "Saved track geometry for source activity {source_id}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Automatically find and create efforts for existing activities
     let segment_id = segment.id;
     match db.find_matching_activities_for_segment(segment_id).await {
         Ok(matches) => {
+            tracing::info!(
+                "Found {} matching activities for segment {}",
+                matches.len(),
+                segment_id
+            );
             for activity_match in matches {
                 // Get the activity to find its GPX file
                 let activity = match db.get_activity(activity_match.activity_id).await {
@@ -436,6 +473,27 @@ pub async fn create_segment(
     }
 
     Ok(Json(segment))
+}
+
+/// Build a WKT LINESTRING from all track points
+fn build_track_wkt(gpx: &gpx::Gpx) -> Option<String> {
+    let mut coords: Vec<String> = Vec::new();
+
+    for track in &gpx.tracks {
+        for seg in &track.segments {
+            for pt in &seg.points {
+                let lon = pt.point().x();
+                let lat = pt.point().y();
+                coords.push(format!("{lon} {lat}"));
+            }
+        }
+    }
+
+    if coords.len() < 2 {
+        return None;
+    }
+
+    Some(format!("LINESTRING({})", coords.join(", ")))
 }
 
 fn calculate_total_distance(points: &[SegmentPoint]) -> f64 {

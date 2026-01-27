@@ -73,6 +73,7 @@ export interface CreateSegmentRequest {
   activity_type: string;
   points: { lat: number; lon: number; ele?: number }[];
   visibility?: 'public' | 'private';
+  source_activity_id?: string;
 }
 
 export interface ActivitySegmentEffort {
