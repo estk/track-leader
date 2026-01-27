@@ -17,8 +17,8 @@ impl Database {
         sqlx::query(
             r#"
             INSERT INTO activities (id, user_id, activity_type, name, object_store_path,
-                                    submitted_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
+                                    submitted_at, visibility)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
         )
         .bind(activity.id)
@@ -27,6 +27,7 @@ impl Database {
         .bind(&activity.name)
         .bind(&activity.object_store_path)
         .bind(activity.submitted_at)
+        .bind(&activity.visibility)
         .execute(&self.pool)
         .await?;
 
@@ -36,9 +37,9 @@ impl Database {
     pub async fn get_activity(&self, id: Uuid) -> Result<Option<Activity>, AppError> {
         let activity = sqlx::query_as(
             r#"
-            SELECT id, user_id, activity_type, name, object_store_path, submitted_at
+            SELECT id, user_id, activity_type, name, object_store_path, submitted_at, visibility
             FROM activities
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -51,9 +52,9 @@ impl Database {
     pub async fn get_user_activities(&self, user_id: Uuid) -> Result<Vec<Activity>, AppError> {
         let activities: Vec<Activity> = sqlx::query_as(
             r#"
-            SELECT id, user_id, activity_type, name, object_store_path, submitted_at
+            SELECT id, user_id, activity_type, name, object_store_path, submitted_at, visibility
             FROM activities
-            WHERE user_id = $1
+            WHERE user_id = $1 AND deleted_at IS NULL
             ORDER BY submitted_at DESC
             "#,
         )
@@ -69,19 +70,22 @@ impl Database {
         id: Uuid,
         name: Option<&str>,
         activity_type: Option<&crate::models::ActivityType>,
+        visibility: Option<&str>,
     ) -> Result<Option<Activity>, AppError> {
         let activity = sqlx::query_as(
             r#"
             UPDATE activities
             SET name = COALESCE($2, name),
-                activity_type = COALESCE($3, activity_type)
-            WHERE id = $1
-            RETURNING id, user_id, activity_type, name, object_store_path, submitted_at
+                activity_type = COALESCE($3, activity_type),
+                visibility = COALESCE($4, visibility)
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING id, user_id, activity_type, name, object_store_path, submitted_at, visibility
             "#,
         )
         .bind(id)
         .bind(name)
         .bind(activity_type.map(|at| at as &crate::models::ActivityType))
+        .bind(visibility)
         .fetch_optional(&self.pool)
         .await?;
 

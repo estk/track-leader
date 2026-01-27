@@ -18,6 +18,7 @@ export interface Activity {
   name: string;
   object_store_path: string;
   submitted_at: string;
+  visibility: 'public' | 'private';
 }
 
 export interface TrackPoint {
@@ -128,7 +129,7 @@ class ApiClient {
 
   async updateActivity(
     id: string,
-    data: { name?: string; activity_type?: string }
+    data: { name?: string; activity_type?: string; visibility?: 'public' | 'private' }
   ): Promise<Activity> {
     return this.request<Activity>(`/activities/${id}`, {
       method: 'PATCH',
@@ -146,14 +147,22 @@ class ApiClient {
     userId: string,
     file: File,
     name: string,
-    activityType: string
+    activityType: string,
+    visibility: 'public' | 'private' = 'public'
   ): Promise<Activity> {
     const token = this.getToken();
     const formData = new FormData();
     formData.append('file', file);
 
+    const params = new URLSearchParams({
+      user_id: userId,
+      activity_type: activityType,
+      name: name,
+      visibility: visibility,
+    });
+
     const response = await fetch(
-      `${API_BASE}/activities/new?user_id=${encodeURIComponent(userId)}&activity_type=${encodeURIComponent(activityType)}&name=${encodeURIComponent(name)}`,
+      `${API_BASE}/activities/new?${params.toString()}`,
       {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},

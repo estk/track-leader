@@ -80,7 +80,14 @@ export default function ActivitiesPage() {
             >
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{activity.name}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-lg">{activity.name}</CardTitle>
+                    {activity.visibility === "private" && (
+                      <span className="text-muted-foreground text-sm" title="Private">
+                        🔒
+                      </span>
+                    )}
+                  </div>
                   <Badge variant="secondary">{activity.activity_type}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">

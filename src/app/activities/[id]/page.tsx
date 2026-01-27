@@ -36,6 +36,7 @@ export default function ActivityDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState("");
+  const [editVisibility, setEditVisibility] = useState<"public" | "private">("public");
   const [saving, setSaving] = useState(false);
 
   // Delete modal state
@@ -68,6 +69,7 @@ export default function ActivityDetailPage() {
     if (activity) {
       setEditName(activity.name);
       setEditType(activity.activity_type);
+      setEditVisibility(activity.visibility);
       setEditOpen(true);
     }
   };
@@ -80,6 +82,7 @@ export default function ActivityDetailPage() {
       const updated = await api.updateActivity(activity.id, {
         name: editName !== activity.name ? editName : undefined,
         activity_type: editType !== activity.activity_type ? editType : undefined,
+        visibility: editVisibility !== activity.visibility ? editVisibility : undefined,
       });
       setActivity(updated);
       setEditOpen(false);
@@ -160,6 +163,33 @@ export default function ActivityDetailPage() {
                   ))}
                 </select>
               </div>
+              <div className="space-y-2">
+                <Label>Visibility</Label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="edit-visibility"
+                      value="public"
+                      checked={editVisibility === "public"}
+                      onChange={() => setEditVisibility("public")}
+                      className="w-4 h-4"
+                    />
+                    <span>Public</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="edit-visibility"
+                      value="private"
+                      checked={editVisibility === "private"}
+                      onChange={() => setEditVisibility("private")}
+                      className="w-4 h-4"
+                    />
+                    <span>Private</span>
+                  </label>
+                </div>
+              </div>
               <div className="flex gap-2 pt-4">
                 <Button
                   variant="outline"
@@ -222,6 +252,9 @@ export default function ActivityDetailPage() {
           <h1 className="text-3xl font-bold">{activity.name}</h1>
           <div className="flex items-center gap-4 mt-2">
             <Badge variant="secondary">{activity.activity_type}</Badge>
+            <Badge variant={activity.visibility === "private" ? "outline" : "default"}>
+              {activity.visibility === "private" ? "Private" : "Public"}
+            </Badge>
             <span className="text-muted-foreground">
               {new Date(activity.submitted_at).toLocaleDateString(undefined, {
                 weekday: "long",

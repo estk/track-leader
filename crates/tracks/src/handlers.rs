@@ -64,6 +64,8 @@ pub struct UploadQuery {
     pub user_id: Uuid,
     pub activity_type: ActivityType,
     pub name: String,
+    #[serde(default)]
+    pub visibility: Option<String>,
 }
 
 pub async fn new_activity(
@@ -118,8 +120,8 @@ pub async fn new_activity(
         name,
         activity_type,
         submitted_at: time::UtcDateTime::now().to_offset(time::UtcOffset::UTC),
-
         object_store_path,
+        visibility: params.visibility.unwrap_or_else(|| "public".to_string()),
     };
 
     aq.submit(params.user_id, activity.id, file_type, file_bytes)
@@ -143,6 +145,7 @@ pub async fn get_activity(
 pub struct UpdateActivityRequest {
     pub name: Option<String>,
     pub activity_type: Option<ActivityType>,
+    pub visibility: Option<String>,
 }
 
 pub async fn update_activity(
@@ -151,7 +154,12 @@ pub async fn update_activity(
     Json(req): Json<UpdateActivityRequest>,
 ) -> Result<Json<Activity>, AppError> {
     let activity = db
-        .update_activity(id, req.name.as_deref(), req.activity_type.as_ref())
+        .update_activity(
+            id,
+            req.name.as_deref(),
+            req.activity_type.as_ref(),
+            req.visibility.as_deref(),
+        )
         .await?
         .ok_or(AppError::NotFound)?;
 

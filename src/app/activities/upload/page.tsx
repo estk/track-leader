@@ -25,6 +25,7 @@ export default function UploadActivityPage() {
 
   const [name, setName] = useState("");
   const [activityType, setActivityType] = useState("Running");
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -66,7 +67,7 @@ export default function UploadActivityPage() {
     }
 
     try {
-      await api.uploadActivity(user.id, file, name, activityType);
+      await api.uploadActivity(user.id, file, name, activityType, visibility);
       router.push("/activities");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -141,6 +142,39 @@ export default function UploadActivityPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Visibility</Label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="public"
+                    checked={visibility === "public"}
+                    onChange={() => setVisibility("public")}
+                    className="w-4 h-4"
+                  />
+                  <span>Public</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="visibility"
+                    value="private"
+                    checked={visibility === "private"}
+                    onChange={() => setVisibility("private")}
+                    className="w-4 h-4"
+                  />
+                  <span>Private</span>
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {visibility === "public"
+                  ? "Anyone can view this activity"
+                  : "Only you can view this activity"}
+              </p>
             </div>
 
             <div className="flex gap-4">

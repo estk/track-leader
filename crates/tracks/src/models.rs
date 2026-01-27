@@ -25,6 +25,35 @@ impl User {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Visibility {
+    #[default]
+    Public,
+    Private,
+}
+
+impl Visibility {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Visibility::Public => "public",
+            Visibility::Private => "private",
+        }
+    }
+}
+
+impl std::str::FromStr for Visibility {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "public" => Ok(Visibility::Public),
+            "private" => Ok(Visibility::Private),
+            _ => Err(format!("unknown visibility: {s}")),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Activity {
     pub id: Uuid,
@@ -34,6 +63,7 @@ pub struct Activity {
     pub object_store_path: String,
     #[serde(with = "rfc3339")]
     pub submitted_at: OffsetDateTime,
+    pub visibility: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::Type)]
