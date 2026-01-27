@@ -250,7 +250,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] Display segment on map
 - [x] Show segment statistics
 - [x] Show elevation profile
-- [ ] Display creator info
+- [x] Display creator info
 - [x] Star/unstar button
 
 ### 4.2 Segment Leaderboard Preview
