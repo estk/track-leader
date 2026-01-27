@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   AreaChart,
   Area,
@@ -8,7 +8,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine,
 } from "recharts";
 import { TrackPoint } from "@/lib/api";
 
@@ -37,25 +36,34 @@ function calculateDistance(
 }
 
 export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
+  const lastHoveredIndex = useRef<number | null>(null);
+
   const chartData = useMemo(() => {
     let cumulativeDistance = 0;
-    return points
-      .filter((p) => p.ele !== null)
-      .map((point, i, arr) => {
-        if (i > 0) {
-          cumulativeDistance += calculateDistance(
-            arr[i - 1].lat,
-            arr[i - 1].lon,
-            point.lat,
-            point.lon
-          );
-        }
-        return {
-          distance: cumulativeDistance,
-          elevation: point.ele!,
-          index: i,
-        };
+    const data: { distance: number; elevation: number; originalIndex: number }[] = [];
+
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
+      if (point.ele === null) continue;
+
+      if (data.length > 0) {
+        const prevPoint = points[data[data.length - 1].originalIndex];
+        cumulativeDistance += calculateDistance(
+          prevPoint.lat,
+          prevPoint.lon,
+          point.lat,
+          point.lon
+        );
+      }
+
+      data.push({
+        distance: cumulativeDistance,
+        elevation: point.ele,
+        originalIndex: i,
       });
+    }
+
+    return data;
   }, [points]);
 
   const { minEle, maxEle, totalDistance, totalGain } = useMemo(() => {
@@ -98,12 +106,6 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart
           data={chartData}
-          onMouseMove={(e) => {
-            const payload = e as { activePayload?: { payload: { index: number } }[] };
-            if (payload.activePayload && payload.activePayload[0]) {
-              onHover?.(payload.activePayload[0].payload.index);
-            }
-          }}
           onMouseLeave={() => onHover?.(null)}
         >
           <defs>
@@ -125,9 +127,15 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
             fontSize={12}
           />
           <Tooltip
-            content={({ payload }) => {
-              if (payload && payload[0]) {
+            content={({ payload, active }) => {
+              if (active && payload && payload[0]) {
                 const data = payload[0].payload;
+                const idx = data.originalIndex;
+                // Only call onHover when index changes to avoid render loops
+                if (lastHoveredIndex.current !== idx) {
+                  lastHoveredIndex.current = idx;
+                  setTimeout(() => onHover?.(idx), 0);
+                }
                 return (
                   <div className="bg-background border rounded-md p-2 shadow-md">
                     <p className="text-sm font-medium">
@@ -138,6 +146,11 @@ export function ElevationProfile({ points, onHover }: ElevationProfileProps) {
                     </p>
                   </div>
                 );
+              }
+              // Clear hover when tooltip is not active
+              if (!active && lastHoveredIndex.current !== null) {
+                lastHoveredIndex.current = null;
+                setTimeout(() => onHover?.(null), 0);
               }
               return null;
             }}
