@@ -297,7 +297,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] Filter by activity type
 - [ ] Filter by distance range
 - [ ] Filter by climb category
-- [ ] Sort by popularity, distance, elevation
+- [x] Sort by name, distance, elevation, date
 
 ### 5.3 Nearby Segments
 
