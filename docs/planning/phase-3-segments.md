@@ -183,13 +183,13 @@ interface CreateSegmentRequest {
 ### 3.1 Matching Algorithm
 
 **Tasks:**
-- [ ] Implement segment matching service
-- [ ] Use PostGIS spatial queries
-- [ ] Define match criteria:
-  - Start point within tolerance
-  - End point within tolerance
-  - Path similarity threshold
-- [ ] Return matched segments with confidence
+- [x] Implement segment matching service
+- [x] Use PostGIS spatial queries
+- [x] Define match criteria:
+  - Start point within tolerance (50m)
+  - End point within tolerance (50m)
+  - Direction verification (start before end)
+- [x] Return matched segments with fractional positions
 
 **Algorithm Overview:**
 ```
@@ -225,19 +225,19 @@ WHERE t.activity_id = $1 AND s.id = $2;
 ### 3.3 Background Matching Job
 
 **Tasks:**
-- [ ] Integrate matching into activity queue
-- [ ] After scoring, run segment matching
-- [ ] Create segment_efforts for matches
-- [ ] Calculate PR ranks
-- [ ] Update segment effort_count
+- [x] Integrate matching into activity queue
+- [x] After scoring, run segment matching
+- [x] Create segment_efforts for matches
+- [x] Calculate PR ranks (update_personal_records)
+- [ ] Update segment effort_count (cached counter)
 
 ### 3.4 Effort Calculation
 
 **Tasks:**
-- [ ] Extract time from start_index to end_index
+- [x] Extract time from start_index to end_index (via fractional position interpolation)
 - [ ] Calculate moving time (exclude stops)
 - [ ] Calculate average/max speed for segment
-- [ ] Determine PR rank (compare to user's other efforts)
+- [x] Determine PR rank (compare to user's other efforts)
 
 ---
 
@@ -403,3 +403,52 @@ Only create effort if score > 0.8
 4. **PRs work:** Personal records tracked
 5. **Discovery works:** Can find segments on map and search
 6. **Stars work:** Can favorite segments
+
+---
+
+## Implementation Notes (Added 2026-01-26)
+
+### Segment Matching Implementation
+
+The segment matching system is implemented with the following architecture:
+
+**Database Layer (`database.rs`):**
+- `save_track_geometry()` - Stores activity track as LINESTRING with upsert
+- `find_matching_segments()` - Finds segments that activity passes through
+- `find_matching_activities_for_segment()` - Inverse: finds activities for a segment
+- `segment_effort_exists()` - Idempotency check
+- `update_personal_records()` - Marks fastest effort as PR
+
+**Matching Algorithm:**
+```sql
+-- Core matching query
+SELECT s.id, s.distance_meters,
+       ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry) as start_pos,
+       ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry) as end_pos
+FROM segments s
+JOIN tracks t ON t.activity_id = $1
+WHERE ST_DWithin(t.geo, s.start_point, 50)  -- 50m tolerance
+  AND ST_DWithin(t.geo, s.end_point, 50)
+  AND ST_LineLocatePoint(...) < ST_LineLocatePoint(...)  -- direction check
+```
+
+**Timing Extraction (`segment_matching.rs`):**
+- Calculates cumulative distance along track
+- Normalizes to fractions (0-1)
+- Interpolates GPX timestamps at start/end fractions
+- Returns `SegmentTiming { started_at, elapsed_time_seconds }`
+
+**Key Design Decisions:**
+1. **50m tolerance** - Balances accuracy with GPS variance
+2. **Direction verification** - Ensures segment traversed in correct direction
+3. **Fractional position** - Uses ST_LineLocatePoint for precise timing extraction
+4. **Idempotency** - Checks for existing efforts before creating duplicates
+5. **Auto-reprocess** - When segment created, automatically finds matching activities
+
+**API Endpoints:**
+- `POST /segments` - Now auto-creates efforts for matching activities
+- `POST /segments/{id}/reprocess` - Manual reprocess trigger
+
+**Files Added:**
+- `migrations/005_tracks_spatial_index.sql` - GIST index + unique constraint
+- `segment_matching.rs` - SegmentMatch, ActivityMatch, timing extraction

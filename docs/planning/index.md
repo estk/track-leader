@@ -51,12 +51,22 @@
 |------|--------|-------|
 | Segments database schema | Done | Migration 003 with PostGIS geometry |
 | Segment models | Done | Segment, SegmentEffort structs |
-| Segment API endpoints | Done | Create, get, list, leaderboard |
+| Segment API endpoints | Done | Create, get, list, leaderboard, reprocess |
 | Segments list page | Done | Shows public segments |
 | Segment detail page | Done | Shows stats and leaderboard |
 | Segment creation from activities | Pending | Need UI to select portion of activity |
-| Automatic segment matching | Pending | PostGIS spatial query |
-| Personal records tracking | Pending | Mark PRs on efforts |
+| **Automatic segment matching** | **Done** | PostGIS ST_DWithin + ST_LineLocatePoint |
+| **Personal records tracking** | **Done** | update_personal_records() marks fastest effort |
+| **Track geometry storage** | **Done** | LINESTRING in tracks table with GIST index |
+| **Timing extraction from GPX** | **Done** | Interpolates timestamps at match positions |
+| **Auto-reprocess on segment create** | **Done** | Finds existing activities when segment created |
+
+**Segment Matching Implementation Notes:**
+- Uses 50m tolerance for start/end point matching
+- Direction verified via ST_LineLocatePoint (start_fraction < end_fraction)
+- Timing extracted by interpolating GPX timestamps at fractional positions
+- Idempotent: checks segment_effort_exists() before creating duplicates
+- New endpoint: POST /segments/{id}/reprocess for manual reprocessing
 
 ---
 
