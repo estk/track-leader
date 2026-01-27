@@ -108,6 +108,13 @@ export default function ProfilePage() {
           <Button
             variant="outline"
             className="w-full"
+            onClick={() => router.push("/profile/settings")}
+          >
+            Settings
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
             onClick={handleLogout}
           >
             Sign Out
