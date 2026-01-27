@@ -3,8 +3,18 @@ use crate::models::{
     Activity, ActivitySegmentEffort, ActivityType, Scores, Segment, SegmentEffort, User,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
+use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+/// A segment that is similar to a proposed new segment.
+/// Used for duplicate detection when creating segments.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct SimilarSegment {
+    pub id: Uuid,
+    pub name: String,
+    pub distance_meters: f64,
+}
 
 #[derive(Clone)]
 pub struct Database {
@@ -237,6 +247,7 @@ impl Database {
 
     // Segment methods
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_segment(
         &self,
         id: Uuid,
@@ -250,6 +261,9 @@ impl Database {
         distance_meters: f64,
         elevation_gain: Option<f64>,
         elevation_loss: Option<f64>,
+        average_grade: Option<f64>,
+        max_grade: Option<f64>,
+        climb_category: Option<i32>,
         visibility: &str,
     ) -> Result<Segment, AppError> {
         let segment = sqlx::query_as(
@@ -258,16 +272,19 @@ impl Database {
                 id, creator_id, name, description, activity_type,
                 geo, start_point, end_point,
                 distance_meters, elevation_gain_meters, elevation_loss_meters,
+                average_grade, max_grade, climb_category,
                 visibility, created_at
             )
             VALUES (
                 $1, $2, $3, $4, $5,
                 ST_GeogFromText($6), ST_GeogFromText($7), ST_GeogFromText($8),
                 $9, $10, $11,
-                $12, NOW()
+                $12, $13, $14,
+                $15, NOW()
             )
             RETURNING id, creator_id, name, description, activity_type,
                       distance_meters, elevation_gain_meters, elevation_loss_meters,
+                      average_grade, max_grade, climb_category,
                       visibility, created_at
             "#,
         )
@@ -282,6 +299,9 @@ impl Database {
         .bind(distance_meters)
         .bind(elevation_gain)
         .bind(elevation_loss)
+        .bind(average_grade)
+        .bind(max_grade)
+        .bind(climb_category)
         .bind(visibility)
         .fetch_one(&self.pool)
         .await?;
@@ -294,6 +314,7 @@ impl Database {
             r#"
             SELECT id, creator_id, name, description, activity_type,
                    distance_meters, elevation_gain_meters, elevation_loss_meters,
+                   average_grade, max_grade, climb_category,
                    visibility, created_at
             FROM segments
             WHERE id = $1 AND deleted_at IS NULL
@@ -316,6 +337,7 @@ impl Database {
                 r#"
                 SELECT id, creator_id, name, description, activity_type,
                        distance_meters, elevation_gain_meters, elevation_loss_meters,
+                       average_grade, max_grade, climb_category,
                        visibility, created_at
                 FROM segments
                 WHERE deleted_at IS NULL AND visibility = 'public' AND activity_type = $1
@@ -332,6 +354,7 @@ impl Database {
                 r#"
                 SELECT id, creator_id, name, description, activity_type,
                        distance_meters, elevation_gain_meters, elevation_loss_meters,
+                       average_grade, max_grade, climb_category,
                        visibility, created_at
                 FROM segments
                 WHERE deleted_at IS NULL AND visibility = 'public'
@@ -352,6 +375,7 @@ impl Database {
             r#"
             SELECT id, creator_id, name, description, activity_type,
                    distance_meters, elevation_gain_meters, elevation_loss_meters,
+                   average_grade, max_grade, climb_category,
                    visibility, created_at
             FROM segments
             WHERE creator_id = $1 AND deleted_at IS NULL
@@ -365,6 +389,7 @@ impl Database {
         Ok(segments)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_segment_effort(
         &self,
         segment_id: Uuid,
@@ -375,6 +400,8 @@ impl Database {
         moving_time_seconds: Option<f64>,
         average_speed_mps: Option<f64>,
         max_speed_mps: Option<f64>,
+        start_fraction: Option<f64>,
+        end_fraction: Option<f64>,
     ) -> Result<SegmentEffort, AppError> {
         let effort = sqlx::query_as(
             r#"
@@ -382,18 +409,21 @@ impl Database {
                 id, segment_id, activity_id, user_id,
                 started_at, elapsed_time_seconds,
                 moving_time_seconds, average_speed_mps, max_speed_mps,
-                is_personal_record, created_at
+                is_personal_record, created_at,
+                start_fraction, end_fraction
             )
             VALUES (
                 gen_random_uuid(), $1, $2, $3,
                 $4, $5,
                 $6, $7, $8,
-                FALSE, NOW()
+                FALSE, NOW(),
+                $9, $10
             )
             RETURNING id, segment_id, activity_id, user_id,
                       started_at, elapsed_time_seconds,
                       moving_time_seconds, average_speed_mps, max_speed_mps,
-                      is_personal_record, created_at
+                      is_personal_record, created_at,
+                      start_fraction, end_fraction
             "#,
         )
         .bind(segment_id)
@@ -404,6 +434,8 @@ impl Database {
         .bind(moving_time_seconds)
         .bind(average_speed_mps)
         .bind(max_speed_mps)
+        .bind(start_fraction)
+        .bind(end_fraction)
         .fetch_one(&self.pool)
         .await?;
 
@@ -420,7 +452,8 @@ impl Database {
             SELECT id, segment_id, activity_id, user_id,
                    started_at, elapsed_time_seconds,
                    moving_time_seconds, average_speed_mps, max_speed_mps,
-                   is_personal_record, created_at
+                   is_personal_record, created_at,
+                   start_fraction, end_fraction
             FROM segment_efforts
             WHERE segment_id = $1
             ORDER BY elapsed_time_seconds ASC
@@ -445,7 +478,8 @@ impl Database {
             SELECT id, segment_id, activity_id, user_id,
                    started_at, elapsed_time_seconds,
                    moving_time_seconds, average_speed_mps, max_speed_mps,
-                   is_personal_record, created_at
+                   is_personal_record, created_at,
+                   start_fraction, end_fraction
             FROM segment_efforts
             WHERE segment_id = $1 AND user_id = $2
             ORDER BY elapsed_time_seconds ASC
@@ -492,7 +526,9 @@ impl Database {
                 s.activity_type,
                 (SELECT COUNT(*) + 1 FROM segment_efforts e2
                  WHERE e2.segment_id = e.segment_id
-                 AND e2.elapsed_time_seconds < e.elapsed_time_seconds) as rank
+                 AND e2.elapsed_time_seconds < e.elapsed_time_seconds) as rank,
+                e.start_fraction,
+                e.end_fraction
             FROM segment_efforts e
             JOIN segments s ON s.id = e.segment_id
             WHERE e.activity_id = $1
@@ -616,6 +652,22 @@ impl Database {
         .await?;
 
         Ok(row.is_some())
+    }
+
+    /// Increment the effort_count counter on a segment.
+    pub async fn increment_segment_effort_count(&self, segment_id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE segments
+            SET effort_count = effort_count + 1
+            WHERE id = $1
+            "#,
+        )
+        .bind(segment_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 
     /// Update personal records for a user on a segment.
@@ -789,6 +841,7 @@ impl Database {
             r#"
             SELECT s.id, s.creator_id, s.name, s.description, s.activity_type,
                    s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                   s.average_grade, s.max_grade, s.climb_category,
                    s.visibility, s.created_at
             FROM segments s
             JOIN segment_stars ss ON ss.segment_id = s.id
@@ -797,6 +850,134 @@ impl Database {
             "#,
         )
         .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(segments)
+    }
+
+    /// Get all starred segments with effort stats for a user.
+    /// Returns each starred segment with the user's best effort, effort count, and leader time.
+    pub async fn get_starred_segments_with_efforts(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<crate::models::StarredSegmentEffort>, AppError> {
+        let efforts: Vec<crate::models::StarredSegmentEffort> = sqlx::query_as(
+            r#"
+            SELECT
+                s.id as segment_id,
+                s.name as segment_name,
+                s.activity_type,
+                s.distance_meters,
+                s.elevation_gain_meters,
+                -- User's best effort (PR)
+                user_best.elapsed_time_seconds as best_time_seconds,
+                user_best.rank as best_effort_rank,
+                user_best.started_at as best_effort_date,
+                -- User's total effort count
+                COALESCE(user_count.cnt, 0)::bigint as user_effort_count,
+                -- Segment leader time
+                leader.elapsed_time_seconds as leader_time_seconds
+            FROM segments s
+            JOIN segment_stars ss ON ss.segment_id = s.id AND ss.user_id = $1
+            -- User's best effort (subquery to get PR with rank)
+            LEFT JOIN LATERAL (
+                SELECT
+                    e.elapsed_time_seconds,
+                    e.started_at,
+                    (SELECT COUNT(*) + 1 FROM segment_efforts e2
+                     WHERE e2.segment_id = s.id
+                     AND e2.elapsed_time_seconds < e.elapsed_time_seconds) as rank
+                FROM segment_efforts e
+                WHERE e.segment_id = s.id
+                  AND e.user_id = $1
+                ORDER BY e.elapsed_time_seconds ASC
+                LIMIT 1
+            ) user_best ON true
+            -- User's total effort count
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*)::bigint as cnt
+                FROM segment_efforts e
+                WHERE e.segment_id = s.id AND e.user_id = $1
+            ) user_count ON true
+            -- Segment leader (fastest effort overall)
+            LEFT JOIN LATERAL (
+                SELECT e.elapsed_time_seconds
+                FROM segment_efforts e
+                WHERE e.segment_id = s.id
+                ORDER BY e.elapsed_time_seconds ASC
+                LIMIT 1
+            ) leader ON true
+            WHERE s.deleted_at IS NULL
+            ORDER BY ss.created_at DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(efforts)
+    }
+
+    /// Find segments with similar start/end points and same activity type.
+    /// Used to detect potential duplicates when creating a new segment.
+    /// Returns segments where both start and end points are within 30m of the given points.
+    pub async fn find_similar_segments(
+        &self,
+        activity_type: &ActivityType,
+        start_wkt: &str,
+        end_wkt: &str,
+    ) -> Result<Vec<SimilarSegment>, AppError> {
+        let rows: Vec<SimilarSegment> = sqlx::query_as(
+            r#"
+            SELECT id, name, distance_meters
+            FROM segments
+            WHERE activity_type = $1
+              AND ST_DWithin(start_point, ST_GeogFromText($2), 30)
+              AND ST_DWithin(end_point, ST_GeogFromText($3), 30)
+              AND deleted_at IS NULL
+            LIMIT 5
+            "#,
+        )
+        .bind(activity_type)
+        .bind(start_wkt)
+        .bind(end_wkt)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
+    /// Find segments whose start_point is within a given radius of a point.
+    pub async fn find_segments_near_point(
+        &self,
+        lat: f64,
+        lon: f64,
+        radius_meters: f64,
+        limit: i64,
+    ) -> Result<Vec<Segment>, AppError> {
+        let point_wkt = format!("POINT({lon} {lat})");
+        let segments: Vec<Segment> = sqlx::query_as(
+            r#"
+            SELECT id, creator_id, name, description, activity_type,
+                   distance_meters, elevation_gain_meters, elevation_loss_meters,
+                   average_grade, max_grade, climb_category,
+                   visibility, created_at
+            FROM segments
+            WHERE deleted_at IS NULL
+              AND visibility = 'public'
+              AND ST_DWithin(
+                  start_point,
+                  ST_GeogFromText($1),
+                  $2
+              )
+            ORDER BY ST_Distance(start_point, ST_GeogFromText($1))
+            LIMIT $3
+            "#,
+        )
+        .bind(&point_wkt)
+        .bind(radius_meters)
+        .bind(limit)
         .fetch_all(&self.pool)
         .await?;
 

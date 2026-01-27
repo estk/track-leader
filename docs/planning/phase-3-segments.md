@@ -100,8 +100,8 @@ CREATE TABLE segment_stars (
 **Tasks:**
 - [x] Calculate distance from LineString
 - [x] Calculate elevation gain/loss
-- [ ] Calculate average/max grade
-- [ ] Determine climb category
+- [x] Calculate average/max grade
+- [x] Determine climb category
 - [x] Pre-compute on segment creation
 
 **Climb Categories:**
@@ -126,7 +126,7 @@ Points = elevation_gain * length_km * grade_factor
 - [x] Create segment editor component
 - [x] Allow selecting start/end points on elevation profile
 - [x] Preview segment as user selects
-- [ ] Show calculated metrics in real-time
+- [x] Show calculated metrics in real-time
 - [x] Name and description input
 - [x] Submit segment creation
 
@@ -163,11 +163,11 @@ interface CreateSegmentRequest {
 ### 2.3 Segment Validation
 
 **Tasks:**
-- [ ] Minimum segment length (100m)
-- [ ] Maximum segment length (50km)
-- [ ] Minimum point count (10 points)
-- [ ] No duplicate segments (fuzzy match)
-- [ ] Activity type inheritance
+- [x] Minimum segment length (100m)
+- [x] Maximum segment length (50km)
+- [x] Minimum point count (10 points)
+- [x] No duplicate segments (fuzzy match)
+- [x] Activity type inheritance
 
 ### 2.4 Creator's First Effort
 
@@ -229,14 +229,14 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] After scoring, run segment matching
 - [x] Create segment_efforts for matches
 - [x] Calculate PR ranks (update_personal_records)
-- [ ] Update segment effort_count (cached counter)
+- [x] Update segment effort_count (cached counter)
 
 ### 3.4 Effort Calculation
 
 **Tasks:**
 - [x] Extract time from start_index to end_index (via fractional position interpolation)
-- [ ] Calculate moving time (exclude stops)
-- [ ] Calculate average/max speed for segment
+- [x] Calculate moving time (exclude stops)
+- [x] Calculate average/max speed for segment
 - [x] Determine PR rank (compare to user's other efforts)
 
 ---
@@ -264,9 +264,9 @@ WHERE t.activity_id = $1 AND s.id = $2;
 ### 4.3 Personal Efforts
 
 **Tasks:**
-- [ ] Show user's efforts on segment
-- [ ] PR history chart
-- [ ] Effort comparison
+- [x] Show user's efforts on segment
+- [x] PR history chart
+- [x] Effort comparison
 - [x] Link to source activity (click leaderboard row)
 
 ### 4.4 Segment on Activity
@@ -275,7 +275,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] Show matched segments on activity detail
 - [x] Display segment time and rank
 - [x] Link to segment page
-- [ ] Highlight segment on map
+- [x] Highlight segment on map
 
 ---
 
@@ -285,10 +285,10 @@ WHERE t.activity_id = $1 AND s.id = $2;
 
 **Tasks:**
 - [x] Create `/segments` route
-- [ ] Map-based segment discovery
-- [ ] Show segments as clickable lines
-- [ ] Clustering for dense areas
-- [ ] Popup on hover
+- [x] Map-based segment discovery
+- [x] Show segments as clickable lines
+- [x] Clustering for dense areas
+- [x] Popup on hover
 
 ### 5.2 Segment Search
 
@@ -296,23 +296,23 @@ WHERE t.activity_id = $1 AND s.id = $2;
 - [x] Search by name
 - [x] Filter by activity type
 - [x] Filter by distance range
-- [ ] Filter by climb category
+- [x] Filter by climb category
 - [x] Sort by name, distance, elevation, date
 
 ### 5.3 Nearby Segments
 
 **Tasks:**
-- [ ] "Segments near me" feature
-- [ ] Request location permission
-- [ ] Find segments within radius
-- [ ] Show on map and list
+- [x] "Segments near me" feature
+- [x] Request location permission
+- [x] Find segments within radius
+- [x] Show on map and list
 
 ### 5.4 Starred Segments
 
 **Tasks:**
 - [x] Star/unstar functionality
 - [x] Starred segments page (tab on /segments)
-- [ ] Track starred segment efforts
+- [x] Track starred segment efforts
 
 ---
 

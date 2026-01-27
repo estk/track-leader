@@ -30,19 +30,36 @@ pub struct ActivityMatch {
 pub struct SegmentTiming {
     pub started_at: OffsetDateTime,
     pub elapsed_time_seconds: f64,
+    pub moving_time_seconds: f64,
 }
+
+/// A point with its fractional position along the track and timestamp.
+struct TrackPointWithFraction {
+    fraction: f64,
+    time: OffsetDateTime,
+    lat: f64,
+    lon: f64,
+}
+
+/// Speed threshold in m/s below which we consider the user stopped.
+/// 1 m/s is approximately 2.2 mph (slow walking speed).
+const STOPPED_SPEED_THRESHOLD_MPS: f64 = 1.0;
 
 /// Extract timing from GPX track for a segment match.
 ///
 /// Uses the fractional positions (0-1) from PostGIS ST_LineLocatePoint to find
 /// the corresponding timestamps in the GPX track points.
+///
+/// Also calculates moving time by excluding intervals where speed is below the
+/// stopped threshold (1 m/s).
 pub fn extract_timing_from_gpx(
     gpx: &gpx::Gpx,
     start_fraction: f64,
     end_fraction: f64,
 ) -> Option<SegmentTiming> {
-    // Collect all points with timestamps
+    // Collect all points with timestamps and their fractional positions
     let mut points_with_time: Vec<(f64, gpx::Time)> = Vec::new();
+    let mut all_points: Vec<TrackPointWithFraction> = Vec::new();
     let mut cumulative_distance = 0.0;
 
     for track in &gpx.tracks {
@@ -58,6 +75,12 @@ pub fn extract_timing_from_gpx(
 
                 if let Some(time) = pt.time {
                     points_with_time.push((cumulative_distance, time));
+                    all_points.push(TrackPointWithFraction {
+                        fraction: cumulative_distance, // Will be normalized later
+                        time: time.into(),
+                        lat: pt.point().y(),
+                        lon: pt.point().x(),
+                    });
                 }
 
                 prev_point = Some(pt.point());
@@ -74,6 +97,9 @@ pub fn extract_timing_from_gpx(
     for (dist, _) in &mut points_with_time {
         *dist /= total_distance;
     }
+    for pt in &mut all_points {
+        pt.fraction /= total_distance;
+    }
 
     // Find timestamps at start and end fractions by interpolation
     let start_time = interpolate_time(&points_with_time, start_fraction)?;
@@ -88,10 +114,56 @@ pub fn extract_timing_from_gpx(
         return None;
     }
 
+    // Calculate moving time by summing intervals where speed >= threshold
+    let moving_time = calculate_moving_time(&all_points, start_fraction, end_fraction);
+
     Some(SegmentTiming {
         started_at: start_dt,
         elapsed_time_seconds: elapsed,
+        moving_time_seconds: moving_time,
     })
+}
+
+/// Calculate moving time by summing time intervals where speed >= threshold.
+///
+/// Only considers points within the segment bounds (start_fraction to end_fraction).
+fn calculate_moving_time(
+    points: &[TrackPointWithFraction],
+    start_fraction: f64,
+    end_fraction: f64,
+) -> f64 {
+    let mut moving_time = 0.0;
+
+    // Filter points within the segment bounds
+    let segment_points: Vec<&TrackPointWithFraction> = points
+        .iter()
+        .filter(|p| p.fraction >= start_fraction && p.fraction <= end_fraction)
+        .collect();
+
+    if segment_points.len() < 2 {
+        return moving_time;
+    }
+
+    for i in 1..segment_points.len() {
+        let p1 = segment_points[i - 1];
+        let p2 = segment_points[i];
+
+        let distance = haversine_distance(p1.lat, p1.lon, p2.lat, p2.lon);
+        let time_delta = (p2.time - p1.time).as_seconds_f64();
+
+        // Avoid division by zero or negative time
+        if time_delta <= 0.0 {
+            continue;
+        }
+
+        let speed = distance / time_delta;
+
+        if speed >= STOPPED_SPEED_THRESHOLD_MPS {
+            moving_time += time_delta;
+        }
+    }
+
+    moving_time
 }
 
 /// Interpolate time at a given fractional position along the track.

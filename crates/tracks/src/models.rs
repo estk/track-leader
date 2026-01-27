@@ -108,6 +108,9 @@ pub struct Segment {
     pub distance_meters: f64,
     pub elevation_gain_meters: Option<f64>,
     pub elevation_loss_meters: Option<f64>,
+    pub average_grade: Option<f64>,
+    pub max_grade: Option<f64>,
+    pub climb_category: Option<i32>,
     pub visibility: String,
     #[serde(with = "rfc3339")]
     pub created_at: OffsetDateTime,
@@ -128,6 +131,8 @@ pub struct SegmentEffort {
     pub is_personal_record: bool,
     #[serde(with = "rfc3339")]
     pub created_at: OffsetDateTime,
+    pub start_fraction: Option<f64>,
+    pub end_fraction: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -152,4 +157,26 @@ pub struct ActivitySegmentEffort {
     pub segment_distance: f64,
     pub activity_type: ActivityType,
     pub rank: i64,
+    pub start_fraction: Option<f64>,
+    pub end_fraction: Option<f64>,
+}
+
+/// Starred segment with the user's effort stats, for the starred segments dashboard.
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct StarredSegmentEffort {
+    // Segment basic info
+    pub segment_id: Uuid,
+    pub segment_name: String,
+    pub activity_type: ActivityType,
+    pub distance_meters: f64,
+    pub elevation_gain_meters: Option<f64>,
+    // User's best effort
+    pub best_time_seconds: Option<f64>,
+    pub best_effort_rank: Option<i64>,
+    #[serde(with = "rfc3339::option")]
+    pub best_effort_date: Option<OffsetDateTime>,
+    // User's effort count on this segment
+    pub user_effort_count: i64,
+    // Segment leader time for comparison
+    pub leader_time_seconds: Option<f64>,
 }

@@ -49,6 +49,9 @@ export interface Segment {
   distance_meters: number;
   elevation_gain_meters: number | null;
   elevation_loss_meters: number | null;
+  average_grade: number | null;
+  max_grade: number | null;
+  climb_category: number | null;
   visibility: 'public' | 'private';
   created_at: string;
 }
@@ -65,14 +68,18 @@ export interface SegmentEffort {
   max_speed_mps: number | null;
   is_personal_record: boolean;
   created_at: string;
+  start_fraction: number | null;
+  end_fraction: number | null;
 }
 
 export interface CreateSegmentRequest {
   name: string;
   description?: string;
-  activity_type: string;
+  /** Optional if source_activity_id is provided (inherits from the activity). Required otherwise. */
+  activity_type?: string;
   points: { lat: number; lon: number; ele?: number }[];
   visibility?: 'public' | 'private';
+  /** If provided, the segment inherits its activity_type from this activity. */
   source_activity_id?: string;
 }
 
@@ -86,6 +93,8 @@ export interface ActivitySegmentEffort {
   segment_distance: number;
   activity_type: string;
   rank: number;
+  start_fraction: number | null;
+  end_fraction: number | null;
 }
 
 export interface SegmentTrackPoint {
@@ -102,6 +111,19 @@ export interface SegmentTrackData {
     min_lon: number;
     max_lon: number;
   };
+}
+
+export interface StarredSegmentEffort {
+  segment_id: string;
+  segment_name: string;
+  activity_type: string;
+  distance_meters: number;
+  elevation_gain_meters: number | null;
+  best_time_seconds: number | null;
+  best_effort_rank: number | null;
+  best_effort_date: string | null;
+  user_effort_count: number;
+  leader_time_seconds: number | null;
 }
 
 class ApiClient {
@@ -260,6 +282,10 @@ class ApiClient {
     return this.request<SegmentEffort[]>(`/segments/${id}/leaderboard`);
   }
 
+  async getMySegmentEfforts(id: string): Promise<SegmentEffort[]> {
+    return this.request<SegmentEffort[]>(`/segments/${id}/my-efforts`);
+  }
+
   async getSegmentTrack(id: string): Promise<SegmentTrackData> {
     return this.request<SegmentTrackData>(`/segments/${id}/track`);
   }
@@ -291,6 +317,20 @@ class ApiClient {
 
   async getStarredSegments(): Promise<Segment[]> {
     return this.request<Segment[]>('/segments/starred');
+  }
+
+  async getStarredSegmentEfforts(): Promise<StarredSegmentEffort[]> {
+    return this.request<StarredSegmentEffort[]>('/segments/starred/efforts');
+  }
+
+  async getNearbySegments(lat: number, lon: number, radiusMeters?: number, limit?: number): Promise<Segment[]> {
+    const params = new URLSearchParams({
+      lat: lat.toString(),
+      lon: lon.toString(),
+    });
+    if (radiusMeters) params.set('radius_meters', radiusMeters.toString());
+    if (limit) params.set('limit', limit.toString());
+    return this.request<Segment[]>(`/segments/nearby?${params.toString()}`);
   }
 }
 

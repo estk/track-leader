@@ -289,12 +289,14 @@ pub async fn health_check() -> StatusCode {
 pub struct CreateSegmentRequest {
     pub name: String,
     pub description: Option<String>,
-    pub activity_type: ActivityType,
+    /// Optional if source_activity_id is provided (inherits from the activity).
+    /// Required if source_activity_id is not provided.
+    pub activity_type: Option<ActivityType>,
     pub points: Vec<SegmentPoint>,
     #[serde(default = "default_visibility")]
     pub visibility: String,
     /// Optional: the activity this segment was created from.
-    /// If provided, guarantees that activity gets the first effort.
+    /// If provided, the segment inherits its activity_type and guarantees that activity gets the first effort.
     pub source_activity_id: Option<Uuid>,
 }
 
@@ -317,10 +319,35 @@ pub async fn create_segment(
 ) -> Result<Json<Segment>, AppError> {
     use crate::segment_matching;
 
-    if req.points.len() < 2 {
-        return Err(AppError::InvalidInput(
-            "Segment must have at least 2 points".to_string(),
-        ));
+    // Validation: minimum point count
+    const MIN_POINTS: usize = 10;
+    if req.points.len() < MIN_POINTS {
+        return Err(AppError::InvalidInput(format!(
+            "Segment must have at least {MIN_POINTS} points (got {})",
+            req.points.len()
+        )));
+    }
+
+    // Calculate distance early for validation
+    let distance_meters = calculate_total_distance(&req.points);
+
+    // Validation: minimum length (100m)
+    const MIN_LENGTH_METERS: f64 = 100.0;
+    if distance_meters < MIN_LENGTH_METERS {
+        return Err(AppError::InvalidInput(format!(
+            "Segment must be at least {MIN_LENGTH_METERS}m long (got {:.0}m)",
+            distance_meters
+        )));
+    }
+
+    // Validation: maximum length (50km)
+    const MAX_LENGTH_METERS: f64 = 50_000.0;
+    if distance_meters > MAX_LENGTH_METERS {
+        return Err(AppError::InvalidInput(format!(
+            "Segment must be at most {}km long (got {:.1}km)",
+            MAX_LENGTH_METERS / 1000.0,
+            distance_meters / 1000.0
+        )));
     }
 
     // Build WKT strings for PostGIS (include elevation if available)
@@ -347,13 +374,42 @@ pub async fn create_segment(
     let start_wkt = format!("POINT({} {})", start.lon, start.lat);
     let end_wkt = format!("POINT({} {})", end.lon, end.lat);
 
-    // Calculate distance (simple haversine sum)
-    let distance_meters = calculate_total_distance(&req.points);
-
     // Calculate elevation gain/loss
     let (elevation_gain, elevation_loss) = calculate_elevation_change(&req.points);
 
+    // Calculate grade metrics
+    let (average_grade, max_grade) = calculate_grades(&req.points);
+
+    // Calculate climb category
+    let climb_category = calculate_climb_category(elevation_gain, distance_meters, average_grade);
+
     let creator_id = claims.sub;
+
+    // Resolve activity_type: inherit from source activity if provided, otherwise require in request
+    // Also store the source activity for later use (to save track geometry if needed)
+    let (activity_type, source_activity) = if let Some(source_id) = req.source_activity_id {
+        let activity = db
+            .get_activity(source_id)
+            .await?
+            .ok_or_else(|| AppError::InvalidInput(format!("Source activity {source_id} not found")))?;
+        let activity_type = activity.activity_type.clone();
+        (activity_type, Some(activity))
+    } else {
+        let activity_type = req.activity_type.clone().ok_or_else(|| {
+            AppError::InvalidInput(
+                "activity_type is required when source_activity_id is not provided".to_string(),
+            )
+        })?;
+        (activity_type, None)
+    };
+
+    // Check for duplicate segments (same activity type, similar start/end points)
+    let similar_segments = db
+        .find_similar_segments(&activity_type, &start_wkt, &end_wkt)
+        .await?;
+    if !similar_segments.is_empty() {
+        return Err(AppError::SimilarSegmentsExist(similar_segments));
+    }
 
     let segment = db
         .create_segment(
@@ -361,39 +417,41 @@ pub async fn create_segment(
             creator_id,
             &req.name,
             req.description.as_deref(),
-            &req.activity_type,
+            &activity_type,
             &geo_wkt,
             &start_wkt,
             &end_wkt,
             distance_meters,
             elevation_gain,
             elevation_loss,
+            average_grade,
+            max_grade,
+            climb_category,
             &req.visibility,
         )
         .await?;
 
-    // If source_activity_id provided, ensure its track is in the database
+    // If source_activity provided, ensure its track is in the database
     // (it might not be if the activity was uploaded before track storage was implemented)
-    if let Some(source_id) = req.source_activity_id {
-        if let Ok(Some(activity)) = db.get_activity(source_id).await {
-            // Check if track already exists
-            if db.get_track_geometry(source_id).await.ok().flatten().is_none() {
-                // Track not in database, try to save it
-                if let Ok(file_bytes) = store.get_file(&activity.object_store_path).await {
-                    if let Ok(gpx) = gpx::read(std::io::BufReader::new(file_bytes.as_ref())) {
-                        if let Some(wkt) = build_track_wkt(&gpx) {
-                            if let Err(e) = db
-                                .save_track_geometry(activity.user_id, source_id, &wkt)
-                                .await
-                            {
-                                tracing::warn!(
-                                    "Failed to save track geometry for source activity {source_id}: {e}"
-                                );
-                            } else {
-                                tracing::info!(
-                                    "Saved track geometry for source activity {source_id}"
-                                );
-                            }
+    if let Some(activity) = &source_activity {
+        let source_id = activity.id;
+        // Check if track already exists
+        if db.get_track_geometry(source_id).await.ok().flatten().is_none() {
+            // Track not in database, try to save it
+            if let Ok(file_bytes) = store.get_file(&activity.object_store_path).await {
+                if let Ok(gpx) = gpx::read(std::io::BufReader::new(file_bytes.as_ref())) {
+                    if let Some(wkt) = build_track_wkt(&gpx) {
+                        if let Err(e) = db
+                            .save_track_geometry(activity.user_id, source_id, &wkt)
+                            .await
+                        {
+                            tracing::warn!(
+                                "Failed to save track geometry for source activity {source_id}: {e}"
+                            );
+                        } else {
+                            tracing::info!(
+                                "Saved track geometry for source activity {source_id}"
+                            );
                         }
                     }
                 }
@@ -438,6 +496,13 @@ pub async fn create_segment(
                     None => continue,
                 };
 
+                // Calculate average speed: distance / time
+                let average_speed_mps = if timing.elapsed_time_seconds > 0.0 {
+                    Some(distance_meters / timing.elapsed_time_seconds)
+                } else {
+                    None
+                };
+
                 // Create the effort
                 if let Ok(effort) = db
                     .create_segment_effort(
@@ -446,19 +511,25 @@ pub async fn create_segment(
                         activity_match.user_id,
                         timing.started_at,
                         timing.elapsed_time_seconds,
-                        None,
-                        None,
-                        None,
+                        Some(timing.moving_time_seconds),
+                        average_speed_mps,
+                        None, // max_speed_mps
+                        Some(activity_match.start_fraction),
+                        Some(activity_match.end_fraction),
                     )
                     .await
                 {
                     tracing::info!(
-                        "Auto-created effort {} for segment {} from activity {} with time {:.1}s",
+                        "Auto-created effort {} for segment {} from activity {} with time {:.1}s (moving: {:.1}s)",
                         effort.id,
                         segment_id,
                         activity_match.activity_id,
-                        timing.elapsed_time_seconds
+                        timing.elapsed_time_seconds,
+                        timing.moving_time_seconds
                     );
+
+                    // Update effort count
+                    let _ = db.increment_segment_effort_count(segment_id).await;
 
                     // Update personal records
                     let _ = db
@@ -546,6 +617,97 @@ fn calculate_elevation_change(points: &[SegmentPoint]) -> (Option<f64>, Option<f
     }
 }
 
+/// Calculate average and maximum grade (slope) for a segment.
+/// Returns (average_grade, max_grade) as percentages (e.g., 5.0 = 5% grade).
+fn calculate_grades(points: &[SegmentPoint]) -> (Option<f64>, Option<f64>) {
+    let mut max_grade: f64 = 0.0;
+    let mut total_horizontal = 0.0;
+    let mut total_vertical = 0.0;
+    let mut has_data = false;
+
+    for i in 1..points.len() {
+        if let (Some(e1), Some(e2)) = (points[i - 1].ele, points[i].ele) {
+            let horizontal = haversine_distance(
+                points[i - 1].lat,
+                points[i - 1].lon,
+                points[i].lat,
+                points[i].lon,
+            );
+
+            if horizontal > 1.0 {
+                // Avoid division by very small numbers
+                has_data = true;
+                let vertical = e2 - e1;
+                let grade = (vertical / horizontal) * 100.0;
+
+                total_horizontal += horizontal;
+                total_vertical += vertical;
+
+                // Track max grade (absolute value for steepest section)
+                if grade.abs() > max_grade.abs() {
+                    max_grade = grade;
+                }
+            }
+        }
+    }
+
+    if has_data && total_horizontal > 0.0 {
+        let avg_grade = (total_vertical / total_horizontal) * 100.0;
+        (Some(avg_grade), Some(max_grade))
+    } else {
+        (None, None)
+    }
+}
+
+/// Calculate climb category based on elevation gain and distance.
+/// Categories: 4 (easiest), 3, 2, 1, 0 (HC/hardest), None (not a climb)
+/// Uses a points system: points = elevation_gain * (distance_km * grade_factor)
+fn calculate_climb_category(
+    elevation_gain: Option<f64>,
+    distance_meters: f64,
+    average_grade: Option<f64>,
+) -> Option<i32> {
+    let gain = elevation_gain?;
+    let grade = average_grade?;
+
+    // Only categorize actual climbs (positive elevation gain and grade)
+    if gain < 20.0 || grade < 1.0 {
+        return None;
+    }
+
+    let distance_km = distance_meters / 1000.0;
+
+    // Grade factor increases difficulty for steeper climbs
+    let grade_factor = if grade < 4.0 {
+        1.0
+    } else if grade < 6.0 {
+        1.5
+    } else if grade < 8.0 {
+        2.0
+    } else if grade < 10.0 {
+        2.5
+    } else {
+        3.0
+    };
+
+    let points = gain * distance_km * grade_factor / 100.0;
+
+    // Map points to category
+    if points >= 320.0 {
+        Some(0) // HC (Hors Catégorie)
+    } else if points >= 160.0 {
+        Some(1) // Cat 1
+    } else if points >= 80.0 {
+        Some(2) // Cat 2
+    } else if points >= 40.0 {
+        Some(3) // Cat 3
+    } else if points >= 20.0 {
+        Some(4) // Cat 4
+    } else {
+        None // Not categorized
+    }
+}
+
 pub async fn get_segment(
     Extension(db): Extension<Database>,
     Path(id): Path<Uuid>,
@@ -582,6 +744,15 @@ pub async fn get_segment_leaderboard(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<SegmentEffort>>, AppError> {
     let efforts = db.get_segment_efforts(id, 100).await?;
+    Ok(Json(efforts))
+}
+
+pub async fn get_my_segment_efforts(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<SegmentEffort>>, AppError> {
+    let efforts = db.get_user_segment_efforts(claims.sub, id).await?;
     Ok(Json(efforts))
 }
 
@@ -735,6 +906,13 @@ pub async fn reprocess_segment(
             }
         };
 
+        // Calculate average speed: distance / time
+        let average_speed_mps = if timing.elapsed_time_seconds > 0.0 {
+            Some(segment.distance_meters / timing.elapsed_time_seconds)
+        } else {
+            None
+        };
+
         // Create the effort
         match db
             .create_segment_effort(
@@ -743,21 +921,29 @@ pub async fn reprocess_segment(
                 activity_match.user_id,
                 timing.started_at,
                 timing.elapsed_time_seconds,
-                None,
-                None,
-                None,
+                Some(timing.moving_time_seconds),
+                average_speed_mps,
+                None, // max_speed_mps
+                Some(activity_match.start_fraction),
+                Some(activity_match.end_fraction),
             )
             .await
         {
             Ok(effort) => {
                 tracing::info!(
-                    "Created segment effort {} for segment {} from activity {} with time {:.1}s",
+                    "Created segment effort {} for segment {} from activity {} with time {:.1}s (moving: {:.1}s)",
                     effort.id,
                     segment_id,
                     activity_match.activity_id,
-                    timing.elapsed_time_seconds
+                    timing.elapsed_time_seconds,
+                    timing.moving_time_seconds
                 );
                 efforts_created += 1;
+
+                // Update effort count
+                if let Err(e) = db.increment_segment_effort_count(segment_id).await {
+                    tracing::error!("Failed to increment effort count: {e}");
+                }
 
                 // Update personal records
                 if let Err(e) = db
@@ -829,5 +1015,35 @@ pub async fn get_starred_segments(
     AuthUser(claims): AuthUser,
 ) -> Result<Json<Vec<Segment>>, AppError> {
     let segments = db.get_user_starred_segments(claims.sub).await?;
+    Ok(Json(segments))
+}
+
+/// Get all starred segments with effort stats for the authenticated user.
+/// Returns each starred segment with the user's best effort, effort count, and leader time.
+pub async fn get_starred_segment_efforts(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+) -> Result<Json<Vec<crate::models::StarredSegmentEffort>>, AppError> {
+    let efforts = db.get_starred_segments_with_efforts(claims.sub).await?;
+    Ok(Json(efforts))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NearbySegmentsQuery {
+    lat: f64,
+    lon: f64,
+    radius_meters: Option<f64>,
+    limit: Option<i64>,
+}
+
+pub async fn get_nearby_segments(
+    Extension(db): Extension<Database>,
+    Query(query): Query<NearbySegmentsQuery>,
+) -> Result<Json<Vec<Segment>>, AppError> {
+    let radius = query.radius_meters.unwrap_or(5000.0);
+    let limit = query.limit.unwrap_or(20);
+    let segments = db
+        .find_segments_near_point(query.lat, query.lon, radius, limit)
+        .await?;
     Ok(Json(segments))
 }

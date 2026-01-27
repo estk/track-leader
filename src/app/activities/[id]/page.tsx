@@ -23,6 +23,67 @@ const ACTIVITY_TYPES = [
   { value: "Unknown", label: "Other" },
 ];
 
+// Haversine distance between two points in meters
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Calculate segment metrics from selected track points
+function calculateSegmentMetrics(points: TrackPoint[]): {
+  distance: number;
+  elevationGain: number;
+  elevationLoss: number;
+  averageGrade: number | null;
+  climbCategory: string | null;
+} | null {
+  if (points.length < 2) return null;
+
+  let distance = 0;
+  let elevationGain = 0;
+  let elevationLoss = 0;
+  let hasElevation = false;
+
+  for (let i = 1; i < points.length; i++) {
+    distance += haversineDistance(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon);
+
+    if (points[i - 1].ele !== null && points[i].ele !== null) {
+      hasElevation = true;
+      const diff = points[i].ele! - points[i - 1].ele!;
+      if (diff > 0) elevationGain += diff;
+      else elevationLoss += Math.abs(diff);
+    }
+  }
+
+  let averageGrade: number | null = null;
+  if (hasElevation && distance > 0) {
+    const netElevation = elevationGain - elevationLoss;
+    averageGrade = (netElevation / distance) * 100;
+  }
+
+  // Calculate climb category
+  let climbCategory: string | null = null;
+  if (hasElevation && elevationGain >= 20 && averageGrade !== null && averageGrade >= 1) {
+    const distanceKm = distance / 1000;
+    const gradeFactor = averageGrade < 4 ? 1 : averageGrade < 6 ? 1.5 : averageGrade < 8 ? 2 : averageGrade < 10 ? 2.5 : 3;
+    const points = elevationGain * distanceKm * gradeFactor / 100;
+
+    if (points >= 320) climbCategory = "HC";
+    else if (points >= 160) climbCategory = "Cat 1";
+    else if (points >= 80) climbCategory = "Cat 2";
+    else if (points >= 40) climbCategory = "Cat 3";
+    else if (points >= 20) climbCategory = "Cat 4";
+  }
+
+  return { distance, elevationGain, elevationLoss, averageGrade, climbCategory };
+}
+
 export default function ActivityDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -33,6 +94,7 @@ export default function ActivityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+  const [highlightedSegment, setHighlightedSegment] = useState<{start: number, end: number} | null>(null);
 
   // Edit modal state
   const [editOpen, setEditOpen] = useState(false);
@@ -156,7 +218,7 @@ export default function ActivityDetailPage() {
       const segment = await api.createSegment({
         name: segmentName || `${activity.name} segment`,
         description: segmentDescription || undefined,
-        activity_type: activity.activity_type,
+        // activity_type is inherited from source_activity_id
         points: segmentPoints.map((p) => ({
           lat: p.lat,
           lon: p.lon,
@@ -348,13 +410,70 @@ export default function ActivityDetailPage() {
                   rows={3}
                 />
               </div>
-              <div className="text-sm text-muted-foreground">
-                {trackData && segmentStart !== null && segmentEnd !== null && (
-                  <p>
-                    Selected {Math.abs(segmentEnd - segmentStart) + 1} points
-                  </p>
-                )}
-              </div>
+              {trackData && segmentStart !== null && segmentEnd !== null && (() => {
+                const startIdx = Math.min(segmentStart, segmentEnd);
+                const endIdx = Math.max(segmentStart, segmentEnd);
+                const selectedPoints = trackData.points.slice(startIdx, endIdx + 1);
+                const metrics = calculateSegmentMetrics(selectedPoints);
+                if (!metrics) return null;
+
+                // Validation checks
+                const minPoints = 10;
+                const minLength = 100; // meters
+                const maxLength = 50000; // meters
+                const validationErrors: string[] = [];
+                if (selectedPoints.length < minPoints) {
+                  validationErrors.push(`Need at least ${minPoints} points (got ${selectedPoints.length})`);
+                }
+                if (metrics.distance < minLength) {
+                  validationErrors.push(`Must be at least ${minLength}m (got ${Math.round(metrics.distance)}m)`);
+                }
+                if (metrics.distance > maxLength) {
+                  validationErrors.push(`Must be under ${maxLength / 1000}km (got ${(metrics.distance / 1000).toFixed(1)}km)`);
+                }
+
+                return (
+                  <div className="space-y-2">
+                    <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium">Segment Preview</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                        <div>
+                          <span className="font-medium">Distance:</span>{" "}
+                          {metrics.distance >= 1000
+                            ? `${(metrics.distance / 1000).toFixed(2)} km`
+                            : `${Math.round(metrics.distance)} m`}
+                        </div>
+                        <div>
+                          <span className="font-medium">Elevation Gain:</span>{" "}
+                          {Math.round(metrics.elevationGain)} m
+                        </div>
+                        {metrics.averageGrade !== null && (
+                          <div>
+                            <span className="font-medium">Grade:</span>{" "}
+                          {metrics.averageGrade.toFixed(1)}%
+                        </div>
+                      )}
+                        {metrics.climbCategory && (
+                          <div>
+                            <span className="font-medium">Category:</span>{" "}
+                            {metrics.climbCategory}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {validationErrors.length > 0 && (
+                      <div className="bg-destructive/10 text-destructive rounded-lg p-3">
+                        <p className="text-sm font-medium mb-1">Cannot create segment:</p>
+                        <ul className="text-sm list-disc list-inside">
+                          {validationErrors.map((err, i) => (
+                            <li key={i}>{err}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex gap-2 pt-4">
                 <Button
                   variant="outline"
@@ -367,7 +486,14 @@ export default function ActivityDetailPage() {
                 <Button
                   className="flex-1"
                   onClick={handleCreateSegment}
-                  disabled={creatingSegment || !segmentName.trim()}
+                  disabled={creatingSegment || !segmentName.trim() || (() => {
+                    if (!trackData || segmentStart === null || segmentEnd === null) return true;
+                    const startIdx = Math.min(segmentStart, segmentEnd);
+                    const endIdx = Math.max(segmentStart, segmentEnd);
+                    const pts = trackData.points.slice(startIdx, endIdx + 1);
+                    const m = calculateSegmentMetrics(pts);
+                    return !m || pts.length < 10 || m.distance < 100 || m.distance > 50000;
+                  })()}
                 >
                   {creatingSegment ? "Creating..." : "Create Segment"}
                 </Button>
@@ -489,8 +615,8 @@ export default function ActivityDetailPage() {
           <ActivityMap
             trackData={trackData}
             highlightIndex={highlightIndex ?? undefined}
-            selectionStart={segmentStart}
-            selectionEnd={segmentEnd}
+            selectionStart={segmentMode ? segmentStart : highlightedSegment?.start ?? null}
+            selectionEnd={segmentMode ? segmentEnd : highlightedSegment?.end ?? null}
           />
         </CardContent>
       </Card>
@@ -545,33 +671,47 @@ export default function ActivityDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {segmentEfforts.map((effort) => (
-                <div
-                  key={effort.effort_id}
-                  className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted cursor-pointer"
-                  onClick={() => router.push(`/segments/${effort.segment_id}`)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{effort.segment_name}</span>
-                      {effort.is_personal_record && (
-                        <Badge variant="secondary" className="text-xs">PR</Badge>
-                      )}
+              {segmentEfforts.map((effort) => {
+                const handleMouseEnter = () => {
+                  if (effort.start_fraction !== null && effort.end_fraction !== null && trackData) {
+                    const startIdx = Math.round(effort.start_fraction * (trackData.points.length - 1));
+                    const endIdx = Math.round(effort.end_fraction * (trackData.points.length - 1));
+                    setHighlightedSegment({ start: startIdx, end: endIdx });
+                  }
+                };
+                const handleMouseLeave = () => {
+                  setHighlightedSegment(null);
+                };
+                return (
+                  <div
+                    key={effort.effort_id}
+                    className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted cursor-pointer"
+                    onClick={() => router.push(`/segments/${effort.segment_id}`)}
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{effort.segment_name}</span>
+                        {effort.is_personal_record && (
+                          <Badge variant="secondary" className="text-xs">PR</Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {(effort.segment_distance / 1000).toFixed(2)} km
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {(effort.segment_distance / 1000).toFixed(2)} km
+                    <div className="text-right">
+                      <div className="font-mono font-medium">
+                        {formatTime(effort.elapsed_time_seconds)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        #{effort.rank}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-mono font-medium">
-                      {formatTime(effort.elapsed_time_seconds)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      #{effort.rank}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

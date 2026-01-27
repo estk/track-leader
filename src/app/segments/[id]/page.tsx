@@ -9,6 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityMap } from "@/components/activity/activity-map";
 import { ElevationProfile } from "@/components/activity/elevation-profile";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceDot,
+} from "recharts";
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   Running: "Run",
@@ -29,6 +39,17 @@ function formatDistance(meters: number): string {
 function formatElevation(meters: number | null): string {
   if (meters === null) return "N/A";
   return `${Math.round(meters)} m`;
+}
+
+function formatGrade(grade: number | null): string {
+  if (grade === null) return "N/A";
+  return `${grade.toFixed(1)}%`;
+}
+
+function formatClimbCategory(category: number | null): string {
+  if (category === null) return "N/A";
+  if (category === 0) return "HC";
+  return `Cat ${category}`;
 }
 
 function formatTime(seconds: number): string {
@@ -55,6 +76,7 @@ export default function SegmentDetailPage() {
   const [starLoading, setStarLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [myEfforts, setMyEfforts] = useState<SegmentEffort[]>([]);
 
   const segmentId = params.id as string;
 
@@ -73,12 +95,15 @@ export default function SegmentDetailPage() {
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
 
-      // Check starred status and get user info if logged in
+      // Check starred status, get user info, and fetch user's efforts if logged in
       if (api.getToken()) {
         setIsLoggedIn(true);
         api.isSegmentStarred(segmentId)
           .then(setStarred)
           .catch(() => setStarred(false));
+        api.getMySegmentEfforts(segmentId)
+          .then(setMyEfforts)
+          .catch(() => setMyEfforts([]));
         api.me()
           .then((user) => setCurrentUserId(user.id))
           .catch(() => setCurrentUserId(null));
@@ -226,8 +251,22 @@ export default function SegmentDetailPage() {
               value={formatElevation(segment.elevation_gain_meters)}
             />
             <StatItem
+              label="Average Grade"
+              value={formatGrade(segment.average_grade)}
+            />
+            <StatItem
+              label="Max Grade"
+              value={formatGrade(segment.max_grade)}
+            />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+            <StatItem
               label="Elevation Loss"
               value={formatElevation(segment.elevation_loss_meters)}
+            />
+            <StatItem
+              label="Climb Category"
+              value={formatClimbCategory(segment.climb_category)}
             />
             <StatItem
               label="Attempts"
@@ -236,6 +275,14 @@ export default function SegmentDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {isLoggedIn && myEfforts.length > 0 && efforts.length > 0 && (
+        <EffortComparisonCard
+          myEfforts={myEfforts}
+          efforts={efforts}
+          currentUserId={currentUserId}
+        />
+      )}
 
       <Card>
         <CardHeader>
@@ -291,6 +338,149 @@ export default function SegmentDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {isLoggedIn && myEfforts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Your Efforts ({myEfforts.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="grid grid-cols-4 text-sm font-medium text-muted-foreground pb-2 border-b">
+                <span>#</span>
+                <span>Time</span>
+                <span>Date</span>
+                <span></span>
+              </div>
+              {myEfforts.map((effort, index) => (
+                <div
+                  key={effort.id}
+                  className={`grid grid-cols-4 py-2 text-sm border-b last:border-b-0 cursor-pointer hover:bg-muted/50 transition-colors ${
+                    effort.is_personal_record ? "bg-primary/10 font-medium" : ""
+                  }`}
+                  onClick={() => router.push(`/activities/${effort.activity_id}`)}
+                >
+                  <span>{index + 1}</span>
+                  <span className="font-mono">
+                    {formatTime(effort.elapsed_time_seconds)}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {new Date(effort.started_at).toLocaleDateString()}
+                  </span>
+                  <span>
+                    {effort.is_personal_record && (
+                      <Badge variant="default" className="text-xs">
+                        PR
+                      </Badge>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoggedIn && myEfforts.length >= 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>PR History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PRHistoryChart efforts={myEfforts} />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+interface ChartDataPoint {
+  date: number;
+  time: number;
+  isPR: boolean;
+  formattedDate: string;
+}
+
+function PRHistoryChart({ efforts }: { efforts: SegmentEffort[] }) {
+  const chartData: ChartDataPoint[] = useMemo(() => {
+    return efforts
+      .slice()
+      .sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime())
+      .map((effort) => ({
+        date: new Date(effort.started_at).getTime(),
+        time: effort.elapsed_time_seconds,
+        isPR: effort.is_personal_record,
+        formattedDate: new Date(effort.started_at).toLocaleDateString(),
+      }));
+  }, [efforts]);
+
+  const prPoints = chartData.filter((d) => d.isPR);
+
+  const formatTooltipTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="h-64">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+          <XAxis
+            dataKey="date"
+            type="number"
+            domain={["dataMin", "dataMax"]}
+            tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            className="text-xs fill-muted-foreground"
+          />
+          <YAxis
+            dataKey="time"
+            tickFormatter={formatTooltipTime}
+            className="text-xs fill-muted-foreground"
+            width={50}
+          />
+          <Tooltip
+            labelFormatter={(value) => new Date(value as number).toLocaleDateString()}
+            formatter={(value) => [formatTooltipTime(value as number), "Time"]}
+            contentStyle={{
+              backgroundColor: "hsl(var(--card))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: "var(--radius)",
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="time"
+            stroke="hsl(var(--primary))"
+            strokeWidth={2}
+            dot={{ r: 4, fill: "hsl(var(--primary))" }}
+            activeDot={{ r: 6 }}
+          />
+          {prPoints.map((point) => (
+            <ReferenceDot
+              key={point.date}
+              x={point.date}
+              y={point.time}
+              r={8}
+              fill="hsl(var(--chart-1))"
+              stroke="hsl(var(--background))"
+              strokeWidth={2}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="flex justify-center gap-6 mt-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-primary" />
+          <span>Effort</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-1))" }} />
+          <span>Personal Record</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -301,5 +491,77 @@ function StatItem({ label, value }: { label: string; value: string }) {
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-sm text-muted-foreground">{label}</p>
     </div>
+  );
+}
+
+interface EffortComparisonCardProps {
+  myEfforts: SegmentEffort[];
+  efforts: SegmentEffort[];
+  currentUserId: string | null;
+}
+
+function EffortComparisonCard({ myEfforts, efforts, currentUserId }: EffortComparisonCardProps) {
+  // Find user's personal best (fastest time)
+  const userBest = useMemo(() => {
+    return [...myEfforts].sort((a, b) => a.elapsed_time_seconds - b.elapsed_time_seconds)[0];
+  }, [myEfforts]);
+
+  // Segment record is the first effort in the leaderboard
+  const segmentRecord = efforts[0];
+
+  // Find user's rank in the overall leaderboard
+  const userRank = useMemo(() => {
+    const index = efforts.findIndex((e) => e.id === userBest.id);
+    return index >= 0 ? index + 1 : null;
+  }, [efforts, userBest]);
+
+  const userHoldsRecord = currentUserId && segmentRecord.user_id === currentUserId;
+
+  const gapSeconds = userBest.elapsed_time_seconds - segmentRecord.elapsed_time_seconds;
+  const gapPercent = ((userBest.elapsed_time_seconds - segmentRecord.elapsed_time_seconds) / segmentRecord.elapsed_time_seconds) * 100;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Your Best vs Record</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {userHoldsRecord ? (
+          <div className="text-center py-4">
+            <p className="text-2xl font-bold text-primary">You hold the segment record!</p>
+            <p className="text-muted-foreground mt-2">
+              Your time: {formatTime(userBest.elapsed_time_seconds)}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center py-2 border-b">
+              <span className="text-muted-foreground">Your Best</span>
+              <span className="font-mono font-medium">
+                {formatTime(userBest.elapsed_time_seconds)}
+                {userRank && (
+                  <span className="text-muted-foreground ml-2">(rank #{userRank})</span>
+                )}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b">
+              <span className="text-muted-foreground">Segment Record</span>
+              <span className="font-mono font-medium">
+                {formatTime(segmentRecord.elapsed_time_seconds)}
+                <span className="text-muted-foreground ml-2">
+                  by {segmentRecord.user_id.slice(0, 8)}...
+                </span>
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-muted-foreground">Gap</span>
+              <span className="font-mono font-medium text-destructive">
+                +{gapSeconds}s (+{gapPercent.toFixed(1)}%)
+              </span>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

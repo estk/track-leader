@@ -22,10 +22,10 @@ use crate::{
     database::Database,
     handlers::{
         all_users, create_segment, delete_activity, download_gpx_file, get_activity,
-        get_activity_segments, get_activity_track, get_segment, get_segment_leaderboard,
-        get_segment_track, get_starred_segments, get_user_activities, health_check,
-        is_segment_starred, list_segments, new_activity, new_user, reprocess_segment,
-        star_segment, unstar_segment, update_activity,
+        get_activity_segments, get_activity_track, get_my_segment_efforts, get_nearby_segments,
+        get_segment, get_segment_leaderboard, get_segment_track, get_starred_segment_efforts,
+        get_starred_segments, get_user_activities, health_check, is_segment_starred, list_segments,
+        new_activity, new_user, reprocess_segment, star_segment, unstar_segment, update_activity,
     },
     object_store_service::ObjectStoreService,
 };
@@ -63,9 +63,11 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/users/{id}/activities", get(get_user_activities))
         // Segment routes
         .route("/segments", get(list_segments).post(create_segment))
+        .route("/segments/nearby", get(get_nearby_segments))
         .route("/segments/{id}", get(get_segment))
         .route("/segments/{id}/track", get(get_segment_track))
         .route("/segments/{id}/leaderboard", get(get_segment_leaderboard))
+        .route("/segments/{id}/my-efforts", get(get_my_segment_efforts))
         .route("/segments/{id}/reprocess", post(reprocess_segment))
         .route(
             "/segments/{id}/star",
@@ -74,6 +76,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
                 .delete(unstar_segment),
         )
         .route("/segments/starred", get(get_starred_segments))
+        .route("/segments/starred/efforts", get(get_starred_segment_efforts))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

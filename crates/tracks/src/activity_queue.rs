@@ -168,6 +168,13 @@ async fn process_segment_match(
         }
     };
 
+    // Calculate average speed: distance / time
+    let average_speed_mps = if timing.elapsed_time_seconds > 0.0 {
+        Some(segment_match.distance_meters / timing.elapsed_time_seconds)
+    } else {
+        None
+    };
+
     // Create the effort
     match db
         .create_segment_effort(
@@ -176,19 +183,26 @@ async fn process_segment_match(
             user_id,
             timing.started_at,
             timing.elapsed_time_seconds,
-            None, // moving_time_seconds
-            None, // average_speed_mps
+            Some(timing.moving_time_seconds),
+            average_speed_mps,
             None, // max_speed_mps
+            Some(segment_match.start_fraction),
+            Some(segment_match.end_fraction),
         )
         .await
     {
         Ok(effort) => {
             tracing::info!(
-                "Created segment effort {} for segment {} with time {:.1}s",
+                "Created segment effort {} for segment {} with time {:.1}s (moving: {:.1}s)",
                 effort.id,
                 segment_match.segment_id,
-                timing.elapsed_time_seconds
+                timing.elapsed_time_seconds,
+                timing.moving_time_seconds
             );
+            // Update effort count
+            if let Err(e) = db.increment_segment_effort_count(segment_match.segment_id).await {
+                tracing::error!("Failed to increment effort count: {e}");
+            }
             // Update personal records
             if let Err(e) = db
                 .update_personal_records(segment_match.segment_id, user_id)

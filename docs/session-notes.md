@@ -1,12 +1,12 @@
-# Session Notes - January 26-27, 2026
+# Session Notes - January 27, 2026
 
-**Last verified:** 2026-01-27 - Phase 3 segment creation working with map and elevation profile.
+**Last verified:** 2026-01-27 - Phase 3 segments COMPLETE.
 
 ## Current Status
 
 **Phase 1:** Complete (except staging deployment)
 **Phase 2:** Complete
-**Phase 3:** In Progress - Segment creation from activities complete
+**Phase 3:** Complete
 
 ### What's Working
 
@@ -22,31 +22,51 @@
    - Delete with confirmation
    - Download GPX button
    - **Segment creation mode** - select start/end points on elevation profile
+   - Real-time segment metrics preview (distance, elevation, grade, climb category)
+   - Segment validation (min 100m, max 50km, min 10 points)
 5. **Segments:**
    - Create segment from activity by selecting portion on elevation profile
-   - Segment list page
-   - Segment detail page with map, elevation profile, statistics, leaderboard
-   - Hover sync between elevation profile and map on segment pages
+   - Automatic segment matching on activity upload (PostGIS spatial queries)
+   - Personal records tracking
+   - Segment list page with search, filters (activity type, distance, climb category), sorting
+   - Starred segments feature (star/unstar, starred tab)
+   - Segment detail page with:
+     - Map and elevation profile with hover sync
+     - Statistics (distance, elevation, grade, climb category)
+     - Global leaderboard
+     - User's personal efforts section
+   - Grade calculation (average and max)
+   - Climb category calculation (Cat 4 through HC)
 6. **User Profile Page** - Shows user info, activity summary (total/public/private counts)
 7. **Mobile Responsive** - Hamburger menu, responsive layouts, touch-friendly
 8. **Styling** - Tailwind CSS with shadcn/ui-style components
 
-### Phase 3 Progress (Segments)
+### Phase 3 Progress (Segments) - COMPLETE
 
-**Done:**
-- [x] Database schema for segments (migration 003)
+**All Done:**
+- [x] Database schema for segments (migrations 003-007)
 - [x] 3D geometry support for elevation (migration 004)
-- [x] Segment and SegmentEffort models
-- [x] Segment API endpoints (create, get, list, leaderboard, track)
-- [x] Segments list page
-- [x] Segment detail page with map, elevation profile, leaderboard
-- [x] Segment creation UI from activity detail page
-- [x] Hover sync on segment pages
-
-**Remaining:**
-- [ ] Automatic segment matching on upload (PostGIS spatial query)
-- [ ] Personal records tracking (mark PRs on efforts)
-- [ ] Segment editing/deletion
+- [x] Tracks spatial index (migration 005)
+- [x] Grade and climb category columns (migration 006)
+- [x] Effort positions for map highlighting (migration 007)
+- [x] Segment and SegmentEffort models with all fields
+- [x] Segment API endpoints (create, get, list, leaderboard, track, star/unstar, my-efforts, nearby, starred/efforts)
+- [x] Segment creation with validation (min/max length, min points)
+- [x] Duplicate segment detection (fuzzy spatial match)
+- [x] Activity type inheritance (segments inherit from source activity)
+- [x] Automatic segment matching on upload (PostGIS spatial query)
+- [x] Personal records tracking (mark PRs on efforts)
+- [x] Effort count cached counter (incremented on effort creation)
+- [x] Moving time calculation (excludes stops < 1 m/s)
+- [x] Segments list page with search, filters, sorting
+- [x] Segment detail page with statistics, leaderboard, user efforts
+- [x] Grade and climb category calculation
+- [x] Starred segments feature with effort dashboard
+- [x] Real-time metrics preview during segment creation
+- [x] Highlight segment on activity map
+- [x] Map-based segment discovery with clustering
+- [x] PR history chart
+- [x] Nearby segments feature ("Near Me" with geolocation)
 
 ### Key Fixes Made This Session (Jan 27)
 
