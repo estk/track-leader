@@ -82,13 +82,19 @@ npm run dev
 
 Open http://localhost:3000
 
-### What's Next (Phase 3 - Segments)
+### Phase 3 Progress (Segments)
 
-- [ ] Segment creation from activity portions
+**Done:**
+- [x] Database schema for segments (migration 003)
+- [x] Segment and SegmentEffort models
+- [x] Segment API endpoints (create, get, list, leaderboard)
+- [x] Segments list page
+- [x] Segment detail page with leaderboard
+
+**Remaining:**
+- [ ] Segment creation UI from activity portions
 - [ ] Automatic segment matching on upload
-- [ ] Segment detail pages
 - [ ] Personal records tracking
-- [ ] Segment discovery/search
 
 ### Phase 3 Details (Segments)
 

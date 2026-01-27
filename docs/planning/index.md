@@ -45,6 +45,19 @@
 
 **Latest Session:** 2026-01-27 - See `docs/session-notes.md` for detailed fixes and learnings.
 
+### Phase 3 Progress (In Progress)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Segments database schema | Done | Migration 003 with PostGIS geometry |
+| Segment models | Done | Segment, SegmentEffort structs |
+| Segment API endpoints | Done | Create, get, list, leaderboard |
+| Segments list page | Done | Shows public segments |
+| Segment detail page | Done | Shows stats and leaderboard |
+| Segment creation from activities | Pending | Need UI to select portion of activity |
+| Automatic segment matching | Pending | PostGIS spatial query |
+| Personal records tracking | Pending | Mark PRs on efforts |
+
 ---
 
 ## Vision
