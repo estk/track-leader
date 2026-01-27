@@ -311,7 +311,7 @@ WHERE t.activity_id = $1 AND s.id = $2;
 
 **Tasks:**
 - [x] Star/unstar functionality
-- [ ] Starred segments page (API exists, needs UI)
+- [x] Starred segments page (tab on /segments)
 - [ ] Track starred segment efforts
 
 ---
