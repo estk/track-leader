@@ -24,7 +24,7 @@ use crate::{
     handlers::{
         all_users, create_segment, delete_activity, download_gpx_file, follow_user, get_activity,
         get_activity_segments, get_activity_track, get_crown_leaderboard, get_distance_leaderboard,
-        get_filtered_leaderboard, get_follow_status, get_followers, get_following,
+        get_feed, get_filtered_leaderboard, get_follow_status, get_followers, get_following,
         get_leaderboard_position, get_my_achievements, get_my_demographics, get_my_segment_efforts,
         get_nearby_segments, get_notifications, get_segment, get_segment_achievements,
         get_segment_leaderboard, get_segment_track, get_starred_segment_efforts,
@@ -120,6 +120,8 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/notifications", get(get_notifications))
         .route("/notifications/{id}/read", post(mark_notification_read))
         .route("/notifications/read-all", post(mark_all_notifications_read))
+        // Activity feed
+        .route("/feed", get(get_feed))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

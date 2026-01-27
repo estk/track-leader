@@ -1804,6 +1804,53 @@ impl Database {
     }
 
     // ========================================================================
+    // Activity Feed Methods
+    // ========================================================================
+
+    /// Get activity feed for a user (activities from users they follow).
+    pub async fn get_activity_feed(
+        &self,
+        user_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::FeedActivity>, AppError> {
+        let activities: Vec<crate::models::FeedActivity> = sqlx::query_as(
+            r#"
+            SELECT
+                a.id,
+                a.user_id,
+                a.name,
+                a.activity_type,
+                a.submitted_at,
+                a.visibility,
+                u.name as user_name,
+                s.distance,
+                s.duration,
+                s.elevation_gain,
+                COALESCE(a.kudos_count, 0) as kudos_count,
+                COALESCE(a.comment_count, 0) as comment_count
+            FROM activities a
+            JOIN users u ON a.user_id = u.id
+            LEFT JOIN scores s ON a.id = s.activity_id
+            WHERE a.user_id IN (
+                SELECT following_id FROM follows WHERE follower_id = $1
+            )
+            AND a.visibility = 'public'
+            AND a.deleted_at IS NULL
+            ORDER BY a.submitted_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(user_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(activities)
+    }
+
+    // ========================================================================
     // Notification Methods
     // ========================================================================
 

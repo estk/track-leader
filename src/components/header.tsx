@@ -28,6 +28,11 @@ export function Header() {
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-6">
+          {user && (
+            <Link href="/feed" className="text-muted-foreground hover:text-foreground">
+              Feed
+            </Link>
+          )}
           <Link href="/activities" className="text-muted-foreground hover:text-foreground">
             Activities
           </Link>
@@ -100,6 +105,15 @@ export function Header() {
       {mobileMenuOpen && (
         <nav className="md:hidden border-t bg-background">
           <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
+            {user && (
+              <Link
+                href="/feed"
+                className="text-muted-foreground hover:text-foreground py-2"
+                onClick={closeMobileMenu}
+              >
+                Feed
+              </Link>
+            )}
             <Link
               href="/activities"
               className="text-muted-foreground hover:text-foreground py-2"

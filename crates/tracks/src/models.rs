@@ -640,3 +640,25 @@ pub struct NotificationsResponse {
     pub unread_count: i64,
     pub total_count: i64,
 }
+
+// ============================================================================
+// Activity Feed Models
+// ============================================================================
+
+/// Activity with user and stats for the feed
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct FeedActivity {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub activity_type: String,
+    #[serde(with = "rfc3339")]
+    pub submitted_at: OffsetDateTime,
+    pub visibility: String,
+    pub user_name: String,
+    pub distance: Option<f64>,
+    pub duration: Option<f64>,
+    pub elevation_gain: Option<f64>,
+    pub kudos_count: i32,
+    pub comment_count: i32,
+}

@@ -1427,3 +1427,28 @@ pub async fn mark_all_notifications_read(
     let count = db.mark_all_notifications_read(claims.sub).await?;
     Ok(Json(serde_json::json!({ "marked_count": count })))
 }
+
+// ============================================================================
+// Activity Feed Handlers
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct FeedQuery {
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+/// Get the activity feed for the authenticated user.
+/// Returns activities from users they follow.
+pub async fn get_feed(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Query(query): Query<FeedQuery>,
+) -> Result<Json<Vec<crate::models::FeedActivity>>, AppError> {
+    let activities = db
+        .get_activity_feed(claims.sub, query.limit, query.offset)
+        .await?;
+    Ok(Json(activities))
+}

@@ -291,6 +291,22 @@ export interface NotificationsResponse {
   total_count: number;
 }
 
+// Activity Feed types
+export interface FeedActivity {
+  id: string;
+  user_id: string;
+  name: string;
+  activity_type: string;
+  submitted_at: string;
+  visibility: string;
+  user_name: string;
+  distance: number | null;
+  duration: number | null;
+  elevation_gain: number | null;
+  kudos_count: number;
+  comment_count: number;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -630,6 +646,15 @@ class ApiClient {
     return this.request<{ marked_count: number }>('/notifications/read-all', {
       method: 'POST',
     });
+  }
+
+  // Activity feed endpoints
+  async getFeed(limit?: number, offset?: number): Promise<FeedActivity[]> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    return this.request<FeedActivity[]>(`/feed${queryString ? `?${queryString}` : ''}`);
   }
 }
 
