@@ -29,6 +29,8 @@ function formatElevation(meters: number | null): string {
   return `${Math.round(meters)} m`;
 }
 
+const ACTIVITY_TYPES = ["All", "Running", "RoadCycling", "MountainBiking", "Hiking", "Walking"];
+
 export default function SegmentsPage() {
   const router = useRouter();
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -36,6 +38,7 @@ export default function SegmentsPage() {
   const [error, setError] = useState("");
   const [showStarred, setShowStarred] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activityTypeFilter, setActivityTypeFilter] = useState<string>("All");
 
   useEffect(() => {
     const hasToken = !!api.getToken();
@@ -44,15 +47,17 @@ export default function SegmentsPage() {
 
   useEffect(() => {
     setLoading(true);
+    const typeFilter = activityTypeFilter === "All" ? undefined : activityTypeFilter;
+
     const fetchSegments = showStarred && isLoggedIn
       ? api.getStarredSegments()
-      : api.listSegments();
+      : api.listSegments(typeFilter);
 
     fetchSegments
       .then(setSegments)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [showStarred, isLoggedIn]);
+  }, [showStarred, isLoggedIn, activityTypeFilter]);
 
   return (
     <div className="space-y-6">
@@ -77,6 +82,21 @@ export default function SegmentsPage() {
           </div>
         )}
       </div>
+
+      {!showStarred && (
+        <div className="flex flex-wrap gap-2">
+          {ACTIVITY_TYPES.map((type) => (
+            <Button
+              key={type}
+              variant={activityTypeFilter === type ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActivityTypeFilter(type)}
+            >
+              {type === "All" ? "All Types" : ACTIVITY_TYPE_LABELS[type] || type}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="p-4 text-destructive bg-destructive/10 rounded-md">

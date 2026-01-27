@@ -54,6 +54,7 @@ export default function SegmentDetailPage() {
   const [starred, setStarred] = useState(false);
   const [starLoading, setStarLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const segmentId = params.id as string;
 
@@ -72,12 +73,15 @@ export default function SegmentDetailPage() {
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
 
-      // Check starred status if logged in
+      // Check starred status and get user info if logged in
       if (api.getToken()) {
         setIsLoggedIn(true);
         api.isSegmentStarred(segmentId)
           .then(setStarred)
           .catch(() => setStarred(false));
+        api.me()
+          .then((user) => setCurrentUserId(user.id))
+          .catch(() => setCurrentUserId(null));
       }
     }
   }, [segmentId]);
@@ -247,33 +251,39 @@ export default function SegmentDetailPage() {
                 <span>Time</span>
                 <span>Date</span>
               </div>
-              {efforts.map((effort, index) => (
-                <div
-                  key={effort.id}
-                  className="grid grid-cols-4 py-2 text-sm border-b last:border-b-0"
-                >
-                  <span className="font-medium">
-                    {index === 0 && "🥇 "}
-                    {index === 1 && "🥈 "}
-                    {index === 2 && "🥉 "}
-                    {index + 1}
-                  </span>
-                  <span className="truncate">
-                    {effort.user_id.slice(0, 8)}...
-                    {effort.is_personal_record && (
-                      <Badge variant="outline" className="ml-2 text-xs">
-                        PR
-                      </Badge>
-                    )}
-                  </span>
-                  <span className="font-mono">
-                    {formatTime(effort.elapsed_time_seconds)}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {new Date(effort.started_at).toLocaleDateString()}
-                  </span>
-                </div>
-              ))}
+              {efforts.map((effort, index) => {
+                const isCurrentUser = currentUserId && effort.user_id === currentUserId;
+                return (
+                  <div
+                    key={effort.id}
+                    className={`grid grid-cols-4 py-2 text-sm border-b last:border-b-0 cursor-pointer hover:bg-muted/50 transition-colors ${
+                      isCurrentUser ? "bg-primary/10 font-medium" : ""
+                    }`}
+                    onClick={() => router.push(`/activities/${effort.activity_id}`)}
+                  >
+                    <span className="font-medium">
+                      {index === 0 && "🥇 "}
+                      {index === 1 && "🥈 "}
+                      {index === 2 && "🥉 "}
+                      {index + 1}
+                    </span>
+                    <span className="truncate">
+                      {isCurrentUser ? "You" : `${effort.user_id.slice(0, 8)}...`}
+                      {effort.is_personal_record && (
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          PR
+                        </Badge>
+                      )}
+                    </span>
+                    <span className="font-mono">
+                      {formatTime(effort.elapsed_time_seconds)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {new Date(effort.started_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
