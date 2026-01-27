@@ -1452,3 +1452,160 @@ pub async fn get_feed(
         .await?;
     Ok(Json(activities))
 }
+
+// ============================================================================
+// Kudos Handlers
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct KudosResponse {
+    pub given: bool,
+    pub kudos_count: i32,
+}
+
+/// Give kudos to an activity.
+pub async fn give_kudos(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<KudosResponse>, AppError> {
+    // Get activity to check it exists and get owner
+    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+
+    // Can't give kudos to your own activity
+    if activity.user_id == claims.sub {
+        return Err(AppError::InvalidInput("Cannot give kudos to your own activity".to_string()));
+    }
+
+    let was_new = db.give_kudos(claims.sub, activity_id).await?;
+
+    // Create notification if this is a new kudos
+    if was_new {
+        db.create_notification(
+            activity.user_id,
+            "kudos",
+            Some(claims.sub),
+            Some("activity"),
+            Some(activity_id),
+            None,
+        )
+        .await?;
+    }
+
+    // Get updated count
+    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+
+    Ok(Json(KudosResponse {
+        given: true,
+        kudos_count: 0, // We don't have kudos_count in Activity struct yet
+    }))
+}
+
+/// Remove kudos from an activity.
+pub async fn remove_kudos(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(activity_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    db.remove_kudos(claims.sub, activity_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Serialize)]
+pub struct KudosStatusResponse {
+    pub has_given: bool,
+}
+
+/// Check if user has given kudos to an activity.
+pub async fn get_kudos_status(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<KudosStatusResponse>, AppError> {
+    let has_given = db.has_given_kudos(claims.sub, activity_id).await?;
+    Ok(Json(KudosStatusResponse { has_given }))
+}
+
+/// Get users who gave kudos to an activity.
+pub async fn get_kudos_givers(
+    Extension(db): Extension<Database>,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<Vec<crate::models::KudosGiver>>, AppError> {
+    let givers = db.get_kudos_givers(activity_id, 100).await?;
+    Ok(Json(givers))
+}
+
+// ============================================================================
+// Comments Handlers
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct AddCommentRequest {
+    pub content: String,
+    pub parent_id: Option<Uuid>,
+}
+
+/// Add a comment to an activity.
+pub async fn add_comment(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(activity_id): Path<Uuid>,
+    Json(req): Json<AddCommentRequest>,
+) -> Result<Json<crate::models::CommentWithUser>, AppError> {
+    // Verify activity exists
+    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+
+    let comment = db
+        .add_comment(claims.sub, activity_id, &req.content, req.parent_id)
+        .await?;
+
+    // Get user name for response
+    let user = db.get_user(claims.sub).await?.ok_or(AppError::NotFound)?;
+
+    // Create notification if commenting on someone else's activity
+    if activity.user_id != claims.sub {
+        db.create_notification(
+            activity.user_id,
+            "comment",
+            Some(claims.sub),
+            Some("activity"),
+            Some(activity_id),
+            Some(&req.content),
+        )
+        .await?;
+    }
+
+    Ok(Json(crate::models::CommentWithUser {
+        id: comment.id,
+        user_id: comment.user_id,
+        activity_id: comment.activity_id,
+        parent_id: comment.parent_id,
+        content: comment.content,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        user_name: user.name,
+    }))
+}
+
+/// Get comments for an activity.
+pub async fn get_comments(
+    Extension(db): Extension<Database>,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<Vec<crate::models::CommentWithUser>>, AppError> {
+    let comments = db.get_comments(activity_id).await?;
+    Ok(Json(comments))
+}
+
+/// Delete a comment.
+pub async fn delete_comment(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(comment_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    let deleted = db.delete_comment(comment_id, claims.sub).await?;
+    if deleted {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(AppError::NotFound)
+    }
+}

@@ -307,6 +307,29 @@ export interface FeedActivity {
   comment_count: number;
 }
 
+// Kudos types
+export interface KudosGiver {
+  user_id: string;
+  user_name: string;
+  created_at: string;
+}
+
+export interface KudosStatusResponse {
+  has_given: boolean;
+}
+
+// Comment types
+export interface Comment {
+  id: string;
+  user_id: string;
+  activity_id: string;
+  parent_id: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string | null;
+  user_name: string;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -655,6 +678,46 @@ class ApiClient {
     if (offset !== undefined) params.set('offset', offset.toString());
     const queryString = params.toString();
     return this.request<FeedActivity[]>(`/feed${queryString ? `?${queryString}` : ''}`);
+  }
+
+  // Kudos endpoints
+  async giveKudos(activityId: string): Promise<void> {
+    await this.request<void>(`/activities/${activityId}/kudos`, {
+      method: 'POST',
+    });
+  }
+
+  async removeKudos(activityId: string): Promise<void> {
+    await this.request<void>(`/activities/${activityId}/kudos`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getKudosStatus(activityId: string): Promise<boolean> {
+    const result = await this.request<KudosStatusResponse>(`/activities/${activityId}/kudos`);
+    return result.has_given;
+  }
+
+  async getKudosGivers(activityId: string): Promise<KudosGiver[]> {
+    return this.request<KudosGiver[]>(`/activities/${activityId}/kudos/givers`);
+  }
+
+  // Comments endpoints
+  async getComments(activityId: string): Promise<Comment[]> {
+    return this.request<Comment[]>(`/activities/${activityId}/comments`);
+  }
+
+  async addComment(activityId: string, content: string, parentId?: string): Promise<Comment> {
+    return this.request<Comment>(`/activities/${activityId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content, parent_id: parentId }),
+    });
+  }
+
+  async deleteComment(commentId: string): Promise<void> {
+    await this.request<void>(`/comments/${commentId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

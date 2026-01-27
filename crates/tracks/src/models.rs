@@ -662,3 +662,47 @@ pub struct FeedActivity {
     pub kudos_count: i32,
     pub comment_count: i32,
 }
+
+// ============================================================================
+// Kudos and Comments Models
+// ============================================================================
+
+/// User who gave kudos
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct KudosGiver {
+    pub user_id: Uuid,
+    pub user_name: String,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// A comment on an activity
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Comment {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub activity_id: Uuid,
+    pub parent_id: Option<Uuid>,
+    pub content: String,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "rfc3339::option")]
+    pub updated_at: Option<OffsetDateTime>,
+    #[serde(with = "rfc3339::option")]
+    pub deleted_at: Option<OffsetDateTime>,
+}
+
+/// Comment with user info for display
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct CommentWithUser {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub activity_id: Uuid,
+    pub parent_id: Option<Uuid>,
+    pub content: String,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "rfc3339::option")]
+    pub updated_at: Option<OffsetDateTime>,
+    pub user_name: String,
+}

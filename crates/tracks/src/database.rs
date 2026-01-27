@@ -1851,6 +1851,199 @@ impl Database {
     }
 
     // ========================================================================
+    // Kudos Methods
+    // ========================================================================
+
+    /// Give kudos to an activity.
+    pub async fn give_kudos(&self, user_id: Uuid, activity_id: Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            INSERT INTO kudos (user_id, activity_id, created_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id, activity_id) DO NOTHING
+            "#,
+        )
+        .bind(user_id)
+        .bind(activity_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            // Update kudos count
+            sqlx::query(
+                r#"UPDATE activities SET kudos_count = kudos_count + 1 WHERE id = $1"#,
+            )
+            .bind(activity_id)
+            .execute(&self.pool)
+            .await?;
+            Ok(true)
+        } else {
+            Ok(false) // Already gave kudos
+        }
+    }
+
+    /// Remove kudos from an activity.
+    pub async fn remove_kudos(&self, user_id: Uuid, activity_id: Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"DELETE FROM kudos WHERE user_id = $1 AND activity_id = $2"#,
+        )
+        .bind(user_id)
+        .bind(activity_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            // Update kudos count
+            sqlx::query(
+                r#"UPDATE activities SET kudos_count = GREATEST(kudos_count - 1, 0) WHERE id = $1"#,
+            )
+            .bind(activity_id)
+            .execute(&self.pool)
+            .await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Check if user gave kudos to an activity.
+    pub async fn has_given_kudos(&self, user_id: Uuid, activity_id: Uuid) -> Result<bool, AppError> {
+        let row: Option<(i32,)> = sqlx::query_as(
+            r#"SELECT 1 FROM kudos WHERE user_id = $1 AND activity_id = $2"#,
+        )
+        .bind(user_id)
+        .bind(activity_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    /// Get users who gave kudos to an activity.
+    pub async fn get_kudos_givers(
+        &self,
+        activity_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<crate::models::KudosGiver>, AppError> {
+        let givers: Vec<crate::models::KudosGiver> = sqlx::query_as(
+            r#"
+            SELECT u.id as user_id, u.name as user_name, k.created_at
+            FROM kudos k
+            JOIN users u ON u.id = k.user_id
+            WHERE k.activity_id = $1
+            ORDER BY k.created_at DESC
+            LIMIT $2
+            "#,
+        )
+        .bind(activity_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(givers)
+    }
+
+    // ========================================================================
+    // Comments Methods
+    // ========================================================================
+
+    /// Add a comment to an activity.
+    pub async fn add_comment(
+        &self,
+        user_id: Uuid,
+        activity_id: Uuid,
+        content: &str,
+        parent_id: Option<Uuid>,
+    ) -> Result<crate::models::Comment, AppError> {
+        let comment: crate::models::Comment = sqlx::query_as(
+            r#"
+            INSERT INTO comments (id, user_id, activity_id, parent_id, content, created_at)
+            VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW())
+            RETURNING id, user_id, activity_id, parent_id, content, created_at, updated_at, deleted_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(activity_id)
+        .bind(parent_id)
+        .bind(content)
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Update comment count
+        sqlx::query(
+            r#"UPDATE activities SET comment_count = comment_count + 1 WHERE id = $1"#,
+        )
+        .bind(activity_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(comment)
+    }
+
+    /// Get comments for an activity.
+    pub async fn get_comments(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Vec<crate::models::CommentWithUser>, AppError> {
+        let comments: Vec<crate::models::CommentWithUser> = sqlx::query_as(
+            r#"
+            SELECT
+                c.id,
+                c.user_id,
+                c.activity_id,
+                c.parent_id,
+                c.content,
+                c.created_at,
+                c.updated_at,
+                u.name as user_name
+            FROM comments c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.activity_id = $1 AND c.deleted_at IS NULL
+            ORDER BY c.created_at ASC
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(comments)
+    }
+
+    /// Delete a comment (soft delete).
+    pub async fn delete_comment(&self, comment_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
+        // Get the activity_id before deleting
+        let activity_id: Option<(Uuid,)> = sqlx::query_as(
+            r#"SELECT activity_id FROM comments WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL"#,
+        )
+        .bind(comment_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some((activity_id,)) = activity_id {
+            sqlx::query(
+                r#"UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND user_id = $2"#,
+            )
+            .bind(comment_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+            // Update comment count
+            sqlx::query(
+                r#"UPDATE activities SET comment_count = GREATEST(comment_count - 1, 0) WHERE id = $1"#,
+            )
+            .bind(activity_id)
+            .execute(&self.pool)
+            .await?;
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    // ========================================================================
     // Notification Methods
     // ========================================================================
 

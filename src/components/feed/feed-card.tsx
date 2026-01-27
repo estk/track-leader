@@ -1,9 +1,13 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { FeedActivity } from "@/lib/api";
+import { FeedActivity, api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDistanceToNow } from "@/lib/utils";
+import { KudosButton } from "@/components/social/kudos-button";
+import { CommentsSection } from "@/components/social/comments-section";
 
 interface FeedCardProps {
   activity: FeedActivity;
@@ -49,7 +53,19 @@ function getActivityIcon(type: string): string {
 }
 
 export function FeedCard({ activity }: FeedCardProps) {
+  const { user } = useAuth();
   const timeAgo = formatDistanceToNow(new Date(activity.submitted_at));
+  const [hasGivenKudos, setHasGivenKudos] = useState(false);
+  const [kudosCount, setKudosCount] = useState(activity.kudos_count);
+
+  // Check if current user has given kudos
+  useEffect(() => {
+    if (user && user.id !== activity.user_id) {
+      api.getKudosStatus(activity.id).then(setHasGivenKudos).catch(() => {});
+    }
+  }, [user, activity.id, activity.user_id]);
+
+  const isOwnActivity = user?.id === activity.user_id;
 
   return (
     <Card className="hover:bg-muted/50 transition-colors">
@@ -90,14 +106,33 @@ export function FeedCard({ activity }: FeedCardProps) {
               <span>↑ {formatElevation(activity.elevation_gain)}</span>
             </div>
 
-            {/* Social stats */}
-            <div className="flex gap-4 mt-2 text-sm">
-              <span className="text-muted-foreground">
-                {activity.kudos_count} kudos
-              </span>
-              <span className="text-muted-foreground">
-                {activity.comment_count} comments
-              </span>
+            {/* Kudos and comments */}
+            <div className="flex items-center gap-4 mt-3 pt-3 border-t">
+              {user && (
+                <KudosButton
+                  activityId={activity.id}
+                  initialHasGiven={hasGivenKudos}
+                  initialCount={kudosCount}
+                  disabled={isOwnActivity}
+                  onKudosChange={(hasGiven, count) => {
+                    setHasGivenKudos(hasGiven);
+                    setKudosCount(count);
+                  }}
+                />
+              )}
+              {!user && (
+                <span className="text-sm text-muted-foreground">
+                  👏 {kudosCount}
+                </span>
+              )}
+            </div>
+
+            {/* Comments section */}
+            <div className="mt-3">
+              <CommentsSection
+                activityId={activity.id}
+                initialCommentCount={activity.comment_count}
+              />
             </div>
           </div>
         </div>
