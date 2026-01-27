@@ -147,7 +147,10 @@ export default function SegmentsPage() {
     setLoading(true);
     const typeFilter = activityTypeFilter === "All" ? undefined : activityTypeFilter;
 
-    if (showStarred && isLoggedIn) {
+    // Check token directly to avoid race condition with isLoggedIn state
+    const hasToken = !!api.getToken();
+
+    if (showStarred && hasToken) {
       // Fetch starred segments with effort data
       api.getStarredSegmentEfforts()
         .then((efforts) => {
