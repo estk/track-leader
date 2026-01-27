@@ -90,6 +90,24 @@ Open http://localhost:3000
 - Segment matching
 - Segment leaderboards
 
+## Important Context Not in Code
+
+### User Preferences (from CLAUDE.md)
+- Uses **jj (Jujutsu)** not git - never use git commands
+- Uses `cargo +nightly fmt` for formatting
+- Uses `cargo nextest run` for tests
+- Prefers simple solutions, minimal changes
+- TDD approach when writing new code
+- Address user as "PrimusMan" or "JagulonPrime"
+
+### Browser Testing
+- Chrome automation available via `/chrome` or `mcp__claude-in-chrome__*` tools
+- Can take screenshots, navigate, click to verify UI changes
+
+### Test User Created
+- Email: evan (visible in screenshots)
+- Has one activity: "reno tour" (MountainBiking, 107km near Reno NV)
+
 ## Architecture Notes
 
 ### Backend Port
