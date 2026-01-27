@@ -35,7 +35,9 @@ export function Header() {
               <span className="text-muted-foreground text-sm">Loading...</span>
             ) : user ? (
               <>
-                <span className="text-sm text-muted-foreground">{user.name}</span>
+                <Link href="/profile" className="text-sm text-muted-foreground hover:text-foreground">
+                  {user.name}
+                </Link>
                 <Button variant="ghost" size="sm" onClick={handleLogout}>
                   Sign out
                 </Button>
