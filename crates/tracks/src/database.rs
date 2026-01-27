@@ -1,6 +1,9 @@
 use crate::errors::AppError;
 use crate::models::{
-    Activity, ActivitySegmentEffort, ActivityType, Scores, Segment, SegmentEffort, User,
+    Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
+    ActivitySegmentEffort, ActivityType, CrownCountEntry, DistanceLeaderEntry, GenderFilter,
+    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Scores, Segment, SegmentEffort,
+    UpdateDemographicsRequest, User, UserWithDemographics,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use serde::Serialize;
@@ -982,5 +985,603 @@ impl Database {
         .await?;
 
         Ok(segments)
+    }
+
+    // ========================================================================
+    // Enhanced Leaderboard Methods
+    // ========================================================================
+
+    /// Get filtered leaderboard entries with user info and ranking.
+    /// Supports time scope, gender, and age group filtering.
+    pub async fn get_filtered_leaderboard(
+        &self,
+        segment_id: Uuid,
+        filters: &LeaderboardFilters,
+    ) -> Result<(Vec<LeaderboardEntry>, i64), AppError> {
+        // Build the time filter based on scope
+        let time_filter = match filters.scope {
+            LeaderboardScope::AllTime => None,
+            LeaderboardScope::Year => Some("e.started_at >= NOW() - INTERVAL '1 year'"),
+            LeaderboardScope::Month => Some("e.started_at >= NOW() - INTERVAL '1 month'"),
+            LeaderboardScope::Week => Some("e.started_at >= NOW() - INTERVAL '1 week'"),
+        };
+
+        // Build the gender filter
+        let gender_filter = match filters.gender {
+            GenderFilter::All => None,
+            GenderFilter::Male => Some("u.gender = 'male'"),
+            GenderFilter::Female => Some("u.gender = 'female'"),
+        };
+
+        // Build the age filter based on current year and birth_year
+        let current_year = time::OffsetDateTime::now_utc().year();
+        let age_filter = filters.age_group.age_range().map(|(min_age, max_age)| {
+            let max_birth_year = current_year - min_age;
+            match max_age {
+                Some(max) => {
+                    let min_birth_year = current_year - max;
+                    format!("u.birth_year BETWEEN {min_birth_year} AND {max_birth_year}")
+                }
+                None => format!("u.birth_year <= {max_birth_year}"),
+            }
+        });
+
+        // Build WHERE clauses
+        let mut where_clauses = vec!["e.segment_id = $1".to_string()];
+        if let Some(tf) = time_filter {
+            where_clauses.push(tf.to_string());
+        }
+        if let Some(gf) = gender_filter {
+            where_clauses.push(gf.to_string());
+        }
+        if let Some(af) = age_filter {
+            where_clauses.push(af);
+        }
+        let where_clause = where_clauses.join(" AND ");
+
+        // Query for total count (for pagination)
+        let count_query = format!(
+            r#"
+            SELECT COUNT(DISTINCT e.id)
+            FROM segment_efforts e
+            JOIN users u ON u.id = e.user_id
+            WHERE {where_clause}
+            "#
+        );
+
+        let total_count: (i64,) = sqlx::query_as(&count_query)
+            .bind(segment_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        // Main query with ranking
+        let main_query = format!(
+            r#"
+            WITH filtered_efforts AS (
+                SELECT
+                    e.id as effort_id,
+                    e.elapsed_time_seconds,
+                    e.moving_time_seconds,
+                    e.average_speed_mps,
+                    e.started_at,
+                    e.is_personal_record,
+                    e.user_id,
+                    u.name as user_name
+                FROM segment_efforts e
+                JOIN users u ON u.id = e.user_id
+                WHERE {where_clause}
+            ),
+            ranked AS (
+                SELECT
+                    effort_id,
+                    elapsed_time_seconds,
+                    moving_time_seconds,
+                    average_speed_mps,
+                    started_at,
+                    is_personal_record,
+                    user_id,
+                    user_name,
+                    ROW_NUMBER() OVER (ORDER BY elapsed_time_seconds ASC) as rank,
+                    FIRST_VALUE(elapsed_time_seconds) OVER (ORDER BY elapsed_time_seconds ASC) as leader_time
+                FROM filtered_efforts
+            )
+            SELECT
+                effort_id,
+                elapsed_time_seconds,
+                moving_time_seconds,
+                average_speed_mps,
+                started_at,
+                is_personal_record,
+                user_id,
+                user_name,
+                rank,
+                CASE WHEN rank > 1 THEN elapsed_time_seconds - leader_time ELSE NULL END as gap_seconds
+            FROM ranked
+            ORDER BY rank
+            LIMIT $2 OFFSET $3
+            "#
+        );
+
+        let entries: Vec<LeaderboardEntry> = sqlx::query_as(&main_query)
+            .bind(segment_id)
+            .bind(filters.limit)
+            .bind(filters.offset)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok((entries, total_count.0))
+    }
+
+    /// Get the user's position in the leaderboard with surrounding entries.
+    pub async fn get_user_leaderboard_position(
+        &self,
+        segment_id: Uuid,
+        user_id: Uuid,
+        filters: &LeaderboardFilters,
+        context_entries: i64,
+    ) -> Result<
+        Option<(
+            LeaderboardEntry,
+            Vec<LeaderboardEntry>,
+            Vec<LeaderboardEntry>,
+            i64,
+        )>,
+        AppError,
+    > {
+        // Build the time filter based on scope
+        let time_filter = match filters.scope {
+            LeaderboardScope::AllTime => None,
+            LeaderboardScope::Year => Some("e.started_at >= NOW() - INTERVAL '1 year'"),
+            LeaderboardScope::Month => Some("e.started_at >= NOW() - INTERVAL '1 month'"),
+            LeaderboardScope::Week => Some("e.started_at >= NOW() - INTERVAL '1 week'"),
+        };
+
+        // Build the gender filter
+        let gender_filter = match filters.gender {
+            GenderFilter::All => None,
+            GenderFilter::Male => Some("u.gender = 'male'"),
+            GenderFilter::Female => Some("u.gender = 'female'"),
+        };
+
+        // Build the age filter
+        let current_year = time::OffsetDateTime::now_utc().year();
+        let age_filter = filters.age_group.age_range().map(|(min_age, max_age)| {
+            let max_birth_year = current_year - min_age;
+            match max_age {
+                Some(max) => {
+                    let min_birth_year = current_year - max;
+                    format!("u.birth_year BETWEEN {min_birth_year} AND {max_birth_year}")
+                }
+                None => format!("u.birth_year <= {max_birth_year}"),
+            }
+        });
+
+        // Build WHERE clauses
+        let mut where_clauses = vec!["e.segment_id = $1".to_string()];
+        if let Some(tf) = time_filter {
+            where_clauses.push(tf.to_string());
+        }
+        if let Some(gf) = gender_filter {
+            where_clauses.push(gf.to_string());
+        }
+        if let Some(af) = age_filter {
+            where_clauses.push(af);
+        }
+        let where_clause = where_clauses.join(" AND ");
+
+        // First get the total count
+        let count_query = format!(
+            r#"
+            SELECT COUNT(DISTINCT e.id)
+            FROM segment_efforts e
+            JOIN users u ON u.id = e.user_id
+            WHERE {where_clause}
+            "#
+        );
+
+        let total_count: (i64,) = sqlx::query_as(&count_query)
+            .bind(segment_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+        // Get all ranked entries including user position
+        let main_query = format!(
+            r#"
+            WITH filtered_efforts AS (
+                SELECT
+                    e.id as effort_id,
+                    e.elapsed_time_seconds,
+                    e.moving_time_seconds,
+                    e.average_speed_mps,
+                    e.started_at,
+                    e.is_personal_record,
+                    e.user_id,
+                    u.name as user_name
+                FROM segment_efforts e
+                JOIN users u ON u.id = e.user_id
+                WHERE {where_clause}
+            ),
+            ranked AS (
+                SELECT
+                    effort_id,
+                    elapsed_time_seconds,
+                    moving_time_seconds,
+                    average_speed_mps,
+                    started_at,
+                    is_personal_record,
+                    user_id,
+                    user_name,
+                    ROW_NUMBER() OVER (ORDER BY elapsed_time_seconds ASC) as rank,
+                    FIRST_VALUE(elapsed_time_seconds) OVER (ORDER BY elapsed_time_seconds ASC) as leader_time
+                FROM filtered_efforts
+            ),
+            user_rank AS (
+                SELECT rank FROM ranked WHERE user_id = $2 ORDER BY elapsed_time_seconds LIMIT 1
+            )
+            SELECT
+                effort_id,
+                elapsed_time_seconds,
+                moving_time_seconds,
+                average_speed_mps,
+                started_at,
+                is_personal_record,
+                user_id,
+                user_name,
+                rank,
+                CASE WHEN rank > 1 THEN elapsed_time_seconds - leader_time ELSE NULL END as gap_seconds
+            FROM ranked
+            WHERE rank BETWEEN (SELECT rank FROM user_rank) - $3 AND (SELECT rank FROM user_rank) + $3
+            ORDER BY rank
+            "#
+        );
+
+        let entries: Vec<LeaderboardEntry> = sqlx::query_as(&main_query)
+            .bind(segment_id)
+            .bind(user_id)
+            .bind(context_entries)
+            .fetch_all(&self.pool)
+            .await?;
+
+        // Find user's entry and split into above/below
+        let user_entry_idx = entries.iter().position(|e| e.user_id == user_id);
+
+        match user_entry_idx {
+            Some(idx) => {
+                let user_entry = entries[idx].clone();
+                let entries_above = entries[..idx].to_vec();
+                let entries_below = entries[idx + 1..].to_vec();
+                Ok(Some((
+                    user_entry,
+                    entries_above,
+                    entries_below,
+                    total_count.0,
+                )))
+            }
+            None => Ok(None),
+        }
+    }
+
+    // ========================================================================
+    // User Demographics Methods
+    // ========================================================================
+
+    /// Get a user with their demographics.
+    pub async fn get_user_with_demographics(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Option<UserWithDemographics>, AppError> {
+        let user: Option<UserWithDemographics> = sqlx::query_as(
+            r#"
+            SELECT id, email, name, created_at, gender, birth_year, weight_kg, country, region
+            FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    /// Update a user's demographics.
+    pub async fn update_user_demographics(
+        &self,
+        user_id: Uuid,
+        req: &UpdateDemographicsRequest,
+    ) -> Result<UserWithDemographics, AppError> {
+        let user: UserWithDemographics = sqlx::query_as(
+            r#"
+            UPDATE users
+            SET gender = COALESCE($2, gender),
+                birth_year = COALESCE($3, birth_year),
+                weight_kg = COALESCE($4, weight_kg),
+                country = COALESCE($5, country),
+                region = COALESCE($6, region)
+            WHERE id = $1
+            RETURNING id, email, name, created_at, gender, birth_year, weight_kg, country, region
+            "#,
+        )
+        .bind(user_id)
+        .bind(&req.gender)
+        .bind(req.birth_year)
+        .bind(req.weight_kg)
+        .bind(&req.country)
+        .bind(&req.region)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(user)
+    }
+
+    // ========================================================================
+    // Achievement Methods
+    // ========================================================================
+
+    /// Create or update an achievement (crown).
+    pub async fn create_achievement(
+        &self,
+        user_id: Uuid,
+        segment_id: Uuid,
+        effort_id: Option<Uuid>,
+        achievement_type: AchievementType,
+        effort_count: Option<i32>,
+    ) -> Result<Achievement, AppError> {
+        let achievement: Achievement = sqlx::query_as(
+            r#"
+            INSERT INTO achievements (id, user_id, segment_id, effort_id, achievement_type, effort_count, earned_at, created_at)
+            VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW(), NOW())
+            RETURNING id, user_id, segment_id, effort_id, achievement_type, earned_at, lost_at, effort_count, created_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(segment_id)
+        .bind(effort_id)
+        .bind(achievement_type)
+        .bind(effort_count)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(achievement)
+    }
+
+    /// Mark an achievement as lost (dethroned).
+    pub async fn dethrone_achievement(
+        &self,
+        segment_id: Uuid,
+        achievement_type: AchievementType,
+    ) -> Result<Option<Achievement>, AppError> {
+        let achievement: Option<Achievement> = sqlx::query_as(
+            r#"
+            UPDATE achievements
+            SET lost_at = NOW()
+            WHERE segment_id = $1 AND achievement_type = $2 AND lost_at IS NULL
+            RETURNING id, user_id, segment_id, effort_id, achievement_type, earned_at, lost_at, effort_count, created_at
+            "#,
+        )
+        .bind(segment_id)
+        .bind(achievement_type)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(achievement)
+    }
+
+    /// Get the current holder of an achievement for a segment.
+    pub async fn get_current_achievement_holder(
+        &self,
+        segment_id: Uuid,
+        achievement_type: AchievementType,
+    ) -> Result<Option<AchievementHolder>, AppError> {
+        let holder: Option<AchievementHolder> = sqlx::query_as(
+            r#"
+            SELECT
+                a.user_id,
+                u.name as user_name,
+                a.achievement_type,
+                a.earned_at,
+                e.elapsed_time_seconds,
+                a.effort_count
+            FROM achievements a
+            JOIN users u ON u.id = a.user_id
+            LEFT JOIN segment_efforts e ON e.id = a.effort_id
+            WHERE a.segment_id = $1 AND a.achievement_type = $2 AND a.lost_at IS NULL
+            "#,
+        )
+        .bind(segment_id)
+        .bind(achievement_type)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(holder)
+    }
+
+    /// Get all achievements for a user.
+    pub async fn get_user_achievements(
+        &self,
+        user_id: Uuid,
+        include_lost: bool,
+    ) -> Result<Vec<AchievementWithSegment>, AppError> {
+        let lost_filter = if include_lost {
+            ""
+        } else {
+            "AND a.lost_at IS NULL"
+        };
+        let query = format!(
+            r#"
+            SELECT
+                a.id,
+                a.user_id,
+                a.segment_id,
+                a.effort_id,
+                a.achievement_type,
+                a.earned_at,
+                a.lost_at,
+                a.effort_count,
+                s.name as segment_name,
+                s.distance_meters as segment_distance_meters,
+                s.activity_type as segment_activity_type
+            FROM achievements a
+            JOIN segments s ON s.id = a.segment_id
+            WHERE a.user_id = $1 {lost_filter}
+            ORDER BY a.earned_at DESC
+            "#
+        );
+
+        let achievements: Vec<AchievementWithSegment> = sqlx::query_as(&query)
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(achievements)
+    }
+
+    /// Get achievement counts for a user.
+    pub async fn get_user_achievement_counts(
+        &self,
+        user_id: Uuid,
+    ) -> Result<(i64, i64, i64), AppError> {
+        let counts: (i64, i64, i64) = sqlx::query_as(
+            r#"
+            SELECT
+                COUNT(*) FILTER (WHERE achievement_type = 'kom' AND lost_at IS NULL),
+                COUNT(*) FILTER (WHERE achievement_type = 'qom' AND lost_at IS NULL),
+                COUNT(*) FILTER (WHERE achievement_type = 'local_legend' AND lost_at IS NULL)
+            FROM achievements
+            WHERE user_id = $1
+            "#,
+        )
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(counts)
+    }
+
+    /// Get the user's effort count on a segment in the last 90 days (for Local Legend).
+    pub async fn get_user_recent_effort_count(
+        &self,
+        user_id: Uuid,
+        segment_id: Uuid,
+    ) -> Result<i64, AppError> {
+        let count: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM segment_efforts
+            WHERE user_id = $1 AND segment_id = $2
+              AND started_at >= NOW() - INTERVAL '90 days'
+            "#,
+        )
+        .bind(user_id)
+        .bind(segment_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(count.0)
+    }
+
+    /// Get the top effort counts on a segment in the last 90 days (for Local Legend determination).
+    pub async fn get_top_recent_effort_counts(
+        &self,
+        segment_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<(Uuid, i64)>, AppError> {
+        let counts: Vec<(Uuid, i64)> = sqlx::query_as(
+            r#"
+            SELECT user_id, COUNT(*) as cnt
+            FROM segment_efforts
+            WHERE segment_id = $1 AND started_at >= NOW() - INTERVAL '90 days'
+            GROUP BY user_id
+            ORDER BY cnt DESC
+            LIMIT $2
+            "#,
+        )
+        .bind(segment_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(counts)
+    }
+
+    // ========================================================================
+    // Global Leaderboard Methods
+    // ========================================================================
+
+    /// Get global crown count leaderboard.
+    pub async fn get_crown_count_leaderboard(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<CrownCountEntry>, AppError> {
+        let entries: Vec<CrownCountEntry> = sqlx::query_as(
+            r#"
+            WITH crown_counts AS (
+                SELECT
+                    user_id,
+                    COUNT(*) FILTER (WHERE achievement_type = 'kom') as kom_count,
+                    COUNT(*) FILTER (WHERE achievement_type = 'qom') as qom_count,
+                    COUNT(*) FILTER (WHERE achievement_type = 'local_legend') as local_legend_count,
+                    COUNT(*) as total_crowns
+                FROM achievements
+                WHERE lost_at IS NULL
+                GROUP BY user_id
+            )
+            SELECT
+                cc.user_id,
+                u.name as user_name,
+                cc.kom_count,
+                cc.qom_count,
+                cc.local_legend_count,
+                cc.total_crowns,
+                ROW_NUMBER() OVER (ORDER BY cc.total_crowns DESC, cc.kom_count DESC) as rank
+            FROM crown_counts cc
+            JOIN users u ON u.id = cc.user_id
+            ORDER BY rank
+            LIMIT $1 OFFSET $2
+            "#,
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(entries)
+    }
+
+    /// Get global distance leaderboard.
+    pub async fn get_distance_leaderboard(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<DistanceLeaderEntry>, AppError> {
+        let entries: Vec<DistanceLeaderEntry> = sqlx::query_as(
+            r#"
+            WITH distance_totals AS (
+                SELECT
+                    user_id,
+                    SUM(distance) as total_distance_meters,
+                    COUNT(*) as activity_count
+                FROM scores
+                GROUP BY user_id
+            )
+            SELECT
+                dt.user_id,
+                u.name as user_name,
+                dt.total_distance_meters,
+                dt.activity_count,
+                ROW_NUMBER() OVER (ORDER BY dt.total_distance_meters DESC) as rank
+            FROM distance_totals dt
+            JOIN users u ON u.id = dt.user_id
+            ORDER BY rank
+            LIMIT $1 OFFSET $2
+            "#,
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(entries)
     }
 }

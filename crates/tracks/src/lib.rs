@@ -1,3 +1,4 @@
+pub mod achievements_service;
 pub mod activity_queue;
 pub mod auth;
 pub mod database;
@@ -22,10 +23,14 @@ use crate::{
     database::Database,
     handlers::{
         all_users, create_segment, delete_activity, download_gpx_file, get_activity,
-        get_activity_segments, get_activity_track, get_my_segment_efforts, get_nearby_segments,
-        get_segment, get_segment_leaderboard, get_segment_track, get_starred_segment_efforts,
-        get_starred_segments, get_user_activities, health_check, is_segment_starred, list_segments,
-        new_activity, new_user, reprocess_segment, star_segment, unstar_segment, update_activity,
+        get_activity_segments, get_activity_track, get_crown_leaderboard, get_distance_leaderboard,
+        get_filtered_leaderboard, get_leaderboard_position, get_my_achievements,
+        get_my_demographics, get_my_segment_efforts, get_nearby_segments, get_segment,
+        get_segment_achievements, get_segment_leaderboard, get_segment_track,
+        get_starred_segment_efforts, get_starred_segments, get_user_achievements,
+        get_user_activities, health_check, is_segment_starred, list_segments, new_activity,
+        new_user, reprocess_segment, star_segment, unstar_segment, update_activity,
+        update_my_demographics,
     },
     object_store_service::ObjectStoreService,
 };
@@ -61,12 +66,29 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/activities/{id}/segments", get(get_activity_segments))
         .route("/activities/{id}/download", get(download_gpx_file))
         .route("/users/{id}/activities", get(get_user_activities))
+        // User demographics routes
+        .route(
+            "/users/me/demographics",
+            get(get_my_demographics).patch(update_my_demographics),
+        )
+        // User achievements routes
+        .route("/users/me/achievements", get(get_my_achievements))
+        .route("/users/{id}/achievements", get(get_user_achievements))
         // Segment routes
         .route("/segments", get(list_segments).post(create_segment))
         .route("/segments/nearby", get(get_nearby_segments))
         .route("/segments/{id}", get(get_segment))
         .route("/segments/{id}/track", get(get_segment_track))
         .route("/segments/{id}/leaderboard", get(get_segment_leaderboard))
+        .route(
+            "/segments/{id}/leaderboard/filtered",
+            get(get_filtered_leaderboard),
+        )
+        .route(
+            "/segments/{id}/leaderboard/position",
+            get(get_leaderboard_position),
+        )
+        .route("/segments/{id}/achievements", get(get_segment_achievements))
         .route("/segments/{id}/my-efforts", get(get_my_segment_efforts))
         .route("/segments/{id}/reprocess", post(reprocess_segment))
         .route(
@@ -80,6 +102,9 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             "/segments/starred/efforts",
             get(get_starred_segment_efforts),
         )
+        // Global leaderboards
+        .route("/leaderboards/crowns", get(get_crown_leaderboard))
+        .route("/leaderboards/distance", get(get_distance_leaderboard))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

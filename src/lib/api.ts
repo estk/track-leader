@@ -126,6 +126,118 @@ export interface StarredSegmentEffort {
   leader_time_seconds: number | null;
 }
 
+// Leaderboard types
+export type LeaderboardScope = 'all_time' | 'year' | 'month' | 'week';
+export type GenderFilter = 'all' | 'male' | 'female';
+export type AgeGroup = 'all' | '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+';
+
+export interface LeaderboardFilters {
+  scope: LeaderboardScope;
+  gender: GenderFilter;
+  age_group: AgeGroup;
+  limit: number;
+  offset: number;
+}
+
+export interface LeaderboardEntry {
+  effort_id: string;
+  elapsed_time_seconds: number;
+  moving_time_seconds: number | null;
+  average_speed_mps: number | null;
+  started_at: string;
+  is_personal_record: boolean;
+  user_id: string;
+  user_name: string;
+  rank: number;
+  gap_seconds: number | null;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  total_count: number;
+  filters: LeaderboardFilters;
+}
+
+export interface LeaderboardPosition {
+  user_rank: number | null;
+  user_entry: LeaderboardEntry | null;
+  entries_above: LeaderboardEntry[];
+  entries_below: LeaderboardEntry[];
+  total_count: number;
+}
+
+// Achievement types
+export type AchievementType = 'kom' | 'qom' | 'local_legend' | 'course_record';
+
+export interface Achievement {
+  id: string;
+  user_id: string;
+  segment_id: string;
+  effort_id: string | null;
+  achievement_type: AchievementType;
+  earned_at: string;
+  lost_at: string | null;
+  effort_count: number | null;
+}
+
+export interface AchievementWithSegment extends Achievement {
+  segment_name: string;
+  segment_distance_meters: number;
+  segment_activity_type: string;
+}
+
+export interface AchievementHolder {
+  user_id: string;
+  user_name: string;
+  achievement_type: AchievementType;
+  earned_at: string;
+  elapsed_time_seconds: number | null;
+  effort_count: number | null;
+}
+
+export interface SegmentAchievements {
+  segment_id: string;
+  kom: AchievementHolder | null;
+  qom: AchievementHolder | null;
+  local_legend: AchievementHolder | null;
+}
+
+// User demographics types
+export interface UserWithDemographics extends User {
+  gender: string | null;
+  birth_year: number | null;
+  weight_kg: number | null;
+  country: string | null;
+  region: string | null;
+}
+
+export interface UpdateDemographicsRequest {
+  gender?: string | null;
+  birth_year?: number | null;
+  weight_kg?: number | null;
+  country?: string | null;
+  region?: string | null;
+}
+
+// Global leaderboard types
+export interface CrownCountEntry {
+  user_id: string;
+  user_name: string;
+  kom_count: number;
+  qom_count: number;
+  local_legend_count: number;
+  total_crowns: number;
+  rank: number;
+}
+
+export interface DistanceLeaderEntry {
+  user_id: string;
+  user_name: string;
+  total_distance_meters: number;
+  activity_count: number;
+  rank: number;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -331,6 +443,81 @@ class ApiClient {
     if (radiusMeters) params.set('radius_meters', radiusMeters.toString());
     if (limit) params.set('limit', limit.toString());
     return this.request<Segment[]>(`/segments/nearby?${params.toString()}`);
+  }
+
+  // Filtered leaderboard endpoints
+  async getFilteredLeaderboard(
+    segmentId: string,
+    filters: Partial<LeaderboardFilters>
+  ): Promise<LeaderboardResponse> {
+    const params = new URLSearchParams();
+    if (filters.scope) params.set('scope', filters.scope);
+    if (filters.gender) params.set('gender', filters.gender);
+    if (filters.age_group) params.set('age_group', filters.age_group);
+    if (filters.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters.offset !== undefined) params.set('offset', filters.offset.toString());
+    const queryString = params.toString();
+    const path = `/segments/${segmentId}/leaderboard/filtered${queryString ? `?${queryString}` : ''}`;
+    return this.request<LeaderboardResponse>(path);
+  }
+
+  async getLeaderboardPosition(
+    segmentId: string,
+    filters: Partial<Pick<LeaderboardFilters, 'scope' | 'gender' | 'age_group'>>
+  ): Promise<LeaderboardPosition> {
+    const params = new URLSearchParams();
+    if (filters.scope) params.set('scope', filters.scope);
+    if (filters.gender) params.set('gender', filters.gender);
+    if (filters.age_group) params.set('age_group', filters.age_group);
+    const queryString = params.toString();
+    const path = `/segments/${segmentId}/leaderboard/position${queryString ? `?${queryString}` : ''}`;
+    return this.request<LeaderboardPosition>(path);
+  }
+
+  // Demographics endpoints
+  async getMyDemographics(): Promise<UserWithDemographics> {
+    return this.request<UserWithDemographics>('/users/me/demographics');
+  }
+
+  async updateMyDemographics(data: UpdateDemographicsRequest): Promise<UserWithDemographics> {
+    return this.request<UserWithDemographics>('/users/me/demographics', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Achievement endpoints
+  async getMyAchievements(includeLost?: boolean): Promise<AchievementWithSegment[]> {
+    const params = includeLost !== undefined ? `?include_lost=${includeLost}` : '';
+    return this.request<AchievementWithSegment[]>(`/users/me/achievements${params}`);
+  }
+
+  async getUserAchievements(userId: string, includeLost?: boolean): Promise<AchievementWithSegment[]> {
+    const params = includeLost !== undefined ? `?include_lost=${includeLost}` : '';
+    return this.request<AchievementWithSegment[]>(`/users/${userId}/achievements${params}`);
+  }
+
+  async getSegmentAchievements(segmentId: string): Promise<SegmentAchievements> {
+    return this.request<SegmentAchievements>(`/segments/${segmentId}/achievements`);
+  }
+
+  // Global leaderboard endpoints
+  async getCrownLeaderboard(limit?: number, offset?: number): Promise<CrownCountEntry[]> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    const path = `/leaderboards/crowns${queryString ? `?${queryString}` : ''}`;
+    return this.request<CrownCountEntry[]>(path);
+  }
+
+  async getDistanceLeaderboard(limit?: number, offset?: number): Promise<DistanceLeaderEntry[]> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    const path = `/leaderboards/distance${queryString ? `?${queryString}` : ''}`;
+    return this.request<DistanceLeaderEntry[]>(path);
   }
 }
 

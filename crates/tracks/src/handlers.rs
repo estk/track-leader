@@ -14,7 +14,12 @@ use crate::{
     auth::AuthUser,
     database::Database,
     errors::AppError,
-    models::{Activity, ActivityType, Segment, SegmentEffort, User},
+    models::{
+        AchievementType, AchievementWithSegment, Activity, ActivityType, CrownCountEntry,
+        DistanceLeaderEntry, LeaderboardFilters, LeaderboardFiltersResponse, LeaderboardPosition,
+        LeaderboardResponse, Segment, SegmentAchievements, SegmentEffort,
+        UpdateDemographicsRequest, User, UserWithDemographics,
+    },
     object_store_service::{FileType, ObjectStoreService},
 };
 
@@ -1051,4 +1056,183 @@ pub async fn get_nearby_segments(
         .find_segments_near_point(query.lat, query.lon, radius, limit)
         .await?;
     Ok(Json(segments))
+}
+
+// ============================================================================
+// Enhanced Leaderboard Handlers
+// ============================================================================
+
+/// Get filtered leaderboard for a segment.
+/// Supports time scope, gender, and age group filtering.
+pub async fn get_filtered_leaderboard(
+    Extension(db): Extension<Database>,
+    Path(id): Path<Uuid>,
+    Query(filters): Query<LeaderboardFilters>,
+) -> Result<Json<LeaderboardResponse>, AppError> {
+    // Verify segment exists
+    db.get_segment(id).await?.ok_or(AppError::NotFound)?;
+
+    let (entries, total_count) = db.get_filtered_leaderboard(id, &filters).await?;
+
+    Ok(Json(LeaderboardResponse {
+        entries,
+        total_count,
+        filters: LeaderboardFiltersResponse {
+            scope: filters.scope,
+            gender: filters.gender,
+            age_group: filters.age_group,
+            limit: filters.limit,
+            offset: filters.offset,
+        },
+    }))
+}
+
+/// Get the authenticated user's position in a segment leaderboard.
+pub async fn get_leaderboard_position(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<Uuid>,
+    Query(filters): Query<LeaderboardFilters>,
+) -> Result<Json<LeaderboardPosition>, AppError> {
+    // Verify segment exists
+    db.get_segment(id).await?.ok_or(AppError::NotFound)?;
+
+    // Get user's position with 3 entries above and below
+    let result = db
+        .get_user_leaderboard_position(id, claims.sub, &filters, 3)
+        .await?;
+
+    match result {
+        Some((user_entry, entries_above, entries_below, total_count)) => {
+            Ok(Json(LeaderboardPosition {
+                user_rank: user_entry.rank,
+                user_entry,
+                entries_above,
+                entries_below,
+                total_count,
+            }))
+        }
+        None => Err(AppError::NotFound),
+    }
+}
+
+// ============================================================================
+// User Demographics Handlers
+// ============================================================================
+
+/// Get the authenticated user's profile with demographics.
+pub async fn get_my_demographics(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+) -> Result<Json<UserWithDemographics>, AppError> {
+    let user = db
+        .get_user_with_demographics(claims.sub)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    Ok(Json(user))
+}
+
+/// Update the authenticated user's demographics.
+pub async fn update_my_demographics(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Json(req): Json<UpdateDemographicsRequest>,
+) -> Result<Json<UserWithDemographics>, AppError> {
+    let user = db.update_user_demographics(claims.sub, &req).await?;
+    Ok(Json(user))
+}
+
+// ============================================================================
+// Achievement Handlers
+// ============================================================================
+
+/// Get achievements for a specific user.
+#[derive(Debug, Deserialize)]
+pub struct GetAchievementsQuery {
+    #[serde(default)]
+    pub include_lost: bool,
+}
+
+pub async fn get_user_achievements(
+    Extension(db): Extension<Database>,
+    Path(user_id): Path<Uuid>,
+    Query(query): Query<GetAchievementsQuery>,
+) -> Result<Json<Vec<AchievementWithSegment>>, AppError> {
+    let achievements = db
+        .get_user_achievements(user_id, query.include_lost)
+        .await?;
+    Ok(Json(achievements))
+}
+
+/// Get the authenticated user's achievements.
+pub async fn get_my_achievements(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Query(query): Query<GetAchievementsQuery>,
+) -> Result<Json<Vec<AchievementWithSegment>>, AppError> {
+    let achievements = db
+        .get_user_achievements(claims.sub, query.include_lost)
+        .await?;
+    Ok(Json(achievements))
+}
+
+/// Get current achievement holders for a segment.
+pub async fn get_segment_achievements(
+    Extension(db): Extension<Database>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SegmentAchievements>, AppError> {
+    // Verify segment exists
+    db.get_segment(id).await?.ok_or(AppError::NotFound)?;
+
+    let kom = db
+        .get_current_achievement_holder(id, AchievementType::Kom)
+        .await?;
+    let qom = db
+        .get_current_achievement_holder(id, AchievementType::Qom)
+        .await?;
+    let local_legend = db
+        .get_current_achievement_holder(id, AchievementType::LocalLegend)
+        .await?;
+
+    Ok(Json(SegmentAchievements {
+        segment_id: id,
+        kom,
+        qom,
+        local_legend,
+    }))
+}
+
+// ============================================================================
+// Global Leaderboard Handlers
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct GlobalLeaderboardQuery {
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+/// Get global crown count leaderboard.
+pub async fn get_crown_leaderboard(
+    Extension(db): Extension<Database>,
+    Query(query): Query<GlobalLeaderboardQuery>,
+) -> Result<Json<Vec<CrownCountEntry>>, AppError> {
+    let entries = db
+        .get_crown_count_leaderboard(query.limit, query.offset)
+        .await?;
+    Ok(Json(entries))
+}
+
+/// Get global distance leaderboard.
+pub async fn get_distance_leaderboard(
+    Extension(db): Extension<Database>,
+    Query(query): Query<GlobalLeaderboardQuery>,
+) -> Result<Json<Vec<DistanceLeaderEntry>>, AppError> {
+    let entries = db
+        .get_distance_leaderboard(query.limit, query.offset)
+        .await?;
+    Ok(Json(entries))
 }

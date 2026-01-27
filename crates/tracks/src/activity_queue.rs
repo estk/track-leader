@@ -8,6 +8,7 @@ use tokio::runtime::Handle;
 use uuid::Uuid;
 
 use crate::{
+    achievements_service,
     database::Database,
     models::ActivityType,
     object_store_service::FileType,
@@ -212,6 +213,18 @@ async fn process_segment_match(
                 .await
             {
                 tracing::error!("Failed to update personal records: {e}");
+            }
+            // Check and award achievements (KOM/QOM and Local Legend)
+            if let Err(e) = achievements_service::process_achievements(
+                db,
+                segment_match.segment_id,
+                user_id,
+                effort.id,
+                timing.elapsed_time_seconds,
+            )
+            .await
+            {
+                tracing::error!("Failed to process achievements: {e}");
             }
         }
         Err(e) => {
