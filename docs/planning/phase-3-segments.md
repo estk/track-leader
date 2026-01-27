@@ -457,24 +457,23 @@ WHERE ST_DWithin(t.geo, s.start_point, 50)  -- 50m tolerance
 
 ## Known Issues
 
-### BUG: Original activity not counted as segment effort on segment creation
+### FIXED: Original activity not counted as segment effort on segment creation
 
 **Reported:** 2026-01-26
+**Fixed:** 2026-01-26
 
 **Symptom:** When creating a segment from an activity, the original activity is not automatically counted as a segment effort.
 
-**Possible causes to investigate:**
-1. **Track not in `tracks` table** - The background queue may not have finished processing the activity's track geometry before the segment was created
-2. **Activity type mismatch** - The activity type might not match the segment's activity type
-3. **Spatial matching failure** - The PostGIS query might not be finding the match due to tolerance issues or direction check
+**Root cause:** Activities uploaded before the track storage feature was implemented don't have their tracks in the `tracks` table. The spatial matching query requires tracks to be in the database.
 
-**Where to look:**
-- `handlers.rs::create_segment()` - Calls `find_matching_activities_for_segment()` after segment creation
-- `database.rs::find_matching_activities_for_segment()` - PostGIS query that finds matching activities
-- `activity_queue.rs` - Where `save_track_geometry()` is called (timing issue?)
+**Fix implemented:**
+1. Added `source_activity_id` to `CreateSegmentRequest` (optional field)
+2. When provided, the handler checks if the track exists in the `tracks` table
+3. If not, it loads the GPX, builds the WKT, and saves the track geometry
+4. Then the spatial matching query finds the activity as expected
+5. Frontend updated to pass `source_activity_id` when creating segments
 
-**Debug steps:**
-1. Check if the activity's track exists in the `tracks` table
-2. Verify activity type matches segment activity type
-3. Run the matching query manually to see if it returns results
-4. Check server logs for errors during segment creation
+**Files changed:**
+- `handlers.rs` - Added source_activity_id handling and build_track_wkt helper
+- `src/lib/api.ts` - Added source_activity_id to CreateSegmentRequest interface
+- `src/app/activities/[id]/page.tsx` - Pass activity.id as source_activity_id
