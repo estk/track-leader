@@ -6,6 +6,7 @@ import { api, Segment } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
@@ -39,6 +40,7 @@ export default function SegmentsPage() {
   const [showStarred, setShowStarred] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activityTypeFilter, setActivityTypeFilter] = useState<string>("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const hasToken = !!api.getToken();
@@ -83,6 +85,14 @@ export default function SegmentsPage() {
         )}
       </div>
 
+      <Input
+        type="text"
+        placeholder="Search segments by name..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="max-w-md"
+      />
+
       {!showStarred && (
         <div className="flex flex-wrap gap-2">
           {ACTIVITY_TYPES.map((type) => (
@@ -110,14 +120,24 @@ export default function SegmentsPage() {
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-32 w-full" />
         </div>
-      ) : segments.length === 0 ? (
+      ) : (() => {
+        const filteredSegments = segments.filter((s) =>
+          s.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        return filteredSegments.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">
-              {showStarred ? "No starred segments" : "No segments yet"}
+              {searchQuery
+                ? "No segments match your search"
+                : showStarred
+                ? "No starred segments"
+                : "No segments yet"}
             </p>
             <p className="text-sm text-muted-foreground">
-              {showStarred
+              {searchQuery
+                ? "Try a different search term."
+                : showStarred
                 ? "Star segments from their detail pages to see them here."
                 : "Segments can be created from activity detail pages."}
             </p>
@@ -125,7 +145,7 @@ export default function SegmentsPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {segments.map((segment) => (
+          {filteredSegments.map((segment) => (
             <Card
               key={segment.id}
               className="hover:bg-muted/50 cursor-pointer transition-colors"
@@ -151,7 +171,8 @@ export default function SegmentsPage() {
             </Card>
           ))}
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }
