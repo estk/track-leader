@@ -47,6 +47,16 @@ echo ""
 # Kill existing session if it exists
 tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
+# Kill any stray processes on our ports
+for port in 3000 3001; do
+    pid=$(lsof -ti :$port 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+        echo "Killing process on port $port (pid $pid)"
+        kill $pid 2>/dev/null || true
+        sleep 0.5
+    fi
+done
+
 # Create new tmux session with PostgreSQL pane
 tmux new-session -d -s "$SESSION_NAME" -n "dev" \
     "echo '=== PostgreSQL ===' && cd '$PROJECT_ROOT/crates/tracks' && docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'"
