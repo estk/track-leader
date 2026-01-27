@@ -51,6 +51,10 @@ tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 tmux new-session -d -s "$SESSION_NAME" -n "dev" \
     "echo '=== PostgreSQL ===' && cd '$PROJECT_ROOT/crates/tracks' && docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'"
 
+# Keep panes alive after process exits (allows Ctrl-C then respawn)
+# Set this immediately after session creation, before any pane could exit
+tmux set-option -t "$SESSION_NAME" remain-on-exit on
+
 # Wait a moment for tmux to initialize
 sleep 0.5
 
@@ -62,23 +66,12 @@ tmux split-window -h -t "$SESSION_NAME:dev" \
 tmux split-window -v -t "$SESSION_NAME:dev.1" \
     "echo '=== Frontend (port 3000) ===' && echo 'Waiting for backend...' && sleep 5 && cd '$PROJECT_ROOT' && npm run dev 2>&1 | tee '$FRONTEND_LOG'"
 
-# Keep panes alive after process exits (allows Ctrl-C then respawn)
-tmux set-option -t "$SESSION_NAME" remain-on-exit on
-
 # Adjust pane sizes (make left pane narrower for postgres)
 tmux select-layout -t "$SESSION_NAME:dev" main-vertical
 
-# Set pane titles (requires tmux 2.6+)
-tmux select-pane -t "$SESSION_NAME:dev.0" -T "PostgreSQL"
-tmux select-pane -t "$SESSION_NAME:dev.1" -T "Backend"
-tmux select-pane -t "$SESSION_NAME:dev.2" -T "Frontend"
-
 # Enable pane border status to show titles
 tmux set-option -t "$SESSION_NAME" pane-border-status top
-tmux set-option -t "$SESSION_NAME" pane-border-format "#{pane_title}"
-
-# Select the backend pane by default
-tmux select-pane -t "$SESSION_NAME:dev.1"
+tmux set-option -t "$SESSION_NAME" pane-border-format "#{pane_index}: #{pane_title}"
 
 echo "tmux session '$SESSION_NAME' created!"
 echo ""
