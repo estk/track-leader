@@ -16,14 +16,16 @@ impl From<Mime> for FileType {
     fn from(mime: Mime) -> Self {
         match mime.type_().as_str() {
             "application" => match mime.subtype().as_str() {
-                "gpx" => FileType::Gpx,
+                "gpx" | "gpx+xml" => FileType::Gpx,
+                // Browsers often send GPX files as octet-stream
+                "octet-stream" => FileType::Gpx,
                 s => {
-                    tracing::warn!("Unknown mime subtype: {}", s);
+                    tracing::warn!("Unknown mime subtype: {s}");
                     FileType::Other
                 }
             },
             s => {
-                tracing::warn!("Unknown mime type: {}", s);
+                tracing::warn!("Unknown mime type: {s}");
                 FileType::Other
             }
         }
@@ -61,7 +63,11 @@ impl ObjectStoreService {
         file_type: FileType,
         content: Bytes,
     ) -> Result<String, AppError> {
-        assert!(matches!(file_type, FileType::Gpx), "got: {file_type:?}");
+        if !matches!(file_type, FileType::Gpx) {
+            return Err(AppError::InvalidInput(format!(
+                "Unsupported file type: {file_type:?}. Only GPX files are supported."
+            )));
+        }
 
         let object_path = format!("activities/{user_id}/{activity_id}",);
 

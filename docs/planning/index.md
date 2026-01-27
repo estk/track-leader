@@ -27,18 +27,23 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Install MapLibre GL | Done | maplibre-gl + react-map-gl |
+| Install MapLibre GL | Done | maplibre-gl |
 | Install Recharts | Done | For elevation profile |
 | Activity track API endpoint | Done | GET /activities/{id}/track returns parsed GPX |
-| Activity map component | Done | Interactive route with start/end markers |
+| Activity map component | Done | OpenTopoMap tiles with contour lines |
 | Elevation profile component | Done | Syncs with map on hover |
 | Activity detail page | Done | Shows map, elevation, stats |
 | Activity cards clickable | Done | Navigate to detail page |
 | Activity edit | Done | PATCH endpoint + edit modal |
 | Activity delete | Done | DELETE endpoint + confirmation dialog |
+| Fix date serialization | Done | Added rfc3339 serde to OffsetDateTime fields |
+| Fix PostCSS config | Done | Created missing postcss.config.js |
+| Fix activity types | Done | Frontend sends PascalCase to match backend enum |
 | Privacy controls | Pending | |
 | User profile page | Pending | |
 | Mobile responsive | Pending | |
+
+**Latest Session:** 2026-01-27 - See `docs/session-notes.md` for detailed fixes and learnings.
 
 ---
 

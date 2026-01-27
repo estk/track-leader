@@ -28,7 +28,24 @@ export function ActivityMap({ trackData, highlightIndex, onHover }: ActivityMapP
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
-      style: "https://demotiles.maplibre.org/style.json",
+      style: {
+        version: 8,
+        sources: {
+          opentopomap: {
+            type: "raster",
+            tiles: ["https://tile.opentopomap.org/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
+          },
+        },
+        layers: [
+          {
+            id: "opentopomap",
+            type: "raster",
+            source: "opentopomap",
+          },
+        ],
+      },
       center,
       zoom: 12,
     });

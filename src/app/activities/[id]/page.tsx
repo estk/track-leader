@@ -14,12 +14,12 @@ import { ActivityMap } from "@/components/activity/activity-map";
 import { ElevationProfile } from "@/components/activity/elevation-profile";
 
 const ACTIVITY_TYPES = [
-  { value: "running", label: "Run" },
-  { value: "road_cycling", label: "Road Cycling" },
-  { value: "mountain_biking", label: "Mountain Biking" },
-  { value: "hiking", label: "Hike" },
-  { value: "walking", label: "Walk" },
-  { value: "unknown", label: "Other" },
+  { value: "Running", label: "Run" },
+  { value: "RoadCycling", label: "Road Cycling" },
+  { value: "MountainBiking", label: "Mountain Biking" },
+  { value: "Hiking", label: "Hike" },
+  { value: "Walking", label: "Walk" },
+  { value: "Unknown", label: "Other" },
 ];
 
 export default function ActivityDetailPage() {

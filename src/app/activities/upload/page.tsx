@@ -10,12 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ACTIVITY_TYPES = [
-  { value: "run", label: "Run" },
-  { value: "ride", label: "Ride" },
-  { value: "hike", label: "Hike" },
-  { value: "walk", label: "Walk" },
-  { value: "ski", label: "Ski" },
-  { value: "other", label: "Other" },
+  { value: "Running", label: "Run" },
+  { value: "RoadCycling", label: "Road Cycling" },
+  { value: "MountainBiking", label: "Mountain Biking" },
+  { value: "Hiking", label: "Hike" },
+  { value: "Walking", label: "Walk" },
+  { value: "Unknown", label: "Other" },
 ];
 
 export default function UploadActivityPage() {
@@ -24,7 +24,7 @@ export default function UploadActivityPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
-  const [activityType, setActivityType] = useState("run");
+  const [activityType, setActivityType] = useState("Running");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);

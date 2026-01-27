@@ -14,19 +14,19 @@ impl Database {
     }
 
     pub async fn save_activity(&self, activity: &Activity) -> Result<(), AppError> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO activities (id, user_id, activity_type, name, object_store_path,
                                     submitted_at)
             VALUES ($1, $2, $3, $4, $5, $6)
             "#,
-            activity.id,
-            activity.user_id,
-            activity.activity_type as _,
-            activity.name,
-            activity.object_store_path,
-            activity.submitted_at.into(),
         )
+        .bind(activity.id)
+        .bind(activity.user_id)
+        .bind(&activity.activity_type)
+        .bind(&activity.name)
+        .bind(&activity.object_store_path)
+        .bind(activity.submitted_at)
         .execute(&self.pool)
         .await?;
 
@@ -36,9 +36,7 @@ impl Database {
     pub async fn get_activity(&self, id: Uuid) -> Result<Option<Activity>, AppError> {
         let activity = sqlx::query_as(
             r#"
-            SELECT id, user_id, activity_type , filename, object_store_path,
-                   distance, ascent, descent, duration,
-                   submitted_at, created_at
+            SELECT id, user_id, activity_type, name, object_store_path, submitted_at
             FROM activities
             WHERE id = $1
             "#,
@@ -100,16 +98,16 @@ impl Database {
     }
 
     pub async fn new_user(&self, user: &User) -> Result<(), AppError> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO users (id, name, email, created_at)
             VALUES ($1, $2, $3, $4)
             "#,
-            user.id,
-            user.name,
-            user.email,
-            user.created_at
         )
+        .bind(user.id)
+        .bind(&user.name)
+        .bind(&user.email)
+        .bind(user.created_at)
         .execute(&self.pool)
         .await?;
 
@@ -117,8 +115,7 @@ impl Database {
     }
 
     pub async fn all_users(&self) -> Result<Vec<User>, AppError> {
-        let users = sqlx::query_as!(
-            User,
+        let users: Vec<User> = sqlx::query_as(
             r#"
             SELECT id, name, email, created_at
             FROM users
@@ -137,18 +134,18 @@ impl Database {
         activity_id: Uuid,
         scores: Scores,
     ) -> Result<(), AppError> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO scores (user_id, activity_id, distance, duration, elevation_gain, created_at)
             VALUES ($1, $2, $3, $4, $5, $6)
             "#,
-            uid,
-            activity_id,
-            scores.distance,
-            scores.duration,
-            scores.elevation_gain,
-            time::OffsetDateTime::now_utc()
         )
+        .bind(uid)
+        .bind(activity_id)
+        .bind(scores.distance)
+        .bind(scores.duration)
+        .bind(scores.elevation_gain)
+        .bind(time::OffsetDateTime::now_utc())
         .execute(&self.pool)
         .await?;
 

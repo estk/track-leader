@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use time::OffsetDateTime;
+use time::serde::rfc3339;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -8,6 +9,7 @@ pub struct User {
     pub id: Uuid,
     pub email: String,
     pub name: String,
+    #[serde(with = "rfc3339")]
     pub created_at: OffsetDateTime,
 }
 impl User {
@@ -30,6 +32,7 @@ pub struct Activity {
     pub activity_type: ActivityType,
     pub name: String,
     pub object_store_path: String,
+    #[serde(with = "rfc3339")]
     pub submitted_at: OffsetDateTime,
 }
 
