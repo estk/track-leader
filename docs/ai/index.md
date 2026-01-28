@@ -2,6 +2,13 @@
 
 Reference documentation for Claude when working on Track Leader.
 
+## Documentation Index
+
+- [index.md](./index.md) - Project overview and tech stack (this file)
+- [development.md](./development.md) - Development environment setup
+- [context.md](./context.md) - Code patterns and gotchas
+- [learnings/](./learnings/) - Bug investigations and learnings
+
 ## Project Overview
 
 Track Leader is an open leaderboard platform for trail segments - a competitor to Strava's segment feature with key differentiators:
@@ -56,21 +63,15 @@ track-leader/
 
 ## Development Environment
 
-**Always use:**
+See [development.md](./development.md) for full details.
+
+**Quick start:**
 ```bash
-./scripts/start-dev.sh   # Creates tmux session with all components
+./scripts/start-dev.sh          # Zellij-based (native)
+./scripts/start-dev-docker.sh   # Docker-based (recommended)
 ```
 
-**Ports:**
-- Frontend: 3000
-- Backend: 3001
-- PostgreSQL: 5432
-
-**Monitor logs:**
-```bash
-tail -f logs/backend_latest.log
-tail -f logs/frontend_latest.log
-```
+Both support random ports for running multiple workspaces simultaneously.
 
 ## Database Schema Highlights
 

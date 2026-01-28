@@ -1,25 +1,16 @@
 # AI Context for Track Leader
 
-Context and gotchas for AI assistants working on this codebase.
-
-## Project Overview
-
-Track Leader is a GPS activity tracking app with segment leaderboards (think Strava-like).
-
-- **Frontend**: Next.js (TypeScript) on port 3000
-- **Backend**: Rust/Axum on port 3001
-- **Database**: PostgreSQL with PostGIS on port 5432
+Code patterns and gotchas for AI assistants working on this codebase.
 
 ## Development Environment
 
-**Always use the dev scripts** - never start components individually:
-```bash
-./scripts/start-dev.sh   # Start everything in zellij
-./scripts/stop-dev.sh    # Stop everything
-./scripts/dev-status.sh  # Check what's running
-```
+See [development.md](./development.md) for full setup instructions.
 
-The restart script (`restart-service.sh`) has a bug where it creates broken symlinks for log files. Prefer full stop/start if restart doesn't work.
+**Quick start:**
+```bash
+./scripts/start-dev.sh          # Zellij-based
+./scripts/start-dev-docker.sh   # Docker-based (recommended)
+```
 
 ## Version Control
 

@@ -6,10 +6,26 @@
 # Add nix profile to PATH if it exists (for zellij)
 [ -d "$HOME/.nix-profile/bin" ] && export PATH="$HOME/.nix-profile/bin:$PATH"
 
-SESSION_NAME="track-leader"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PORTS_FILE="$PROJECT_ROOT/.dev-ports"
 
 echo "=== Track Leader Dev Environment Status ==="
+echo ""
+
+# Load port configuration if it exists
+if [ -f "$PORTS_FILE" ]; then
+    source "$PORTS_FILE"
+    echo "Configuration loaded from: $PORTS_FILE"
+else
+    # Fallback to workspace-based session name
+    WORKSPACE_NAME=$(basename "$PROJECT_ROOT")
+    SESSION_NAME="tl-${WORKSPACE_NAME}"
+    FRONTEND_PORT=""
+    BACKEND_PORT=""
+    POSTGRES_PORT=""
+    POSTGRES_CONTAINER_NAME="tracks_postgres_${WORKSPACE_NAME}"
+    echo "No port configuration found (dev environment not started?)"
+fi
 echo ""
 
 # Check zellij session (strip ANSI codes for matching)
@@ -23,35 +39,50 @@ echo ""
 
 # Check ports
 echo "Service Ports:"
-for port in 3000 3001 5432; do
-    pid=$(lsof -ti :$port 2>/dev/null || true)
+if [ -n "$FRONTEND_PORT" ]; then
+    pid=$(lsof -ti :$FRONTEND_PORT 2>/dev/null || true)
     if [ -n "$pid" ]; then
         process=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
-        case $port in
-            3000) service="Frontend (Next.js)" ;;
-            3001) service="Backend (Axum)" ;;
-            5432) service="PostgreSQL" ;;
-        esac
-        echo "  ✓ Port $port: $service (pid $pid, $process)"
+        echo "  ✓ Port $FRONTEND_PORT: Frontend (Next.js) (pid $pid, $process)"
     else
-        case $port in
-            3000) service="Frontend" ;;
-            3001) service="Backend" ;;
-            5432) service="PostgreSQL" ;;
-        esac
-        echo "  ✗ Port $port: $service not listening"
+        echo "  ✗ Port $FRONTEND_PORT: Frontend not listening"
     fi
-done
+else
+    echo "  ? Frontend port: unknown"
+fi
+
+if [ -n "$BACKEND_PORT" ]; then
+    pid=$(lsof -ti :$BACKEND_PORT 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+        process=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
+        echo "  ✓ Port $BACKEND_PORT: Backend (Axum) (pid $pid, $process)"
+    else
+        echo "  ✗ Port $BACKEND_PORT: Backend not listening"
+    fi
+else
+    echo "  ? Backend port: unknown"
+fi
+
+if [ -n "$POSTGRES_PORT" ]; then
+    pid=$(lsof -ti :$POSTGRES_PORT 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+        process=$(ps -p $pid -o comm= 2>/dev/null || echo "unknown")
+        echo "  ✓ Port $POSTGRES_PORT: PostgreSQL (pid $pid, $process)"
+    else
+        echo "  ✗ Port $POSTGRES_PORT: PostgreSQL not listening"
+    fi
+else
+    echo "  ? PostgreSQL port: unknown"
+fi
 echo ""
 
 # Check Docker
-echo "Docker Containers:"
-cd "$PROJECT_ROOT/crates/tracks"
-if docker-compose ps -q postgres 2>/dev/null | grep -q .; then
-    status=$(docker-compose ps postgres 2>/dev/null | tail -1 | awk '{print $NF}')
-    echo "  ✓ PostgreSQL container: $status"
+echo "Docker Container:"
+if docker ps -q -f name="$POSTGRES_CONTAINER_NAME" 2>/dev/null | grep -q .; then
+    status=$(docker ps -f name="$POSTGRES_CONTAINER_NAME" --format "{{.Status}}" 2>/dev/null)
+    echo "  ✓ $POSTGRES_CONTAINER_NAME: $status"
 else
-    echo "  ✗ PostgreSQL container not running"
+    echo "  ✗ $POSTGRES_CONTAINER_NAME: not running"
 fi
 echo ""
 
@@ -75,18 +106,22 @@ echo ""
 
 # Quick health check
 echo "Quick Health Check:"
-if curl -s --max-time 2 http://localhost:3000 > /dev/null 2>&1; then
-    echo "  ✓ Frontend responding on http://localhost:3000"
-else
-    echo "  ✗ Frontend not responding"
+if [ -n "$FRONTEND_PORT" ]; then
+    if curl -s --max-time 2 http://localhost:$FRONTEND_PORT > /dev/null 2>&1; then
+        echo "  ✓ Frontend responding on http://localhost:$FRONTEND_PORT"
+    else
+        echo "  ✗ Frontend not responding on http://localhost:$FRONTEND_PORT"
+    fi
 fi
 
-if curl -s --max-time 2 http://localhost:3001/health > /dev/null 2>&1; then
-    echo "  ✓ Backend responding on http://localhost:3001"
-elif curl -s --max-time 2 http://localhost:3001 > /dev/null 2>&1; then
-    echo "  ✓ Backend responding on http://localhost:3001 (no /health endpoint)"
-else
-    echo "  ✗ Backend not responding"
+if [ -n "$BACKEND_PORT" ]; then
+    if curl -s --max-time 2 http://localhost:$BACKEND_PORT/health > /dev/null 2>&1; then
+        echo "  ✓ Backend responding on http://localhost:$BACKEND_PORT"
+    elif curl -s --max-time 2 http://localhost:$BACKEND_PORT > /dev/null 2>&1; then
+        echo "  ✓ Backend responding on http://localhost:$BACKEND_PORT (no /health endpoint)"
+    else
+        echo "  ✗ Backend not responding on http://localhost:$BACKEND_PORT"
+    fi
 fi
 echo ""
 

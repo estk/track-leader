@@ -58,6 +58,10 @@ logs/
 # Generated zellij layout
 scripts/.dev-layout-generated.kdl
 
+# Dev environment port configuration
+.dev-ports
+.dev-ports-docker
+
 # Playwright test artifacts
 test-results/
 playwright-report/

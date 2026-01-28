@@ -1,0 +1,39 @@
+# Development Dockerfile for Rust backend with hot reloading
+# Multi-arch support for Apple Silicon (M1/M2)
+
+FROM rust:1.83-bookworm
+
+# Install cargo-watch for hot reloading and sqlx-cli for migrations
+RUN cargo install cargo-watch sqlx-cli --locked
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy cargo files first for dependency caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create src directory and dummy main.rs to cache dependencies
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+
+# Pre-build dependencies
+RUN cargo build && rm -rf src
+
+# Copy sqlx offline data for compile-time query checking
+COPY .sqlx ./.sqlx
+
+# The actual source is mounted as a volume at runtime
+# migrations are also mounted
+
+ENV RUST_LOG=info
+ENV SQLX_OFFLINE=true
+
+EXPOSE 3001
+
+# Default command - can be overridden
+CMD ["cargo", "watch", "-x", "run"]

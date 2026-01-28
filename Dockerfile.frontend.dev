@@ -1,0 +1,29 @@
+# Development Dockerfile for Next.js frontend with hot reloading
+# Multi-arch support for Apple Silicon (M1/M2)
+
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+# Install dependencies for native modules
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files first for dependency caching
+COPY package*.json ./
+
+# Install all dependencies (including devDependencies)
+RUN npm ci
+
+# Source files are mounted as volumes at runtime
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+EXPOSE 3000
+
+# Default command
+CMD ["npm", "run", "dev"]

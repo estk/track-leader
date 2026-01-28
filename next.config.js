@@ -8,10 +8,14 @@ const nextConfig = {
   output: "standalone",
 
   async rewrites() {
+    // BACKEND_URL takes precedence (for Docker), otherwise use BACKEND_PORT with localhost
+    const backendUrl =
+      process.env.BACKEND_URL ||
+      `http://localhost:${process.env.BACKEND_PORT || "3001"}`;
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:3001/:path*",
+        destination: `${backendUrl}/:path*`,
       },
     ];
   },

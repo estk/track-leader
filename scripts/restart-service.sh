@@ -11,9 +11,9 @@ set -e
 [ -d "$HOME/.nix-profile/bin" ] && export PATH="$HOME/.nix-profile/bin:$PATH"
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SESSION_NAME="track-leader"
 LOG_DIR="$PROJECT_ROOT/logs"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+PORTS_FILE="$PROJECT_ROOT/.dev-ports"
 
 SERVICE="${1:-}"
 
@@ -28,6 +28,15 @@ if [ -z "$SERVICE" ]; then
     exit 1
 fi
 
+# Load port configuration
+if [ -f "$PORTS_FILE" ]; then
+    source "$PORTS_FILE"
+else
+    echo "Error: Port configuration not found at $PORTS_FILE"
+    echo "Start the dev environment first with: ./scripts/start-dev.sh"
+    exit 1
+fi
+
 # Check if session exists (strip ANSI codes for matching)
 if ! zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q "^$SESSION_NAME"; then
     echo "Error: zellij session '$SESSION_NAME' not found"
@@ -36,28 +45,27 @@ if ! zellij list-sessions 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -q "^$S
 fi
 
 restart_backend() {
-    echo "Restarting backend..."
+    echo "Restarting backend on port $BACKEND_PORT..."
 
     # Create new log file
     BACKEND_LOG="$LOG_DIR/backend_${TIMESTAMP}.log"
     ln -sf "backend_${TIMESTAMP}.log" "$LOG_DIR/backend_latest.log"
 
-    # Kill process on port 3001
-    pid=$(lsof -ti :3001 2>/dev/null || true)
+    # Kill process on backend port
+    pid=$(lsof -ti :$BACKEND_PORT 2>/dev/null || true)
     if [ -n "$pid" ]; then
         kill $pid 2>/dev/null || true
         sleep 0.5
     fi
 
     # Use zellij action to run command in the backend pane
-    # First focus the pane by name, then close it and rerun
     zellij --session "$SESSION_NAME" action write-chars $'\x03'  # Ctrl+C in current pane
     sleep 0.5
 
     # Run the backend command
     zellij --session "$SESSION_NAME" action focus-pane-in-tab "backend" 2>/dev/null || true
 
-    CMD="cd '$PROJECT_ROOT/crates/tracks' && RUST_LOG=info DATABASE_URL='postgres://tracks_user:tracks_password@localhost:5432/tracks_db' cargo run 2>&1 | tee '$BACKEND_LOG'"
+    CMD="cd '$PROJECT_ROOT/crates/tracks' && RUST_LOG=info PORT=$BACKEND_PORT DATABASE_URL='postgres://tracks_user:tracks_password@localhost:$POSTGRES_PORT/tracks_db' cargo run 2>&1 | tee '$BACKEND_LOG'"
     zellij --session "$SESSION_NAME" action write-chars "$CMD"
     zellij --session "$SESSION_NAME" action write-chars $'\n'
 
@@ -65,14 +73,14 @@ restart_backend() {
 }
 
 restart_frontend() {
-    echo "Restarting frontend..."
+    echo "Restarting frontend on port $FRONTEND_PORT..."
 
     # Create new log file
     FRONTEND_LOG="$LOG_DIR/frontend_${TIMESTAMP}.log"
     ln -sf "frontend_${TIMESTAMP}.log" "$LOG_DIR/frontend_latest.log"
 
-    # Kill process on port 3000
-    pid=$(lsof -ti :3000 2>/dev/null || true)
+    # Kill process on frontend port
+    pid=$(lsof -ti :$FRONTEND_PORT 2>/dev/null || true)
     if [ -n "$pid" ]; then
         kill $pid 2>/dev/null || true
         sleep 0.5
@@ -82,7 +90,7 @@ restart_frontend() {
     zellij --session "$SESSION_NAME" action write-chars $'\x03'  # Ctrl+C
     sleep 0.5
 
-    CMD="cd '$PROJECT_ROOT' && npm run dev 2>&1 | tee '$FRONTEND_LOG'"
+    CMD="cd '$PROJECT_ROOT' && PORT=$FRONTEND_PORT BACKEND_PORT=$BACKEND_PORT npm run dev 2>&1 | tee '$FRONTEND_LOG'"
     zellij --session "$SESSION_NAME" action write-chars "$CMD"
     zellij --session "$SESSION_NAME" action write-chars $'\n'
 
@@ -90,22 +98,21 @@ restart_frontend() {
 }
 
 restart_postgres() {
-    echo "Restarting PostgreSQL..."
+    echo "Restarting PostgreSQL on port $POSTGRES_PORT..."
 
     # Create new log file
     POSTGRES_LOG="$LOG_DIR/postgres_${TIMESTAMP}.log"
     ln -sf "postgres_${TIMESTAMP}.log" "$LOG_DIR/postgres_latest.log"
 
     # Stop container first
-    cd "$PROJECT_ROOT/crates/tracks"
-    docker-compose stop postgres 2>/dev/null || true
+    docker stop "$POSTGRES_CONTAINER_NAME" 2>/dev/null || true
     sleep 1
 
     zellij --session "$SESSION_NAME" action focus-pane-in-tab "postgres" 2>/dev/null || true
     zellij --session "$SESSION_NAME" action write-chars $'\x03'  # Ctrl+C
     sleep 0.5
 
-    CMD="cd '$PROJECT_ROOT/crates/tracks' && docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'"
+    CMD="cd '$PROJECT_ROOT/crates/tracks' && POSTGRES_PORT=$POSTGRES_PORT POSTGRES_CONTAINER_NAME=$POSTGRES_CONTAINER_NAME POSTGRES_VOLUME_NAME=$POSTGRES_VOLUME_NAME docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'"
     zellij --session "$SESSION_NAME" action write-chars "$CMD"
     zellij --session "$SESSION_NAME" action write-chars $'\n'
 
