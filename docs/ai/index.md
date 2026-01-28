@@ -128,7 +128,6 @@ Tables like `users` and `activities` have denormalized count columns (`follower_
 These were planned but deferred:
 - SSE real-time leaderboard updates
 - Leaderboard caching service
-- Auto-achievement processing on effort creation
 - Rate limiting (tower_governor added but not integrated)
 - Sentry error tracking
 

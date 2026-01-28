@@ -56,6 +56,6 @@ track-leader/
 
 ## Documentation
 
-- [Session Notes](docs/session-notes.md) - Current status, learnings, gotchas
-- [Phase 3 Segments](docs/planning/phase-3-segments.md) - Segment feature specification
-- [Backend README](crates/tracks/README.md) - Backend API documentation
+- [API Reference](docs/api-reference.md) - REST API documentation
+- [Architecture](docs/architecture/overview.md) - System design
+- [Development](docs/ai/development.md) - Development environment setup

@@ -14,7 +14,7 @@
 | Phase 5 | Social Features | ✅ Complete |
 | Phase 6 | Polish & Launch | ✅ Complete |
 
-Detailed phase documentation is in [archive/](./archive/).
+Phase documentation has been archived.
 
 ---
 
@@ -76,9 +76,6 @@ Detailed phase documentation is in [archive/](./archive/).
 ## Deferred Features
 
 These items were planned but deferred for post-launch:
-
-### Features
-- Auto-achievement processing on effort creation
 
 ### Future Enhancements (Phase 7+)
 - Live tracking, based on your privacy prefs (teams, followers etc) you can show your live location to logged in users with the right permissions
