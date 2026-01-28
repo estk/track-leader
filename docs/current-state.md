@@ -1,7 +1,7 @@
 # Track Leader - Current State Analysis
 
 **Date:** January 2026
-**Last Updated:** January 27, 2026
+**Last Updated:** January 28, 2026
 **Status:** Phase 5 Complete, Ready for Phase 6
 
 ## Executive Summary
@@ -34,7 +34,7 @@ Track Leader is a GPS activity tracking application with aspirations to become a
 | Metrics calculation | ✅ | Distance, duration, elevation gain |
 | Background processing | ✅ | Rayon thread pool + async |
 | Database persistence | ✅ | PostgreSQL with PostGIS |
-| Track geometry storage | ✅ | LINESTRING with GIST index |
+| Track geometry storage | ✅ | LineStringZM with elevation + timestamps |
 | Segment creation | ✅ | PostGIS geometry operations |
 | Segment matching | ✅ | ST_DWithin + ST_LineLocatePoint |
 | Personal records | ✅ | Auto-updated on effort |
@@ -93,12 +93,13 @@ Track Leader is a GPS activity tracking application with aspirations to become a
 - MapLibre GL v5.16
 - Recharts v3.7
 
-### Database Schema (Migrations 001-013)
+### Database Schema (Migrations 001-014)
 
 **Core Tables:**
 - `users` - Auth, profile, demographics, follower counts
 - `activities` - User activities with metadata, kudos/comment counts
-- `tracks` - PostGIS GEOGRAPHY LineString Z
+- `tracks` - PostGIS GEOGRAPHY LineStringZM (lat, lon, elevation, timestamp)
+- `activity_sensor_data` - Sensor arrays (HR, cadence, power, temp) for FIT/TCX
 - `scores` - Computed metrics
 - `segments` - User-created trail segments
 - `segment_efforts` - Matched efforts with timing
@@ -216,6 +217,28 @@ track-leader/
    - NotificationBell component with dropdown in header
    - FollowButton, FollowStats, KudosButton, CommentsSection components
    - FeedCard component for activity display
+
+---
+
+## Phase 6 Progress
+
+### Bug Fixes (January 28, 2026)
+
+**BUG-P6-001: GPS Track Storage Refactoring**
+
+Fixed activity detail "Not Found" bug by storing track data in PostgreSQL instead of re-parsing GPX from object storage on every request.
+
+**Changes:**
+- Migration 014: Convert `tracks.geo` from LineString to LineStringZM (4D geometry)
+- X=longitude, Y=latitude, Z=elevation(meters), M=timestamp(unix epoch)
+- Track data now read from database, not re-parsed from object storage
+- Created `activity_sensor_data` table for future FIT/TCX sensor data
+
+**Impact:**
+- `/activities/{id}/track` endpoint now works reliably
+- No dependency on GPX file existing in object store
+- Elevation and timestamp data preserved in database
+- Segment matching unchanged (PostGIS ignores Z/M for 2D spatial ops)
 
 ---
 

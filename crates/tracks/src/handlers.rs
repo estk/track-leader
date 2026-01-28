@@ -224,43 +224,45 @@ pub async fn download_gpx_file(
 
 pub async fn get_activity_track(
     Extension(db): Extension<Database>,
-    Extension(store): Extension<ObjectStoreService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<TrackData>, AppError> {
-    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
-    let file_bytes = store.get_file(&activity.object_store_path).await?;
+    // Verify activity exists
+    db.get_activity(id).await?.ok_or(AppError::NotFound)?;
 
-    let gpx: gpx::Gpx = gpx::read(std::io::BufReader::new(file_bytes.as_ref()))
-        .map_err(|e| AppError::InvalidInput(format!("Failed to parse GPX: {e}")))?;
+    // Get track points from database
+    let track_points = db
+        .get_track_points(id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
-    let mut points = Vec::new();
+    if track_points.is_empty() {
+        return Err(AppError::NotFound);
+    }
+
     let mut min_lat = f64::MAX;
     let mut max_lat = f64::MIN;
     let mut min_lon = f64::MAX;
     let mut max_lon = f64::MIN;
 
-    for track in &gpx.tracks {
-        for segment in &track.segments {
-            for pt in &segment.points {
-                let lat = pt.point().y();
-                let lon = pt.point().x();
-                let ele = pt.elevation;
-                let time = pt.time.as_ref().map(|t| t.format().unwrap_or_default());
+    let points: Vec<TrackPoint> = track_points
+        .iter()
+        .map(|pt| {
+            min_lat = min_lat.min(pt.lat);
+            max_lat = max_lat.max(pt.lat);
+            min_lon = min_lon.min(pt.lon);
+            max_lon = max_lon.max(pt.lon);
 
-                min_lat = min_lat.min(lat);
-                max_lat = max_lat.max(lat);
-                min_lon = min_lon.min(lon);
-                max_lon = max_lon.max(lon);
-
-                points.push(TrackPoint {
-                    lat,
-                    lon,
-                    ele,
-                    time,
-                });
+            TrackPoint {
+                lat: pt.lat,
+                lon: pt.lon,
+                ele: pt.elevation,
+                time: pt.timestamp.map(|t| {
+                    t.format(&time::format_description::well_known::Rfc3339)
+                        .unwrap_or_default()
+                }),
             }
-        }
-    }
+        })
+        .collect();
 
     Ok(Json(TrackData {
         points,

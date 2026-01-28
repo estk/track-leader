@@ -549,18 +549,64 @@ impl Database {
 
     // Track geometry methods
 
-    pub async fn save_track_geometry(
+    /// Save track geometry with elevation and timestamps as a LineStringZM.
+    /// Points are stored as (X=lon, Y=lat, Z=elevation, M=unix_epoch).
+    /// Missing elevation defaults to 0, missing timestamp defaults to 0.
+    pub async fn save_track_geometry_with_data(
         &self,
         user_id: Uuid,
         activity_id: Uuid,
-        geo_wkt: &str,
+        points: &[crate::models::TrackPointData],
     ) -> Result<(), AppError> {
+        if points.len() < 2 {
+            return Err(AppError::InvalidInput(
+                "Track must have at least 2 points".to_string(),
+            ));
+        }
+
+        // Build LineStringZM WKT: LINESTRING ZM(lon lat ele time, ...)
+        let coords: Vec<String> = points
+            .iter()
+            .map(|p| {
+                let epoch = p.timestamp.map(|t| t.unix_timestamp() as f64).unwrap_or(0.0);
+                let ele = p.elevation.unwrap_or(0.0);
+                format!("{} {} {} {}", p.lon, p.lat, ele, epoch)
+            })
+            .collect();
+        let wkt = format!("LINESTRING ZM({})", coords.join(", "));
+
         sqlx::query(
             r#"
             INSERT INTO tracks (user_id, activity_id, geo, created_at)
             VALUES ($1, $2, ST_GeogFromText($3), NOW())
             ON CONFLICT (activity_id) DO UPDATE
             SET geo = ST_GeogFromText($3)
+            "#,
+        )
+        .bind(user_id)
+        .bind(activity_id)
+        .bind(&wkt)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Save track geometry from a simple WKT string (for backwards compatibility).
+    /// Used when creating segments from existing activities without full data.
+    pub async fn save_track_geometry(
+        &self,
+        user_id: Uuid,
+        activity_id: Uuid,
+        geo_wkt: &str,
+    ) -> Result<(), AppError> {
+        // For simple 2D WKT, we need to force it to 4D before storing
+        sqlx::query(
+            r#"
+            INSERT INTO tracks (user_id, activity_id, geo, created_at)
+            VALUES ($1, $2, ST_Force4D(ST_GeogFromText($3)::geometry)::geography, NOW())
+            ON CONFLICT (activity_id) DO UPDATE
+            SET geo = ST_Force4D(ST_GeogFromText($3)::geometry)::geography
             "#,
         )
         .bind(user_id)
@@ -585,6 +631,62 @@ impl Database {
         .await?;
 
         Ok(row.map(|(geojson,)| geojson))
+    }
+
+    /// Get track points with all 4 dimensions (lat, lon, elevation, timestamp).
+    /// Uses ST_DumpPoints to extract individual points from the LineStringZM.
+    pub async fn get_track_points(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Option<Vec<crate::models::TrackPointData>>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct PointRow {
+            lon: f64,
+            lat: f64,
+            elevation: f64,
+            epoch: f64,
+        }
+
+        let rows: Vec<PointRow> = sqlx::query_as(
+            r#"
+            SELECT
+                ST_X(geom) as lon,
+                ST_Y(geom) as lat,
+                ST_Z(geom) as elevation,
+                ST_M(geom) as epoch
+            FROM tracks t,
+            LATERAL ST_DumpPoints(t.geo::geometry) AS dp(path, geom)
+            WHERE t.activity_id = $1
+            ORDER BY dp.path[1]
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        if rows.is_empty() {
+            return Ok(None);
+        }
+
+        let points: Vec<crate::models::TrackPointData> = rows
+            .into_iter()
+            .map(|r| crate::models::TrackPointData {
+                lat: r.lat,
+                lon: r.lon,
+                elevation: if r.elevation != 0.0 {
+                    Some(r.elevation)
+                } else {
+                    None
+                },
+                timestamp: if r.epoch != 0.0 {
+                    time::OffsetDateTime::from_unix_timestamp(r.epoch as i64).ok()
+                } else {
+                    None
+                },
+            })
+            .collect();
+
+        Ok(Some(points))
     }
 
     // Segment matching methods

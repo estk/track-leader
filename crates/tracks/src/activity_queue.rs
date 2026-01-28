@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     achievements_service,
     database::Database,
-    models::ActivityType,
+    models::{ActivityType, TrackPointData},
     object_store_service::FileType,
     scoring,
     segment_matching::{self, SegmentMatch},
@@ -68,22 +68,28 @@ impl ActivityQueue {
             // Calculate scores
             let scores = scoring::score_track(&parsed_track);
 
-            // Build WKT LINESTRING from track points
-            let geo_wkt = build_track_wkt(&parsed_track);
+            // Extract track points with elevation and timestamps
+            let track_points = extract_track_points(&parsed_track);
 
             handle.block_on(async move {
                 // Save scores
                 db.save_scores(uid, id, scores).await.unwrap();
 
-                // Save track geometry and find segment matches
-                if let Some(ref wkt) = geo_wkt
-                    && let Err(e) = db.save_track_geometry(uid, id, wkt).await
-                {
-                    tracing::error!("Failed to save track geometry: {e}");
-                }
+                // Save track geometry with elevation and timestamps
+                let track_saved = if !track_points.is_empty() {
+                    match db.save_track_geometry_with_data(uid, id, &track_points).await {
+                        Ok(()) => true,
+                        Err(e) => {
+                            tracing::error!("Failed to save track geometry: {e}");
+                            false
+                        }
+                    }
+                } else {
+                    false
+                };
 
                 // Find and create segment efforts
-                if geo_wkt.is_some() {
+                if track_saved {
                     match db.find_matching_segments(id, &activity_type).await {
                         Ok(matches) => {
                             for segment_match in matches {
@@ -103,25 +109,35 @@ impl ActivityQueue {
     }
 }
 
-/// Build a WKT LINESTRING from all track points
-fn build_track_wkt(gpx: &gpx::Gpx) -> Option<String> {
-    let mut coords: Vec<String> = Vec::new();
+/// Extract track points with elevation and timestamps from GPX
+fn extract_track_points(gpx: &gpx::Gpx) -> Vec<TrackPointData> {
+    let mut points = Vec::new();
 
     for track in &gpx.tracks {
         for seg in &track.segments {
             for pt in &seg.points {
                 let lon = pt.point().x();
                 let lat = pt.point().y();
-                coords.push(format!("{lon} {lat}"));
+                let elevation = pt.elevation;
+                let timestamp = pt.time.as_ref().and_then(|t| {
+                    // gpx::Time has a format() method that returns ISO 8601 string
+                    // We need to parse it to OffsetDateTime
+                    t.format()
+                        .ok()
+                        .and_then(|s| time::OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339).ok())
+                });
+
+                points.push(TrackPointData {
+                    lat,
+                    lon,
+                    elevation,
+                    timestamp,
+                });
             }
         }
     }
 
-    if coords.len() < 2 {
-        return None;
-    }
-
-    Some(format!("LINESTRING({})", coords.join(", ")))
+    points
 }
 
 /// Process a single segment match: extract timing and create effort

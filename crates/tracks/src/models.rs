@@ -718,3 +718,16 @@ pub struct Stats {
     pub segments_created: i64,
     pub activities_uploaded: i64,
 }
+
+// ============================================================================
+// Track Point Data for Storage
+// ============================================================================
+
+/// Track point with all 4 dimensions for storage in LineStringZM geometry
+#[derive(Debug, Clone)]
+pub struct TrackPointData {
+    pub lat: f64,
+    pub lon: f64,
+    pub elevation: Option<f64>,
+    pub timestamp: Option<OffsetDateTime>,
+}

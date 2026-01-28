@@ -90,19 +90,38 @@ CREATE INDEX idx_activities_submitted_at ON activities(submitted_at);
 CREATE TABLE tracks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
-    activity_id UUID NOT NULL,
+    activity_id UUID NOT NULL UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    geo GEOGRAPHY(LineString, 4326) NOT NULL
+    geo GEOGRAPHY(LineStringZM, 4326) NOT NULL
 );
 
 CREATE INDEX idx_tracks_user_id ON tracks(user_id);
-CREATE INDEX idx_tracks_activities_id ON tracks(activity_id);
+CREATE INDEX idx_tracks_activity_id ON tracks(activity_id);
+CREATE INDEX idx_tracks_geo ON tracks USING GIST (geo);
 ```
 
 **Notes:**
-- **Table is created but never populated**
+- Uses **LineStringZM** (4D geometry): X=longitude, Y=latitude, Z=elevation(m), M=timestamp(unix epoch)
 - PostGIS GEOGRAPHY type for spherical calculations
-- No spatial index (GIST) - critical for segment matching
+- GIST spatial index for segment matching
+- Populated during activity upload via background queue
+- Track data retrieved from database, not re-parsed from GPX files
+
+#### `activity_sensor_data`
+```sql
+CREATE TABLE activity_sensor_data (
+    activity_id UUID PRIMARY KEY REFERENCES activities(id) ON DELETE CASCADE,
+    heart_rates int[],
+    cadences int[],
+    powers int[],
+    temperatures double precision[]
+);
+```
+
+**Notes:**
+- Arrays parallel to track geometry points (index 0 = point 0)
+- Populated when importing FIT/TCX files (future feature)
+- Single row per activity for efficient bulk reads
 
 #### `scores`
 ```sql
