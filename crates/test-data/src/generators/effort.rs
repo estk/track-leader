@@ -126,9 +126,8 @@ impl EffortGenerator {
 
         // Maybe add pauses (moving time < elapsed time)
         let (moving_time, max_speed) = if rng.r#gen::<f64>() < self.config.pause_probability {
-            let pause_fraction = rng.gen_range(
-                self.config.pause_fraction_range.0..self.config.pause_fraction_range.1,
-            );
+            let pause_fraction = rng
+                .gen_range(self.config.pause_fraction_range.0..self.config.pause_fraction_range.1);
             let moving = elapsed_time * (1.0 - pause_fraction);
             let max = segment.distance_meters / moving * 1.2; // Max speed during moving portions
             (Some(moving), Some(max))
@@ -279,7 +278,13 @@ mod tests {
         // - Mean should be around 1.0
         // - There should be a mix of above and below 1.0
         assert!(mean > 0.8 && mean < 1.4, "Mean {mean} should be near 1.0");
-        assert!(below_one > 100, "Should have some fast athletes (below 1.0)");
-        assert!(below_one < 900, "Should have more slower athletes (above 1.0)");
+        assert!(
+            below_one > 100,
+            "Should have some fast athletes (below 1.0)"
+        );
+        assert!(
+            below_one < 900,
+            "Should have more slower athletes (above 1.0)"
+        );
     }
 }

@@ -14,8 +14,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Connect to database
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://tracks_user:tracks_password@localhost:5432/tracks_db".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://tracks_user:tracks_password@localhost:5432/tracks_db".to_string()
+    });
 
     tracing::info!("Connecting to database...");
     let pool = PgPoolOptions::new()

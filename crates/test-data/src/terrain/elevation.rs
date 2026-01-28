@@ -99,8 +99,8 @@ impl ElevationGenerator {
             let noise_val = self.perlin.get([lat * frequency, lon * frequency]);
             total += noise_val * amplitude;
             max_amplitude += amplitude;
-            amplitude *= 0.5;     // Each octave has half the amplitude
-            frequency *= 2.0;     // Each octave has double the frequency
+            amplitude *= 0.5; // Each octave has half the amplitude
+            frequency *= 2.0; // Each octave has double the frequency
         }
 
         // Normalize and scale
@@ -128,7 +128,10 @@ impl ElevationGenerator {
         points_between: usize,
     ) -> Vec<f64> {
         if coords.len() < 2 {
-            return coords.iter().map(|(lat, lon)| self.elevation_at(*lat, *lon)).collect();
+            return coords
+                .iter()
+                .map(|(lat, lon)| self.elevation_at(*lat, *lon))
+                .collect();
         }
 
         let mut result = Vec::with_capacity(coords.len() + (coords.len() - 1) * points_between);

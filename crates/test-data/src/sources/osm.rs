@@ -106,9 +106,18 @@ impl OsmClient {
             out body;
             >;
             out skel qt;"#,
-            bounds.min_lat, bounds.min_lon, bounds.max_lat, bounds.max_lon,
-            bounds.min_lat, bounds.min_lon, bounds.max_lat, bounds.max_lon,
-            bounds.min_lat, bounds.min_lon, bounds.max_lat, bounds.max_lon,
+            bounds.min_lat,
+            bounds.min_lon,
+            bounds.max_lat,
+            bounds.max_lon,
+            bounds.min_lat,
+            bounds.min_lon,
+            bounds.max_lat,
+            bounds.max_lon,
+            bounds.min_lat,
+            bounds.min_lon,
+            bounds.max_lat,
+            bounds.max_lon,
         );
 
         self.execute_query(&query).await
@@ -125,8 +134,14 @@ impl OsmClient {
             out body;
             >;
             out skel qt;"#,
-            bounds.min_lat, bounds.min_lon, bounds.max_lat, bounds.max_lon,
-            bounds.min_lat, bounds.min_lon, bounds.max_lat, bounds.max_lon,
+            bounds.min_lat,
+            bounds.min_lon,
+            bounds.max_lat,
+            bounds.max_lon,
+            bounds.min_lat,
+            bounds.min_lon,
+            bounds.max_lat,
+            bounds.max_lon,
         );
 
         self.execute_query(&query).await
@@ -156,7 +171,8 @@ impl OsmClient {
         }
 
         // Make API request
-        let response = self.client
+        let response = self
+            .client
             .post(&self.endpoint)
             .body(query.to_string())
             .send()
@@ -188,7 +204,11 @@ impl OsmClient {
                 OverpassElement::Node { id, lat, lon, .. } => {
                     nodes.insert(id, (lat, lon));
                 }
-                OverpassElement::Way { id, nodes: node_ids, tags } => {
+                OverpassElement::Way {
+                    id,
+                    nodes: node_ids,
+                    tags,
+                } => {
                     ways.push((id, node_ids, tags));
                 }
             }

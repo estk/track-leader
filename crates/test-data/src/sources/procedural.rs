@@ -9,6 +9,18 @@ use crate::config::BoundingBox;
 use crate::profiles::{self, AthleteProfile};
 use crate::terrain::ElevationGenerator;
 
+/// Route pattern determining the shape of the generated track.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RoutePattern {
+    /// Random walk with momentum - the original behavior.
+    #[default]
+    RandomWalk,
+    /// Out-and-back: go out half the distance, then reverse and return.
+    OutAndBack,
+    /// Loop: curve the path back toward the starting point.
+    Loop,
+}
+
 /// Configuration for procedural track generation.
 #[derive(Debug, Clone)]
 pub struct TrackConfig {
@@ -49,6 +61,7 @@ impl Default for TrackConfig {
 pub struct ProceduralGenerator {
     config: TrackConfig,
     elevation: ElevationGenerator,
+    pattern: RoutePattern,
 }
 
 impl ProceduralGenerator {
@@ -57,6 +70,7 @@ impl ProceduralGenerator {
         Self {
             config: TrackConfig::default(),
             elevation: ElevationGenerator::boulder(seed),
+            pattern: RoutePattern::default(),
         }
     }
 
@@ -74,7 +88,14 @@ impl ProceduralGenerator {
                 ..Default::default()
             },
             elevation,
+            pattern: RoutePattern::default(),
         }
+    }
+
+    /// Sets the route pattern.
+    pub fn with_pattern(mut self, pattern: RoutePattern) -> Self {
+        self.pattern = pattern;
+        self
     }
 
     /// Sets the target distance.
@@ -122,7 +143,9 @@ impl ProceduralGenerator {
         profile: &dyn AthleteProfile,
         rng: &mut impl Rng,
     ) -> Vec<TrackPointData> {
-        let start = self.config.start_point
+        let start = self
+            .config
+            .start_point
             .unwrap_or_else(|| self.config.bounds.random_point(rng));
 
         let path = self.generate_path(start, rng);
@@ -130,11 +153,16 @@ impl ProceduralGenerator {
     }
 
     /// Generates a simple path (coordinates only, no timing).
-    pub fn generate_path(
-        &self,
-        start: (f64, f64),
-        rng: &mut impl Rng,
-    ) -> Vec<(f64, f64)> {
+    pub fn generate_path(&self, start: (f64, f64), rng: &mut impl Rng) -> Vec<(f64, f64)> {
+        match self.pattern {
+            RoutePattern::RandomWalk => self.generate_random_walk(start, rng),
+            RoutePattern::OutAndBack => self.generate_out_and_back(start, rng),
+            RoutePattern::Loop => self.generate_loop(start, rng),
+        }
+    }
+
+    /// Generates a random walk path with momentum.
+    fn generate_random_walk(&self, start: (f64, f64), rng: &mut impl Rng) -> Vec<(f64, f64)> {
         let mut path = vec![start];
         let mut current = start;
         let mut total_distance = 0.0;
@@ -159,16 +187,110 @@ impl ProceduralGenerator {
             let next_lon = current.1 + lon_delta;
 
             // Clamp to bounds with bounce-back
-            let (next_lat, next_lon, bounced_heading) = self.apply_bounds(
-                next_lat,
-                next_lon,
-                heading,
-            );
+            let (next_lat, next_lon, bounced_heading) =
+                self.apply_bounds(next_lat, next_lon, heading);
             heading = bounced_heading;
 
             current = (next_lat, next_lon);
             path.push(current);
             total_distance += step;
+        }
+
+        path
+    }
+
+    /// Generates an out-and-back path: go out half the distance, then reverse and return.
+    fn generate_out_and_back(&self, start: (f64, f64), rng: &mut impl Rng) -> Vec<(f64, f64)> {
+        // Generate outbound path for half the total distance
+        let half_distance = self.config.distance_meters / 2.0;
+        let mut outbound = vec![start];
+        let mut current = start;
+        let mut total_distance = 0.0;
+        let mut heading = rng.gen_range(0.0..std::f64::consts::TAU);
+
+        while total_distance < half_distance {
+            let heading_change = rng.gen_range(-0.2..0.2); // Slightly less variation
+            heading += heading_change;
+            let step = self.config.point_spacing_m * rng.gen_range(0.8..1.2);
+
+            let lat_delta = (step * heading.cos()) / 111_000.0;
+            let lon_delta = (step * heading.sin()) / (111_000.0 * current.0.to_radians().cos());
+
+            let next_lat = current.0 + lat_delta;
+            let next_lon = current.1 + lon_delta;
+
+            let (next_lat, next_lon, bounced_heading) =
+                self.apply_bounds(next_lat, next_lon, heading);
+            heading = bounced_heading;
+
+            current = (next_lat, next_lon);
+            outbound.push(current);
+            total_distance += step;
+        }
+
+        // Create return path by reversing and adding slight offset to avoid exact overlap
+        let mut path = outbound.clone();
+        let jitter = Normal::new(0.0, 0.00001).unwrap(); // Small lat/lon offset
+
+        for point in outbound.iter().rev().skip(1) {
+            let offset_lat = point.0 + jitter.sample(rng);
+            let offset_lon = point.1 + jitter.sample(rng);
+            path.push((offset_lat, offset_lon));
+        }
+
+        path
+    }
+
+    /// Generates a loop path that curves back toward the starting point.
+    fn generate_loop(&self, start: (f64, f64), rng: &mut impl Rng) -> Vec<(f64, f64)> {
+        let mut path = vec![start];
+        let mut current = start;
+        let mut total_distance = 0.0;
+
+        // Start with a random initial heading
+        let initial_heading = rng.gen_range(0.0..std::f64::consts::TAU);
+        let mut heading = initial_heading;
+
+        // Target is to curve back to start over the total distance
+        // Use a gradual turn rate that completes ~2π radians over the route
+        let turn_rate =
+            std::f64::consts::TAU / (self.config.distance_meters / self.config.point_spacing_m);
+
+        while total_distance < self.config.distance_meters * 0.95 {
+            let step = self.config.point_spacing_m * rng.gen_range(0.8..1.2);
+
+            // Apply consistent turn with some noise
+            let heading_change = turn_rate + rng.gen_range(-0.1..0.1);
+            heading += heading_change;
+
+            let lat_delta = (step * heading.cos()) / 111_000.0;
+            let lon_delta = (step * heading.sin()) / (111_000.0 * current.0.to_radians().cos());
+
+            let next_lat = current.0 + lat_delta;
+            let next_lon = current.1 + lon_delta;
+
+            let (next_lat, next_lon, bounced_heading) =
+                self.apply_bounds(next_lat, next_lon, heading);
+            heading = bounced_heading;
+
+            current = (next_lat, next_lon);
+            path.push(current);
+            total_distance += step;
+        }
+
+        // Close the loop by adding a direct path back to start if needed
+        let dist_to_start = haversine_distance(current.0, current.1, start.0, start.1);
+        if dist_to_start > self.config.point_spacing_m * 2.0 {
+            // Interpolate points back to start
+            let steps = (dist_to_start / self.config.point_spacing_m).ceil() as usize;
+            for i in 1..=steps {
+                let t = i as f64 / steps as f64;
+                let lat = current.0 + (start.0 - current.0) * t;
+                let lon = current.1 + (start.1 - current.1) * t;
+                path.push((lat, lon));
+            }
+        } else {
+            path.push(start);
         }
 
         path
@@ -250,7 +372,9 @@ impl ProceduralGenerator {
 
             // Maybe add a pause
             let pause_seconds = if rng.r#gen::<f64>() < self.config.pause_probability {
-                rng.gen_range(self.config.pause_duration_range.0..self.config.pause_duration_range.1)
+                rng.gen_range(
+                    self.config.pause_duration_range.0..self.config.pause_duration_range.1,
+                )
             } else {
                 0.0
             };
@@ -329,5 +453,66 @@ mod tests {
         // Known distance: ~111km for 1 degree of latitude
         let dist = haversine_distance(0.0, 0.0, 1.0, 0.0);
         assert!((dist - 111_000.0).abs() < 1000.0);
+    }
+
+    #[test]
+    fn test_out_and_back_pattern() {
+        let track_gen = ProceduralGenerator::new(42)
+            .with_distance(1000.0)
+            .with_pattern(RoutePattern::OutAndBack);
+        let mut rng = rand::thread_rng();
+        let start = (40.0, -105.3);
+
+        let path = track_gen.generate_path(start, &mut rng);
+
+        assert!(!path.is_empty());
+        // First and last points should be close (within ~20m for small GPS variance)
+        let end = path.last().unwrap();
+        let dist_to_start = haversine_distance(start.0, start.1, end.0, end.1);
+        assert!(
+            dist_to_start < 50.0,
+            "Out-and-back should return to start, got {dist_to_start}m"
+        );
+    }
+
+    #[test]
+    fn test_loop_pattern() {
+        let track_gen = ProceduralGenerator::new(42)
+            .with_distance(1000.0)
+            .with_pattern(RoutePattern::Loop);
+        let mut rng = rand::thread_rng();
+        let start = (40.0, -105.3);
+
+        let path = track_gen.generate_path(start, &mut rng);
+
+        assert!(!path.is_empty());
+        // First and last points should be close
+        let end = path.last().unwrap();
+        let dist_to_start = haversine_distance(start.0, start.1, end.0, end.1);
+        assert!(
+            dist_to_start < 50.0,
+            "Loop should return to start, got {dist_to_start}m"
+        );
+    }
+
+    #[test]
+    fn test_random_walk_pattern() {
+        let track_gen = ProceduralGenerator::new(42)
+            .with_distance(1000.0)
+            .with_pattern(RoutePattern::RandomWalk);
+        let mut rng = rand::thread_rng();
+        let start = (40.0, -105.3);
+
+        let path = track_gen.generate_path(start, &mut rng);
+
+        assert!(!path.is_empty());
+        // Random walk typically doesn't return to start
+        let end = path.last().unwrap();
+        let dist_to_start = haversine_distance(start.0, start.1, end.0, end.1);
+        // Just verify we generated something - random walk goes anywhere
+        assert!(path.len() > 10);
+        // Usually won't be at start (though could be by chance)
+        // We don't assert dist_to_start > threshold because random walks could loop back
+        let _ = dist_to_start; // Silence unused warning
     }
 }

@@ -59,7 +59,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Print some leaderboard stats
-    let mut effort_times: Vec<f64> = result.efforts.iter().map(|e| e.elapsed_time_seconds).collect();
+    let mut effort_times: Vec<f64> = result
+        .efforts
+        .iter()
+        .map(|e| e.elapsed_time_seconds)
+        .collect();
     effort_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
     if !effort_times.is_empty() {

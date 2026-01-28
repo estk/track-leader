@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use gpx::{read, Gpx};
+use gpx::{Gpx, read};
 use thiserror::Error;
 use time::OffsetDateTime;
 use tracks::models::TrackPointData;
@@ -91,10 +91,12 @@ impl GpxLoader {
             .map(|p| {
                 let mut wp = Waypoint::new(Point::new(p.lon, p.lat));
                 wp.elevation = p.elevation;
-                wp.time = p.timestamp.map(|t| gpx::Time::from(
-                    time::OffsetDateTime::from_unix_timestamp(t.unix_timestamp())
-                        .unwrap_or(time::OffsetDateTime::UNIX_EPOCH)
-                ));
+                wp.time = p.timestamp.map(|t| {
+                    gpx::Time::from(
+                        time::OffsetDateTime::from_unix_timestamp(t.unix_timestamp())
+                            .unwrap_or(time::OffsetDateTime::UNIX_EPOCH),
+                    )
+                });
                 wp
             })
             .collect();

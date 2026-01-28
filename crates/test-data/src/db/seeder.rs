@@ -158,10 +158,14 @@ impl Seeder {
         .await?;
 
         // Insert track geometry
-        let coords: Vec<String> = activity.track_points
+        let coords: Vec<String> = activity
+            .track_points
             .iter()
             .map(|p| {
-                let epoch = p.timestamp.map(|t| t.unix_timestamp() as f64).unwrap_or(0.0);
+                let epoch = p
+                    .timestamp
+                    .map(|t| t.unix_timestamp() as f64)
+                    .unwrap_or(0.0);
                 let ele = p.elevation.unwrap_or(0.0);
                 format!("{} {} {} {}", p.lon, p.lat, ele, epoch)
             })
@@ -394,15 +398,31 @@ impl Seeder {
         info!("Clearing all seeded data...");
 
         // Order matters due to foreign key constraints
-        sqlx::query("DELETE FROM comments").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM comments")
+            .execute(&self.pool)
+            .await?;
         sqlx::query("DELETE FROM kudos").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM segment_efforts").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM segments").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM tracks").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM scores").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM activities").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM follows").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM notifications").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM segment_efforts")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM segments")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM tracks")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM scores")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM activities")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM follows")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM notifications")
+            .execute(&self.pool)
+            .await?;
         sqlx::query("DELETE FROM users").execute(&self.pool).await?;
 
         info!("All data cleared");

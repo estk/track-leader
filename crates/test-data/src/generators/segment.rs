@@ -155,8 +155,16 @@ impl SegmentGenerator {
             distance_meters: distance,
             elevation_gain_meters: if gain > 0.0 { Some(gain) } else { None },
             elevation_loss_meters: if loss > 0.0 { Some(loss) } else { None },
-            average_grade: if avg_grade.abs() > 0.001 { Some(avg_grade) } else { None },
-            max_grade: if max_grade.abs() > 0.001 { Some(max_grade) } else { None },
+            average_grade: if avg_grade.abs() > 0.001 {
+                Some(avg_grade)
+            } else {
+                None
+            },
+            max_grade: if max_grade.abs() > 0.001 {
+                Some(max_grade)
+            } else {
+                None
+            },
             climb_category,
         })
     }
@@ -164,6 +172,7 @@ impl SegmentGenerator {
     /// Automatically finds and extracts climb segments from a track.
     ///
     /// Identifies uphill sections that meet the minimum gain threshold.
+    /// Generates meaningful names with category and elevation info.
     pub fn extract_climbs(
         &self,
         creator_id: Uuid,
@@ -201,14 +210,15 @@ impl SegmentGenerator {
                     if let Some(start) = climb_start {
                         if current_gain >= self.config.min_climb_gain_m {
                             let climb_points = &points[start..i];
-                            let name = format!("Climb {}", segments.len() + 1);
-                            if let Some(seg) = self.from_points(
+                            if let Some(mut seg) = self.from_points(
                                 creator_id,
                                 climb_points,
                                 activity_type,
-                                name,
+                                "", // Name will be set below
                                 rng,
                             ) {
+                                let climb_num = segments.len() + 1;
+                                self.set_climb_name_and_description(&mut seg, climb_num);
                                 segments.push(seg);
                             }
                         }
@@ -224,14 +234,41 @@ impl SegmentGenerator {
         if let Some(start) = climb_start {
             if current_gain >= self.config.min_climb_gain_m {
                 let climb_points = &points[start..];
-                let name = format!("Climb {}", segments.len() + 1);
-                if let Some(seg) = self.from_points(creator_id, climb_points, activity_type, name, rng) {
+                if let Some(mut seg) =
+                    self.from_points(creator_id, climb_points, activity_type, "", rng)
+                {
+                    let climb_num = segments.len() + 1;
+                    self.set_climb_name_and_description(&mut seg, climb_num);
                     segments.push(seg);
                 }
             }
         }
 
         segments
+    }
+
+    /// Sets a descriptive name and description for an auto-extracted climb.
+    fn set_climb_name_and_description(&self, segment: &mut GeneratedSegment, climb_num: usize) {
+        let gain = segment.elevation_gain_meters.unwrap_or(0.0);
+        let category_str = match segment.climb_category {
+            Some(0) => "HC",
+            Some(1) => "Cat 1",
+            Some(2) => "Cat 2",
+            Some(3) => "Cat 3",
+            Some(4) => "Cat 4",
+            _ => "Uncat",
+        };
+
+        segment.name = format!("Climb {} ({}, {:.0}m gain)", climb_num, category_str, gain);
+
+        let avg_grade_pct = segment.average_grade.unwrap_or(0.0) * 100.0;
+        let max_grade_pct = segment.max_grade.unwrap_or(0.0) * 100.0;
+        let distance_km = segment.distance_meters / 1000.0;
+
+        segment.description = Some(format!(
+            "Auto-extracted climb: {:.2}km at {:.1}% avg grade (max {:.1}%). Elevation gain: {:.0}m.",
+            distance_km, avg_grade_pct, max_grade_pct, gain
+        ));
     }
 
     /// Calculates segment statistics from points.

@@ -51,7 +51,7 @@ impl HikerProfile {
     /// Creates a backpacker profile (slower due to pack weight).
     pub fn backpacker() -> Self {
         Self {
-            base_speed: 1.2,  // ~4.3 km/h
+            base_speed: 1.2, // ~4.3 km/h
             variance: 0.15,  // More fatigue variance
         }
     }

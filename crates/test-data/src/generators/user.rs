@@ -1,6 +1,6 @@
 //! User generation with demographics.
 
-use fake::{faker::name::en::Name, Fake};
+use fake::{Fake, faker::name::en::Name};
 use rand::Rng;
 use rand_distr::{Distribution, Normal};
 use uuid::Uuid;
@@ -82,8 +82,8 @@ impl UserGenerator {
         let email = self.generate_email(&name, rng);
 
         // Hash using the same algorithm the auth system uses
-        let password_hash = tracks::auth::hash_password("password")
-            .expect("Failed to hash password");
+        let password_hash =
+            tracks::auth::hash_password("password").expect("Failed to hash password");
 
         let (gender, birth_year, weight_kg, country, region) =
             if rng.r#gen::<f64>() < self.config.demographics_fill_rate {
@@ -92,7 +92,10 @@ impl UserGenerator {
                     Some(self.generate_birth_year(rng)),
                     Some(self.generate_weight(rng)),
                     Some(self.config.default_country.clone()),
-                    self.config.regions.get(rng.gen_range(0..self.config.regions.len())).cloned(),
+                    self.config
+                        .regions
+                        .get(rng.gen_range(0..self.config.regions.len()))
+                        .cloned(),
                 )
             } else {
                 (None, None, None, None, None)
@@ -159,7 +162,8 @@ impl UserGenerator {
         let normal = Normal::new(
             self.config.birth_year_mean as f64,
             self.config.birth_year_std,
-        ).unwrap();
+        )
+        .unwrap();
 
         let year = normal.sample(rng) as i32;
         // Clamp to reasonable range (18-80 years old in ~2024)

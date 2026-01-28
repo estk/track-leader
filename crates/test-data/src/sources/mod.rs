@@ -11,4 +11,4 @@ mod procedural;
 
 pub use gpx_files::GpxLoader;
 pub use osm::OsmClient;
-pub use procedural::ProceduralGenerator;
+pub use procedural::{ProceduralGenerator, RoutePattern};

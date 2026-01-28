@@ -106,10 +106,7 @@ impl SocialGenerator {
 
             // Pick random users to follow (excluding self)
             let mut available: Vec<usize> = (0..user_ids.len()).filter(|&i| i != idx).collect();
-            let to_follow = available
-                .drain(..)
-                .take(num_follows)
-                .collect::<Vec<_>>();
+            let to_follow = available.drain(..).take(num_follows).collect::<Vec<_>>();
 
             for follow_idx in to_follow {
                 let following_id = user_ids[follow_idx];
@@ -203,13 +200,12 @@ impl SocialGenerator {
             };
 
             // Determine if this is a reply
-            let parent_id = if !comment_ids.is_empty()
-                && rng.r#gen::<f64>() < self.config.reply_probability
-            {
-                Some(comment_ids[rng.gen_range(0..comment_ids.len())])
-            } else {
-                None
-            };
+            let parent_id =
+                if !comment_ids.is_empty() && rng.r#gen::<f64>() < self.config.reply_probability {
+                    Some(comment_ids[rng.gen_range(0..comment_ids.len())])
+                } else {
+                    None
+                };
 
             let content = self.generate_comment_text(parent_id.is_some(), rng);
             let created_at = activity_time

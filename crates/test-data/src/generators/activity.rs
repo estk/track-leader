@@ -107,7 +107,8 @@ impl ActivityGenerator {
         let name = self.generate_name(activity_type, rng);
 
         // Calculate stats from track
-        let (distance_meters, elevation_gain_meters) = self.calculate_distance_and_gain(&track_points);
+        let (distance_meters, elevation_gain_meters) =
+            self.calculate_distance_and_gain(&track_points);
         let (duration_seconds, moving_time_seconds) = self.calculate_times(&track_points);
 
         let submitted_at = track_points
@@ -140,7 +141,9 @@ impl ActivityGenerator {
     fn generate_name(&self, activity_type: ActivityType, rng: &mut impl Rng) -> String {
         let prefixes = match activity_type {
             ActivityType::Running => &self.name_config.running_prefixes,
-            ActivityType::RoadCycling | ActivityType::MountainBiking => &self.name_config.cycling_prefixes,
+            ActivityType::RoadCycling | ActivityType::MountainBiking => {
+                &self.name_config.cycling_prefixes
+            }
             ActivityType::Hiking | ActivityType::Walking => &self.name_config.hiking_prefixes,
             ActivityType::Unknown => &self.name_config.running_prefixes,
         };
@@ -149,7 +152,8 @@ impl ActivityGenerator {
 
         // Sometimes add a location suffix
         if rng.r#gen::<f64>() < 0.3 {
-            let suffix = &self.name_config.location_suffixes[rng.gen_range(0..self.name_config.location_suffixes.len())];
+            let suffix = &self.name_config.location_suffixes
+                [rng.gen_range(0..self.name_config.location_suffixes.len())];
             format!("{prefix} {suffix}")
         } else {
             prefix.clone()
@@ -278,12 +282,8 @@ mod tests {
             },
         ];
 
-        let activity = activity_gen.from_track(
-            Uuid::new_v4(),
-            ActivityType::Running,
-            points,
-            &mut rng,
-        );
+        let activity =
+            activity_gen.from_track(Uuid::new_v4(), ActivityType::Running, points, &mut rng);
 
         assert!(!activity.name.is_empty());
         assert!(activity.distance_meters > 0.0);

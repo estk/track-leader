@@ -108,3 +108,34 @@ impl SkillDistribution {
         Self::PowerLaw { alpha: 2.0 }
     }
 }
+
+/// Controls how efforts are distributed across users and segments.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum EffortCoverage {
+    /// Every user gets efforts on every segment (original behavior).
+    #[default]
+    Full,
+    /// Random fraction of users get efforts on each segment.
+    Sparse {
+        /// Probability (0.0-1.0) that a user has an effort on a segment.
+        fraction: f64,
+    },
+    /// Power-law distribution: popular segments get more efforts.
+    /// Simulates real-world where some segments are heavily trafficked.
+    Zipf {
+        /// Zipf exponent (higher = more skewed toward popular segments).
+        alpha: f64,
+    },
+}
+
+impl EffortCoverage {
+    /// Creates a sparse distribution with 70% coverage (default for stress tests).
+    pub fn sparse() -> Self {
+        Self::Sparse { fraction: 0.7 }
+    }
+
+    /// Creates a Zipf distribution with default parameters.
+    pub fn zipf() -> Self {
+        Self::Zipf { alpha: 1.5 }
+    }
+}
