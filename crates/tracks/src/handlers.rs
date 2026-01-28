@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    achievements_service,
     activity_queue::ActivityQueue,
     auth::AuthUser,
     database::Database,
@@ -541,6 +542,19 @@ pub async fn create_segment(
                     let _ = db
                         .update_personal_records(segment_id, activity_match.user_id)
                         .await;
+
+                    // Process achievements (KOM/QOM and Local Legend)
+                    if let Err(e) = achievements_service::process_achievements(
+                        &db,
+                        segment_id,
+                        activity_match.user_id,
+                        effort.id,
+                        timing.elapsed_time_seconds,
+                    )
+                    .await
+                    {
+                        tracing::error!("Failed to process achievements: {e}");
+                    }
                 }
             }
         }
@@ -1105,6 +1119,19 @@ pub async fn reprocess_segment(
                     .await
                 {
                     tracing::error!("Failed to update personal records: {e}");
+                }
+
+                // Process achievements (KOM/QOM and Local Legend)
+                if let Err(e) = achievements_service::process_achievements(
+                    &db,
+                    segment_id,
+                    activity_match.user_id,
+                    effort.id,
+                    timing.elapsed_time_seconds,
+                )
+                .await
+                {
+                    tracing::error!("Failed to process achievements: {e}");
                 }
             }
             Err(e) => {
