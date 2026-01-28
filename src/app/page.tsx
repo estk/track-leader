@@ -1,6 +1,29 @@
 import { Mountain, Trophy, Users, Upload } from "lucide-react";
 
-export default function Home() {
+interface Stats {
+  active_users: number;
+  segments_created: number;
+  activities_uploaded: number;
+}
+
+async function getStats(): Promise<Stats | null> {
+  try {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const response = await fetch(`${apiBase}/stats`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export default async function Home() {
+  const stats = await getStats();
+
   return (
     <div className="space-y-12">
       {/* Hero Section */}
@@ -57,15 +80,21 @@ export default function Home() {
       <section className="rounded-lg border bg-card p-8">
         <div className="grid gap-8 md:grid-cols-3 text-center">
           <div>
-            <div className="text-4xl font-bold text-primary">0</div>
+            <div className="text-4xl font-bold text-primary">
+              {stats?.active_users ?? '-'}
+            </div>
             <div className="text-sm text-muted-foreground">Active Users</div>
           </div>
           <div>
-            <div className="text-4xl font-bold text-primary">0</div>
+            <div className="text-4xl font-bold text-primary">
+              {stats?.segments_created ?? '-'}
+            </div>
             <div className="text-sm text-muted-foreground">Segments Created</div>
           </div>
           <div>
-            <div className="text-4xl font-bold text-primary">0</div>
+            <div className="text-4xl font-bold text-primary">
+              {stats?.activities_uploaded ?? '-'}
+            </div>
             <div className="text-sm text-muted-foreground">Activities Uploaded</div>
           </div>
         </div>

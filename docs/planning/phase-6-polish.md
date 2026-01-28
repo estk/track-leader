@@ -15,24 +15,43 @@ These bugs were discovered during Phase 5 manual verification and should be fixe
 
 **Severity:** High
 **Location:** `/activities/[id]` page
-**Status:** Open
+**Status:** Open - Requires Tracks Table Refactoring
 
 **Description:**
 Clicking on an activity (e.g., "reno tour") from the activities list navigates to the activity detail page, but it shows "Not found" instead of the activity details.
 
-**Steps to Reproduce:**
-1. Login as evan
-2. Go to /activities
-3. Click on "reno tour" activity
-4. Observe "Not found" error
+**Root Cause (Investigated):**
+The `/activities/{id}/track` endpoint returns 404 because it tries to read the raw GPX file from object storage, but the file doesn't exist (activity metadata was created without uploading actual GPX).
 
-**Expected:** Activity details should display with map, elevation profile, stats.
+**Architectural Problem:**
+Currently `get_activity_track` re-parses the GPX file from object storage on every request. This is:
+1. Inefficient (parsing on every request)
+2. Fragile (depends on GPX file existing in object store)
+3. Duplicative (we already parse GPX during upload)
 
-**Investigation Needed:**
-- Check if the activity exists in the database
-- Verify the GET /activities/{id} endpoint is working
-- Check if there's a permission issue (private vs public)
-- Check if the track data exists
+**Fix Required - Tracks Table Refactoring:**
+Extend the existing `tracks` table to store elevation and timestamp data alongside the geometry:
+
+1. **Migration** (`014_tracks_elevation_time.sql` - already created):
+   ```sql
+   ALTER TABLE tracks
+   ADD COLUMN elevations double precision[],
+   ADD COLUMN recorded_times timestamptz[];
+   ```
+
+2. **Update `save_track_geometry`** to also save elevation/time arrays when processing GPX
+
+3. **Update `get_activity_track`** to read from `tracks` table instead of re-parsing GPX:
+   - Extract points from `geo` LineString using `ST_DumpPoints`
+   - Combine with `elevations` and `recorded_times` arrays
+   - Return TrackData response
+
+4. **Backfill existing activities** - Re-process any activities that have GPX files to populate the new columns
+
+**Files to modify:**
+- `crates/tracks/src/database.rs` - Update save_track_geometry, add get_track_data
+- `crates/tracks/src/handlers.rs` - Update get_activity_track to use DB
+- `crates/tracks/src/activity_queue.rs` - Save elevation/time during processing
 
 ---
 
@@ -40,21 +59,18 @@ Clicking on an activity (e.g., "reno tour") from the activities list navigates t
 
 **Severity:** Medium
 **Location:** Homepage (`/`)
-**Status:** Open
+**Status:** ✅ Fixed
 
 **Description:**
 The homepage statistics section shows "0 Active Users", "0 Segments Created", "0 Activities Uploaded" even though there are users and activities in the system.
 
-**Steps to Reproduce:**
-1. Navigate to homepage (/)
-2. Observe stats section at bottom of page
+**Root Cause:** Stats were hardcoded as zeros - no API endpoint existed.
 
-**Expected:** Should show actual counts from the database.
-
-**Investigation Needed:**
-- Check if there's an API endpoint for these stats
-- Verify the homepage is calling the correct endpoint
-- Check if the data is being fetched at all
+**Fix Applied:**
+- Added `GET /stats` endpoint to backend
+- Added `getStats()` method to frontend API client
+- Updated homepage to fetch and display real stats
+- Fixed query (users table doesn't have deleted_at column)
 
 ---
 

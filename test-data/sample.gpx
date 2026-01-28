@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Test" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Test Track</name>
+    <trkseg>
+      <trkpt lat="39.5296" lon="-119.8138">
+        <ele>1370</ele>
+        <time>2026-01-27T10:00:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5300" lon="-119.8130">
+        <ele>1375</ele>
+        <time>2026-01-27T10:01:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5305" lon="-119.8120">
+        <ele>1380</ele>
+        <time>2026-01-27T10:02:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5310" lon="-119.8110">
+        <ele>1390</ele>
+        <time>2026-01-27T10:03:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5315" lon="-119.8100">
+        <ele>1400</ele>
+        <time>2026-01-27T10:04:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5320" lon="-119.8090">
+        <ele>1410</ele>
+        <time>2026-01-27T10:05:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5325" lon="-119.8080">
+        <ele>1420</ele>
+        <time>2026-01-27T10:06:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5330" lon="-119.8070">
+        <ele>1430</ele>
+        <time>2026-01-27T10:07:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5335" lon="-119.8060">
+        <ele>1440</ele>
+        <time>2026-01-27T10:08:00Z</time>
+      </trkpt>
+      <trkpt lat="39.5340" lon="-119.8050">
+        <ele>1450</ele>
+        <time>2026-01-27T10:09:00Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

@@ -706,3 +706,15 @@ pub struct CommentWithUser {
     pub updated_at: Option<OffsetDateTime>,
     pub user_name: String,
 }
+
+// ============================================================================
+// Stats Models
+// ============================================================================
+
+/// Platform statistics for the homepage
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Stats {
+    pub active_users: i64,
+    pub segments_created: i64,
+    pub activities_uploaded: i64,
+}

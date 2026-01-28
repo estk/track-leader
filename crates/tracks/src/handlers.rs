@@ -17,7 +17,7 @@ use crate::{
     models::{
         AchievementType, AchievementWithSegment, Activity, ActivityType, CrownCountEntry,
         DistanceLeaderEntry, LeaderboardFilters, LeaderboardFiltersResponse, LeaderboardPosition,
-        LeaderboardResponse, Segment, SegmentAchievements, SegmentEffort,
+        LeaderboardResponse, Segment, SegmentAchievements, SegmentEffort, Stats,
         UpdateDemographicsRequest, User, UserWithDemographics,
     },
     object_store_service::{FileType, ObjectStoreService},
@@ -1608,4 +1608,14 @@ pub async fn delete_comment(
     } else {
         Err(AppError::NotFound)
     }
+}
+
+// ============================================================================
+// Stats Handlers
+// ============================================================================
+
+/// Get platform-wide statistics (active users, segments created, activities uploaded).
+pub async fn get_stats(Extension(db): Extension<Database>) -> Result<Json<Stats>, AppError> {
+    let stats = db.get_stats().await?;
+    Ok(Json(stats))
 }

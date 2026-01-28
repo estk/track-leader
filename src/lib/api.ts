@@ -330,6 +330,13 @@ export interface Comment {
   user_name: string;
 }
 
+// Stats types
+export interface Stats {
+  active_users: number;
+  segments_created: number;
+  activities_uploaded: number;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -718,6 +725,11 @@ class ApiClient {
     await this.request<void>(`/comments/${commentId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Stats endpoint
+  async getStats(): Promise<Stats> {
+    return this.request<Stats>('/stats');
   }
 }
 

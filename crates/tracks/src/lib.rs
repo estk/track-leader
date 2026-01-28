@@ -29,7 +29,7 @@ use crate::{
         get_kudos_givers, get_kudos_status, get_leaderboard_position, get_my_achievements,
         get_my_demographics, get_my_segment_efforts, get_nearby_segments, get_notifications,
         get_segment, get_segment_achievements, get_segment_leaderboard, get_segment_track,
-        get_starred_segment_efforts, get_starred_segments, get_user_achievements,
+        get_starred_segment_efforts, get_starred_segments, get_stats, get_user_achievements,
         get_user_activities, get_user_profile, give_kudos, health_check, is_segment_starred,
         list_segments, mark_all_notifications_read, mark_notification_read, new_activity, new_user,
         remove_kudos, reprocess_segment, star_segment, unfollow_user, unstar_segment,
@@ -50,6 +50,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
 
     Router::new()
         .route("/health", get(health_check))
+        .route("/stats", get(get_stats))
         // Auth routes
         .route("/auth/register", post(register))
         .route("/auth/login", post(login))

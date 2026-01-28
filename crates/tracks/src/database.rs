@@ -2160,4 +2160,46 @@ impl Database {
 
         Ok(result.rows_affected() as i64)
     }
+
+    // ========================================================================
+    // Stats Methods
+    // ========================================================================
+
+    /// Get platform-wide statistics.
+    pub async fn get_stats(&self) -> Result<crate::models::Stats, AppError> {
+        let active_users: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(DISTINCT id)
+            FROM users
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let segments_created: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM segments
+            WHERE deleted_at IS NULL
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let activities_uploaded: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM activities
+            WHERE deleted_at IS NULL
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(crate::models::Stats {
+            active_users: active_users.0,
+            segments_created: segments_created.0,
+            activities_uploaded: activities_uploaded.0,
+        })
+    }
 }
