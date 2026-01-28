@@ -19,6 +19,7 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followStatusLoaded, setFollowStatusLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const isOwnProfile = currentUser?.id === userId;
@@ -45,6 +46,7 @@ export default function UserProfilePage() {
         if (currentUser) {
           const following = await api.getFollowStatus(userId);
           setIsFollowing(following);
+          setFollowStatusLoaded(true);
         }
       } catch {
         // User not found
@@ -92,7 +94,7 @@ export default function UserProfilePage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Profile</CardTitle>
-            {currentUser && !isOwnProfile && (
+            {currentUser && !isOwnProfile && followStatusLoaded && (
               <FollowButton
                 userId={userId}
                 initialIsFollowing={isFollowing}
