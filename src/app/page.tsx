@@ -1,4 +1,5 @@
-import { Mountain, Trophy, Users, Upload } from "lucide-react";
+import { Features } from "@/components/marketing/features";
+import { FAQ } from "@/components/marketing/faq";
 
 interface Stats {
   active_users: number;
@@ -53,28 +54,7 @@ export default async function Home() {
       </section>
 
       {/* Features Grid */}
-      <section className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-        <FeatureCard
-          icon={<Mountain className="h-8 w-8" />}
-          title="Create Segments"
-          description="Define your own segments from any activity. Your trail, your rules."
-        />
-        <FeatureCard
-          icon={<Trophy className="h-8 w-8" />}
-          title="Compete Openly"
-          description="Transparent leaderboards with demographic filters. Find your competition."
-        />
-        <FeatureCard
-          icon={<Users className="h-8 w-8" />}
-          title="Community Driven"
-          description="Segments created and verified by the community. Quality through collaboration."
-        />
-        <FeatureCard
-          icon={<Upload className="h-8 w-8" />}
-          title="Upload & Track"
-          description="Upload GPX files and automatically match to segments. See your progress."
-        />
-      </section>
+      <Features />
 
       {/* Stats Section */}
       <section className="rounded-lg border bg-card p-8">
@@ -99,24 +79,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
-    </div>
-  );
-}
 
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-lg border bg-card p-6">
-      <div className="text-primary mb-4">{icon}</div>
-      <h3 className="font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground">{description}</p>
+      {/* FAQ Section */}
+      <FAQ />
     </div>
   );
 }

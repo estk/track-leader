@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use std::env;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use tracks::run_server;
@@ -16,9 +16,22 @@ async fn main() -> anyhow::Result<()> {
     let database_url =
         env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://docker:pg@0.0.0.0".to_string());
 
-    tracing::info!("Connecting to database at {}", database_url);
+    tracing::info!("Connecting to database at {database_url}");
 
-    let pool = PgPool::connect(&database_url).await?;
+    // Configure connection pool for production workloads
+    let pool = PgPoolOptions::new()
+        .max_connections(env::var("DB_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10))
+        .min_connections(env::var("DB_MIN_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2))
+        .acquire_timeout(std::time::Duration::from_secs(10))
+        .idle_timeout(std::time::Duration::from_secs(300))
+        .connect(&database_url)
+        .await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 

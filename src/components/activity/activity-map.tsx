@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { TrackData } from "@/lib/api";
+import { simplifyRoute, getAdaptiveTolerance } from "@/lib/route-simplify";
 
 interface ActivityMapProps {
   trackData: TrackData;
@@ -62,7 +63,12 @@ export function ActivityMap({
       if (!map.current) return;
       setLoaded(true);
 
-      const coordinates = trackData.points.map((p) => [p.lon, p.lat]);
+      // Simplify route for better performance on large tracks
+      const tolerance = getAdaptiveTolerance(trackData.points.length);
+      const displayPoints = tolerance > 0
+        ? simplifyRoute(trackData.points, tolerance)
+        : trackData.points;
+      const coordinates = displayPoints.map((p) => [p.lon, p.lat]);
 
       map.current.addSource("route", {
         type: "geojson",

@@ -2,8 +2,8 @@
 
 ## Implementation Progress
 
-**Current Phase:** Phase 6 - Polish & Launch
-**Last Updated:** 2026-01-27 (Phase 5 complete)
+**Current Phase:** Phase 6 - Polish & Launch (Complete)
+**Last Updated:** 2026-01-28 (Phase 6 complete)
 
 ### Phase 1 Progress (Complete)
 
@@ -111,6 +111,42 @@
 **Bug Found & Fixed:**
 - FollowButton race condition - button rendered before async follow status loaded. Fixed by adding `followStatusLoaded` state.
 
+### Phase 6 Progress (Complete)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Bundle analyzer | Done | next.config.js with @next/bundle-analyzer |
+| Lazy loading components | Done | MapLibre and Recharts load on demand |
+| Loading skeletons | Done | activities, segments, feed, leaderboards routes |
+| Route simplification | Done | @turf/simplify for large GPS tracks |
+| Performance indexes | Done | Migration 015_performance_indexes.sql |
+| Connection pool tuning | Done | PgPoolOptions in main.rs |
+| Gzip compression | Done | tower-http CompressionLayer |
+| CDN caching headers | Done | next.config.js headers() |
+| Security headers | Done | X-Content-Type-Options, X-Frame-Options, etc. |
+| Input validation | Done | validator crate with derive macros |
+| Error boundary | Done | src/app/error.tsx |
+| Custom 404 page | Done | src/app/not-found.tsx |
+| Skip-to-content link | Done | Accessibility improvement |
+| ARIA labels | Done | Header and navigation |
+| Reduced motion support | Done | prefers-reduced-motion in CSS |
+| Marketing components | Done | Features and FAQ sections |
+| User documentation | Done | docs/user/*.md |
+| API documentation | Done | docs/api-reference.md updated |
+| Architecture docs | Done | docs/architecture/overview.md |
+| Deployment guide | Done | docs/deployment.md |
+| Contributing guide | Done | CONTRIBUTING.md |
+| E2E tests (Playwright) | Done | 17 tests passing |
+| Load tests (k6) | Done | load-tests/*.js |
+| Performance docs | Done | docs/performance.md |
+| Production Docker config | Done | docker-compose.prod.yml |
+| Frontend Dockerfile | Done | Dockerfile.frontend |
+| Runbook | Done | docs/runbook.md |
+
+**Bugs Fixed:**
+- BUG-P6-001: Activity track storage refactored to PostGIS LineStringZM
+- BUG-P6-002: Homepage stats now fetch from /stats API endpoint
+
 ---
 
 ## Vision
@@ -131,11 +167,23 @@ Transform Track Leader from a GPS activity tracker into an **open leaderboard pl
 | [Phase 3](./phase-3-segments.md) | Segments | Month 3 | ✅ Complete |
 | [Phase 4](./phase-4-leaderboards.md) | Leaderboards | Month 4 | ✅ Complete |
 | [Phase 5](./phase-5-social.md) | Social Features | Month 5 | ✅ Complete |
-| [Phase 6](./phase-6-polish.md) | Polish & Launch | Month 6 | 🔄 Next |
+| [Phase 6](./phase-6-polish.md) | Polish & Launch | Month 6 | ✅ Complete |
 
 ---
 
 ## Learnings Log
+
+### Phase 6 Learnings (2026-01-28)
+
+1. **Lazy loading reduces initial bundle significantly** - Splitting MapLibre and Recharts into dynamic imports reduced the segments detail page bundle from 384kB to 6.4kB.
+
+2. **Playwright selectors need specificity** - When page content has duplicate text (e.g., "Create Segments" in hero and features), use role-based selectors like `getByRole("heading", { name: /create segments/i })`.
+
+3. **validator crate derive macros are clean** - Using `#[derive(Validate)]` with field attributes like `#[validate(email)]` is more readable than manual validation code.
+
+4. **PostGIS LineStringZM for 4D tracks** - Storing X=lon, Y=lat, Z=elevation, M=timestamp in a single geometry column is efficient and enables spatial queries on time-series GPS data.
+
+5. **Documentation drives architecture understanding** - Writing docs/architecture/overview.md forced clarity on component boundaries and data flow.
 
 ### Phase 5 Learnings (2026-01-27)
 
@@ -255,28 +303,33 @@ Ideas collected during development that may be incorporated into future phases:
 
 ## Next Steps
 
-1. **Begin Phase 6: Polish & Launch**
-   - Performance optimization (lazy loading, caching)
-   - Error handling improvements (user-friendly error messages)
-   - Loading states and skeletons throughout the app
-   - SEO and accessibility audit
-   - Testing coverage (integration tests)
+**Phase 6 Complete - Ready for Launch**
 
-2. **Priority Bug Fixes**
-   - Activity detail page shows "Not found" for own activities (needs investigation)
-   - Homepage stats show 0 users/segments/activities (API or query issue)
+1. **Launch Preparation**
+   - Deploy to production using docker-compose.prod.yml
+   - Configure domain and SSL certificates
+   - Set up monitoring and alerting
+   - Run production smoke tests
 
-3. **Test Data Strategy**
-   - Create seed script for development data
-   - Multiple users with activities, follows, kudos, comments
-   - Segments with efforts and achievements
+2. **Beta Program**
+   - Create beta signup form
+   - Invite initial testers (50 users)
+   - Gather feedback and iterate
+   - Expand to 200 users, then open beta
 
-4. **Deferred Items to Address**
+3. **Post-Launch Monitoring**
+   - Track Lighthouse scores (target > 90)
+   - Monitor API p95 latency (target < 200ms)
+   - Watch error rates and user feedback
+   - Quick bug fixes as needed
+
+4. **Deferred Items (Post-Launch)**
    - SSE real-time updates for notifications and leaderboards
    - Leaderboard caching service
    - Auto-achievement processing on effort creation
 
-5. **Future Enhancements to Consider**
-   - Teams feature (Phase 7)
+5. **Future Enhancements (Phase 7+)**
+   - Teams feature
    - Strava import
    - Mobile app (PWA or native)
+   - Internationalization

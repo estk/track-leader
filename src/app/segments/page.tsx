@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SegmentsMap } from "@/components/segments/segments-map";
+import { LazySegmentsMap } from "@/components/segments/lazy-segments-map";
 
 type ViewMode = "list" | "map";
 
@@ -486,7 +486,7 @@ function SegmentsContent({
         visibility: "public" as const,
         created_at: "",
       }));
-      return <SegmentsMap segments={mapSegments} />;
+      return <LazySegmentsMap segments={mapSegments} />;
     }
 
     return (
@@ -564,7 +564,7 @@ function SegmentsContent({
   }
 
   if (viewMode === "map") {
-    return <SegmentsMap segments={filteredSegments} />;
+    return <LazySegmentsMap segments={filteredSegments} />;
   }
 
   return (

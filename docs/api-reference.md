@@ -1,206 +1,17 @@
 # API Reference
 
-## Current API (Rust Backend)
+Track Leader REST API documentation.
 
-Base URL: `http://localhost:3000`
+## Base URL
 
-### Health Check
+- Development: `http://localhost:3001`
+- Production: `https://api.trackleader.com`
 
-```http
-GET /health
-```
+## Authentication
 
-**Response:** `200 OK` (empty body)
+Most endpoints require authentication via JWT token.
 
----
-
-### Users
-
-#### Create User
-
-```http
-GET /users/new?name={name}&email={email}
-```
-
-**Note:** Should be POST, but currently implemented as GET.
-
-**Query Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| name | string | Yes | User's display name |
-| email | string | Yes | User's email (must be unique) |
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "email": "user@example.com",
-  "name": "John Doe",
-  "created_at": "2026-01-26T12:00:00Z"
-}
-```
-
-**Errors:**
-- `500` - Database error (e.g., duplicate email)
-
----
-
-#### List Users
-
-```http
-GET /users
-```
-
-**Response:**
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "created_at": "2026-01-26T12:00:00Z"
-  }
-]
-```
-
----
-
-### Activities
-
-#### Upload Activity
-
-```http
-POST /activities/new?user_id={uuid}&activity_type={type}&name={name}
-Content-Type: multipart/form-data
-```
-
-**Query Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| user_id | UUID | Yes | User who owns this activity |
-| activity_type | enum | Yes | Type of activity |
-| name | string | Yes | Activity name/title |
-
-**Activity Types:**
-- `Walking`
-- `Running`
-- `Hiking`
-- `RoadCycling`
-- `MountainBiking`
-- `Unknown`
-
-**Form Data:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| file | file | Yes | GPX file |
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440001",
-  "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "activity_type": "Running",
-  "name": "Morning Run",
-  "object_store_path": "activities/550e8400.../550e8400...",
-  "submitted_at": "2026-01-26T12:00:00Z"
-}
-```
-
-**Errors:**
-- `400` - No file provided
-- `400` - Failed to process multipart data
-- `500` - Failed to store file
-
-**Note:** Scores are calculated asynchronously and not returned in this response.
-
----
-
-#### Get Activity
-
-```http
-GET /activities/{id}
-```
-
-**Path Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | UUID | Activity ID |
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440001",
-  "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "activity_type": "Running",
-  "name": "Morning Run",
-  "object_store_path": "activities/550e8400.../550e8400...",
-  "submitted_at": "2026-01-26T12:00:00Z"
-}
-```
-
-**Errors:**
-- `404` - Activity not found
-
-**Note:** Scores are not included (should be joined).
-
----
-
-#### Download GPX File
-
-```http
-GET /activities/{id}/download
-```
-
-**Path Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | UUID | Activity ID |
-
-**Response:**
-```
-Content-Type: application/gpx+xml
-Content-Disposition: attachment; filename="activity-name"
-```
-
-Body contains the original GPX file bytes.
-
-**Errors:**
-- `404` - Activity not found
-
----
-
-#### Get User Activities
-
-```http
-GET /users/{id}/activities
-```
-
-**Path Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | UUID | User ID |
-
-**Response:**
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440001",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
-    "activity_type": "Running",
-    "name": "Morning Run",
-    "object_store_path": "activities/550e8400.../550e8400...",
-    "submitted_at": "2026-01-26T12:00:00Z"
-  }
-]
-```
-
-**Note:** No pagination implemented.
-
----
-
-## Proposed API Extensions
-
-### Authentication
+### Register
 
 ```http
 POST /auth/register
@@ -213,6 +24,20 @@ Content-Type: application/json
 }
 ```
 
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "user@example.com",
+    "name": "John Doe"
+  }
+}
+```
+
+### Login
+
 ```http
 POST /auth/login
 Content-Type: application/json
@@ -223,30 +48,109 @@ Content-Type: application/json
 }
 ```
 
-Response includes JWT token or sets session cookie.
-
-```http
-POST /auth/logout
-Authorization: Bearer {token}
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "user@example.com",
+    "name": "John Doe"
+  }
+}
 ```
+
+### Get Current User
 
 ```http
 GET /auth/me
 Authorization: Bearer {token}
 ```
 
-### Activities (Enhanced)
+**Response:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "user@example.com",
+  "name": "John Doe"
+}
+```
+
+---
+
+## Health & Stats
+
+### Health Check
+
+```http
+GET /health
+```
+
+**Response:** `200 OK`
+
+### Platform Stats
+
+```http
+GET /stats
+```
+
+**Response:**
+```json
+{
+  "active_users": 1234,
+  "segments_created": 567,
+  "activities_uploaded": 8901
+}
+```
+
+---
+
+## Activities
+
+### Upload Activity
+
+```http
+POST /activities/new
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
+
+user_id: {uuid}
+activity_type: Running
+name: Morning Run
+file: [GPX file]
+```
+
+**Activity Types:**
+- `Walking`
+- `Running`
+- `Hiking`
+- `RoadCycling`
+- `MountainBiking`
+- `Unknown`
+
+**Response:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440001",
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "activity_type": "Running",
+  "name": "Morning Run",
+  "submitted_at": "2026-01-26T12:00:00Z"
+}
+```
+
+### Get Activity
 
 ```http
 GET /activities/{id}
 Authorization: Bearer {token}
 ```
 
-Response includes scores:
+**Response:**
 ```json
 {
-  "id": "...",
-  "user_id": "...",
+  "id": "550e8400-e29b-41d4-a716-446655440001",
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
   "activity_type": "Running",
   "name": "Morning Run",
   "submitted_at": "2026-01-26T12:00:00Z",
@@ -254,30 +158,84 @@ Response includes scores:
     "distance": 5234.5,
     "duration": 1845.0,
     "elevation_gain": 125.3
-  },
-  "segments": [
-    {
-      "segment_id": "...",
-      "segment_name": "Hill Climb",
-      "elapsed_time": 245.0,
-      "rank": 15
-    }
-  ]
+  }
 }
 ```
 
-### Segments
+### Delete Activity
 
 ```http
-GET /segments
+DELETE /activities/{id}
 Authorization: Bearer {token}
 ```
 
-Query parameters:
-- `lat`, `lon`, `radius` - Search by location
-- `activity_type` - Filter by activity type
-- `starred` - Only starred segments
-- `created_by` - Filter by creator
+**Response:** `204 No Content`
+
+### Get Activity Track
+
+```http
+GET /activities/{id}/track
+```
+
+**Response:**
+```json
+{
+  "type": "LineString",
+  "coordinates": [[lon1, lat1, ele1], [lon2, lat2, ele2], ...]
+}
+```
+
+### Get Activity Segments
+
+```http
+GET /activities/{id}/segments
+```
+
+Returns all segment efforts recorded for this activity.
+
+### Download GPX File
+
+```http
+GET /activities/{id}/download
+```
+
+**Response:**
+```
+Content-Type: application/gpx+xml
+Content-Disposition: attachment; filename="activity.gpx"
+```
+
+### Get User Activities
+
+```http
+GET /users/{id}/activities
+Authorization: Bearer {token}
+```
+
+---
+
+## Segments
+
+### List Segments
+
+```http
+GET /segments
+```
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| activity_type | string | Filter by activity type |
+| limit | number | Results per page (default 50) |
+| offset | number | Pagination offset |
+
+### Get Nearby Segments
+
+```http
+GET /segments/nearby?lat={lat}&lon={lon}&radius={meters}
+```
+
+### Create Segment
 
 ```http
 POST /segments
@@ -288,92 +246,234 @@ Content-Type: application/json
   "name": "Summit Push",
   "description": "Final climb to the peak",
   "activity_type": "Hiking",
-  "geo": {
-    "type": "LineString",
-    "coordinates": [[lon1, lat1], [lon2, lat2], ...]
-  }
+  "activity_id": "550e8400-e29b-41d4-a716-446655440001",
+  "start_index": 100,
+  "end_index": 250
 }
 ```
+
+### Get Segment
 
 ```http
 GET /segments/{id}
 ```
 
+**Response:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440002",
+  "name": "Summit Push",
+  "description": "Final climb to the peak",
+  "activity_type": "Hiking",
+  "distance": 1234.5,
+  "elevation_gain": 150.0,
+  "created_by": "550e8400-e29b-41d4-a716-446655440000",
+  "created_at": "2026-01-26T12:00:00Z"
+}
+```
+
+### Get Segment Track
+
+```http
+GET /segments/{id}/track
+```
+
+### Get Segment Leaderboard
+
 ```http
 GET /segments/{id}/leaderboard
 ```
 
-Query parameters:
-- `scope` - `all_time`, `year`, `month`, `week`
-- `gender` - `all`, `male`, `female`
-- `age_group` - `all`, `18-24`, `25-34`, etc.
-- `limit` - Number of results (default 10)
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| gender | string | Filter: `male`, `female`, `all` |
+| age_group | string | Filter: `18-29`, `30-39`, etc. |
+| limit | number | Results per page |
+
+**Response:**
+```json
+{
+  "entries": [
+    {
+      "rank": 1,
+      "user_id": "...",
+      "user_name": "Jane Doe",
+      "elapsed_time": 245.5,
+      "recorded_at": "2026-01-26T12:00:00Z",
+      "activity_id": "..."
+    }
+  ],
+  "kom": {...},
+  "qom": {...}
+}
+```
+
+### Star/Unstar Segment
 
 ```http
 POST /segments/{id}/star
 DELETE /segments/{id}/star
+Authorization: Bearer {token}
 ```
 
-### Trails
+### Get Starred Segments
 
 ```http
-GET /trails
-POST /trails
-GET /trails/{id}
-GET /trails/{id}/leaderboard
-POST /trails/{id}/star
-DELETE /trails/{id}/star
+GET /segments/starred
+Authorization: Bearer {token}
 ```
 
-### Leaderboards
+### Get My Efforts on Segment
 
 ```http
-GET /leaderboards/segments/{segment_id}
-GET /leaderboards/trails/{trail_id}
-GET /leaderboards/global
+GET /segments/{id}/my-efforts
+Authorization: Bearer {token}
 ```
 
-### Social
+### Get Segment Achievements
 
 ```http
-POST /users/{id}/follow
-DELETE /users/{id}/follow
-GET /users/{id}/followers
-GET /users/{id}/following
-```
-
-```http
-POST /activities/{id}/kudos
-DELETE /activities/{id}/kudos
-GET /activities/{id}/kudos
-```
-
-```http
-POST /activities/{id}/comments
-GET /activities/{id}/comments
-DELETE /comments/{id}
-```
-
-### Metrics
-
-```http
-GET /metrics
-POST /metrics
-GET /activities/{id}/metrics
+GET /segments/{id}/achievements
 ```
 
 ---
 
-## Error Response Format
+## Leaderboards
 
-All errors should return consistent JSON:
+### Crown Leaderboard
+
+```http
+GET /leaderboards/crowns
+```
+
+Returns users ranked by total crowns (KOMs + QOMs).
+
+### Distance Leaderboard
+
+```http
+GET /leaderboards/distance
+```
+
+Returns users ranked by total distance.
+
+---
+
+## User Profiles
+
+### Get User Profile
+
+```http
+GET /users/{id}/profile
+```
+
+### Update Profile
+
+```http
+PUT /users/me/profile
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "gender": "male",
+  "birth_year": 1990
+}
+```
+
+### Get User Achievements
+
+```http
+GET /users/{id}/achievements
+GET /users/me/achievements
+Authorization: Bearer {token}
+```
+
+---
+
+## Social Features
+
+### Follow/Unfollow User
+
+```http
+POST /users/{id}/follow
+DELETE /users/{id}/follow
+Authorization: Bearer {token}
+```
+
+### Get Followers/Following
+
+```http
+GET /users/{id}/followers
+GET /users/{id}/following
+```
+
+### Activity Feed
+
+```http
+GET /feed
+Authorization: Bearer {token}
+```
+
+Returns activities from followed users.
+
+### Kudos
+
+```http
+POST /activities/{id}/kudos
+DELETE /activities/{id}/kudos
+GET /activities/{id}/kudos/givers
+Authorization: Bearer {token}
+```
+
+### Comments
+
+```http
+GET /activities/{id}/comments
+POST /activities/{id}/comments
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "body": "Great run!"
+}
+```
+
+```http
+DELETE /comments/{id}
+Authorization: Bearer {token}
+```
+
+---
+
+## Notifications
+
+### Get Notifications
+
+```http
+GET /notifications
+Authorization: Bearer {token}
+```
+
+### Mark as Read
+
+```http
+POST /notifications/{id}/read
+POST /notifications/read-all
+Authorization: Bearer {token}
+```
+
+---
+
+## Error Responses
+
+All errors return consistent JSON:
 
 ```json
 {
   "error": {
     "code": "NOT_FOUND",
-    "message": "Activity not found",
-    "details": {}
+    "message": "Activity not found"
   }
 }
 ```
@@ -391,9 +491,26 @@ All errors should return consistent JSON:
 
 ---
 
+## Rate Limiting
+
+| Tier | Limit |
+|------|-------|
+| Anonymous | 60 requests/minute |
+| Authenticated | 300 requests/minute |
+| Uploads | 10 files/hour |
+
+Response headers:
+```
+X-RateLimit-Limit: 300
+X-RateLimit-Remaining: 299
+X-RateLimit-Reset: 1706284800
+```
+
+---
+
 ## Pagination
 
-All list endpoints should support:
+List endpoints support pagination:
 
 ```http
 GET /activities?limit=20&offset=0
@@ -412,29 +529,3 @@ Response includes pagination metadata:
   }
 }
 ```
-
----
-
-## Rate Limiting
-
-Recommended limits:
-- Anonymous: 60 requests/minute
-- Authenticated: 300 requests/minute
-- Uploads: 10 files/hour
-
-Response headers:
-```
-X-RateLimit-Limit: 300
-X-RateLimit-Remaining: 299
-X-RateLimit-Reset: 1706284800
-```
-
----
-
-## CORS Configuration
-
-Current: All origins allowed (development mode)
-
-Production should restrict to:
-- Frontend domain
-- Mobile app origins (if applicable)

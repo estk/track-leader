@@ -12,6 +12,7 @@ use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode}
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
+use validator::Validate;
 
 use crate::{database::Database, errors::AppError, models::User};
 
@@ -30,16 +31,21 @@ pub struct Claims {
     pub iat: i64, // issued at
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct RegisterRequest {
+    #[validate(email(message = "Invalid email address"))]
     pub email: String,
+    #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     pub password: String,
+    #[validate(length(min = 1, max = 100, message = "Name must be between 1 and 100 characters"))]
     pub name: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
+    #[validate(email(message = "Invalid email address"))]
     pub email: String,
+    #[validate(length(min = 1, message = "Password is required"))]
     pub password: String,
 }
 
@@ -144,18 +150,19 @@ pub async fn register(
     Extension(db): Extension<Database>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    // Validate input
-    if req.email.is_empty() || !req.email.contains('@') {
-        return Err(AppError::InvalidInput("Invalid email".to_string()));
-    }
-    if req.password.len() < 8 {
-        return Err(AppError::InvalidInput(
-            "Password must be at least 8 characters".to_string(),
-        ));
-    }
-    if req.name.is_empty() {
-        return Err(AppError::InvalidInput("Name is required".to_string()));
-    }
+    // Validate input using validator crate
+    req.validate().map_err(|e| {
+        let messages: Vec<String> = e
+            .field_errors()
+            .into_iter()
+            .flat_map(|(_, errors)| {
+                errors
+                    .iter()
+                    .filter_map(|e| e.message.as_ref().map(|m| m.to_string()))
+            })
+            .collect();
+        AppError::InvalidInput(messages.join(", "))
+    })?;
 
     // Check if user exists
     if db.get_user_by_email(&req.email).await?.is_some() {
@@ -183,6 +190,20 @@ pub async fn login(
     Extension(db): Extension<Database>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
+    // Validate input
+    req.validate().map_err(|e| {
+        let messages: Vec<String> = e
+            .field_errors()
+            .into_iter()
+            .flat_map(|(_, errors)| {
+                errors
+                    .iter()
+                    .filter_map(|e| e.message.as_ref().map(|m| m.to_string()))
+            })
+            .collect();
+        AppError::InvalidInput(messages.join(", "))
+    })?;
+
     let (user, password_hash) = db
         .get_user_with_password(&req.email)
         .await?

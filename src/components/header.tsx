@@ -21,14 +21,22 @@ export function Header() {
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
-    <header className="border-b">
+    <header className="border-b" role="banner">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold text-primary">
+        <Link
+          href="/"
+          className="text-xl font-bold text-primary"
+          aria-label="Track Leader - Home"
+        >
           Track Leader
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-6">
+        <nav
+          className="hidden md:flex items-center gap-6"
+          role="navigation"
+          aria-label="Main navigation"
+        >
           {user && (
             <Link href="/feed" className="text-muted-foreground hover:text-foreground">
               Feed
@@ -76,7 +84,9 @@ export function Header() {
         <button
           className="md:hidden p-2"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle menu"
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-nav"
         >
           <svg
             className="w-6 h-6"
@@ -105,7 +115,12 @@ export function Header() {
 
       {/* Mobile nav */}
       {mobileMenuOpen && (
-        <nav className="md:hidden border-t bg-background">
+        <nav
+          id="mobile-nav"
+          className="md:hidden border-t bg-background"
+          role="navigation"
+          aria-label="Mobile navigation"
+        >
           <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
             {user && (
               <Link

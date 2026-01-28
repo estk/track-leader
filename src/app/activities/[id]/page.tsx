@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ActivityMap } from "@/components/activity/activity-map";
-import { ElevationProfile } from "@/components/activity/elevation-profile";
+import { LazyActivityMap } from "@/components/activity/lazy-activity-map";
+import { LazyElevationProfile } from "@/components/activity/lazy-elevation-profile";
 import { Textarea } from "@/components/ui/textarea";
 
 const ACTIVITY_TYPES = [
@@ -612,7 +612,7 @@ export default function ActivityDetailPage() {
           <CardTitle>Route</CardTitle>
         </CardHeader>
         <CardContent>
-          <ActivityMap
+          <LazyActivityMap
             trackData={trackData}
             highlightIndex={highlightIndex ?? undefined}
             selectionStart={segmentMode ? segmentStart : highlightedSegment?.start ?? null}
@@ -626,7 +626,7 @@ export default function ActivityDetailPage() {
           <CardTitle>Elevation Profile</CardTitle>
         </CardHeader>
         <CardContent>
-          <ElevationProfile
+          <LazyElevationProfile
             points={trackData.points}
             onHover={setHighlightIndex}
             selectionMode={segmentMode}

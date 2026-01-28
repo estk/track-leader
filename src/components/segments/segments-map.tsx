@@ -6,6 +6,7 @@ import maplibregl, { GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { api, Segment, SegmentTrackData } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { simplifyRoute, getAdaptiveTolerance } from "@/lib/route-simplify";
 
 interface SegmentWithTrack {
   segment: Segment;
@@ -231,7 +232,12 @@ export function SegmentsMap({ segments }: SegmentsMapProps) {
 
       // Add each segment as a separate source and layer (visible at higher zoom)
       segmentsWithTracks.forEach(({ segment, track }, index) => {
-        const coordinates = track.points.map((p) => [p.lon, p.lat]);
+        // Simplify route for better performance
+        const tolerance = getAdaptiveTolerance(track.points.length);
+        const displayPoints = tolerance > 0
+          ? simplifyRoute(track.points, tolerance)
+          : track.points;
+        const coordinates = displayPoints.map((p) => [p.lon, p.lat]);
         const color = SEGMENT_COLORS[index % SEGMENT_COLORS.length];
         const sourceId = `segment-${segment.id}`;
         const layerId = `segment-line-${segment.id}`;

@@ -11,11 +11,15 @@ pub mod segment_matching;
 
 use axum::{
     Extension, Router,
-    http::Method,
+    http::{HeaderValue, Method, header},
     routing::{get, post},
 };
 use sqlx::PgPool;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::{
+    compression::CompressionLayer,
+    cors::{Any, CorsLayer},
+    set_header::SetResponseHeaderLayer,
+};
 
 use crate::{
     activity_queue::ActivityQueue,
@@ -143,6 +147,24 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .layer(Extension(store))
         .layer(Extension(aq))
         .layer(cors)
+        .layer(CompressionLayer::new())
+        // Security headers
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_XSS_PROTECTION,
+            HeaderValue::from_static("1; mode=block"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
 }
 
 pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> anyhow::Result<()> {
