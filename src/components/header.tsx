@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "./ui/button";
+import { NotificationBell } from "./notifications/notification-bell";
 
 export function Header() {
   const router = useRouter();
@@ -47,6 +48,7 @@ export function Header() {
               <span className="text-muted-foreground text-sm">Loading...</span>
             ) : user ? (
               <>
+                <NotificationBell />
                 <Link href="/profile" className="text-sm text-muted-foreground hover:text-foreground">
                   {user.name}
                 </Link>
@@ -140,6 +142,13 @@ export function Header() {
                 <span className="text-muted-foreground text-sm">Loading...</span>
               ) : user ? (
                 <>
+                  <Link
+                    href="/notifications"
+                    className="text-muted-foreground hover:text-foreground py-2"
+                    onClick={closeMobileMenu}
+                  >
+                    Notifications
+                  </Link>
                   <Link
                     href="/profile"
                     className="text-muted-foreground hover:text-foreground py-2"
