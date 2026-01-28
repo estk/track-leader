@@ -7,6 +7,57 @@
 
 ---
 
+## Known Bugs (from Phase 5 Testing)
+
+These bugs were discovered during Phase 5 manual verification and should be fixed early in Phase 6:
+
+### BUG-P6-001: Activity Detail Page Shows "Not Found"
+
+**Severity:** High
+**Location:** `/activities/[id]` page
+**Status:** Open
+
+**Description:**
+Clicking on an activity (e.g., "reno tour") from the activities list navigates to the activity detail page, but it shows "Not found" instead of the activity details.
+
+**Steps to Reproduce:**
+1. Login as evan
+2. Go to /activities
+3. Click on "reno tour" activity
+4. Observe "Not found" error
+
+**Expected:** Activity details should display with map, elevation profile, stats.
+
+**Investigation Needed:**
+- Check if the activity exists in the database
+- Verify the GET /activities/{id} endpoint is working
+- Check if there's a permission issue (private vs public)
+- Check if the track data exists
+
+---
+
+### BUG-P6-002: Homepage Stats Show Zero
+
+**Severity:** Medium
+**Location:** Homepage (`/`)
+**Status:** Open
+
+**Description:**
+The homepage statistics section shows "0 Active Users", "0 Segments Created", "0 Activities Uploaded" even though there are users and activities in the system.
+
+**Steps to Reproduce:**
+1. Navigate to homepage (/)
+2. Observe stats section at bottom of page
+
+**Expected:** Should show actual counts from the database.
+
+**Investigation Needed:**
+- Check if there's an API endpoint for these stats
+- Verify the homepage is calling the correct endpoint
+- Check if the data is being fetched at all
+
+---
+
 ## Objectives
 
 1. Performance optimization
