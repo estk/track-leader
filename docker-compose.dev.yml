@@ -48,7 +48,9 @@ services:
       - ./crates/tracks/migrations:/app/crates/tracks/migrations:cached
       - ./crates/tracks/Cargo.toml:/app/crates/tracks/Cargo.toml:cached
       - ./crates/tracks/.sqlx:/app/crates/tracks/.sqlx:cached
-      - ./crates/test-data:/app/crates/test-data:cached
+      # Mount test-data crate (referenced by workspace)
+      - ./crates/test-data/src:/app/crates/test-data/src:cached
+      - ./crates/test-data/Cargo.toml:/app/crates/test-data/Cargo.toml:cached
       - cargo_cache:/usr/local/cargo/registry
       - target_cache:/app/target
       - uploads:/app/uploads
