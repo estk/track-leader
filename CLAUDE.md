@@ -7,55 +7,78 @@
 ### Starting the Dev Environment
 
 ```bash
-# From project root - creates detached tmux session and returns immediately
+# From project root - creates detached zellij session and returns immediately
 ./scripts/start-dev.sh
 ```
 
-The script creates a tmux session named `track-leader` with 3 panes:
-- **Pane 0 (left):** PostgreSQL via docker-compose
-- **Pane 1 (top-right):** Rust/Axum backend on port 3001
-- **Pane 2 (bottom-right):** Next.js frontend on port 3000
+The script creates a zellij session named `track-leader` with 3 panes:
+- **Left (30%):** PostgreSQL via docker-compose
+- **Top-right:** Rust/Axum backend on port 3001
+- **Bottom-right:** Next.js frontend on port 3000
+
+### Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `./scripts/start-dev.sh` | Start all services in a zellij session |
+| `./scripts/stop-dev.sh` | Stop all services and kill the session |
+| `./scripts/attach-dev.sh` | Attach to the running zellij session |
+| `./scripts/restart-service.sh <service>` | Restart a specific service (backend, frontend, postgres, all) |
+| `./scripts/dev-status.sh` | Show status of all services and ports |
+| `./scripts/watch-logs.sh [component]` | Follow logs in real-time |
+| `./scripts/peek-logs.sh [component] [lines]` | Show recent log entries |
 
 ### Checking Logs
 
 ```bash
-# View latest backend logs
+# Follow all logs (with color highlighting)
+./scripts/watch-logs.sh
+
+# Follow specific component logs
+./scripts/watch-logs.sh backend
+./scripts/watch-logs.sh frontend
+./scripts/watch-logs.sh postgres
+
+# Peek at recent log entries (default: last 50 lines)
+./scripts/peek-logs.sh backend
+./scripts/peek-logs.sh frontend 100
+
+# Direct tail access
 tail -f logs/backend_latest.log
-
-# View latest frontend logs
 tail -f logs/frontend_latest.log
-
-# Check tmux pane output directly
-tmux capture-pane -t track-leader:dev.1 -p | tail -20  # Backend pane
-tmux capture-pane -t track-leader:dev.2 -p | tail -20  # Frontend pane
 ```
 
 ### Restarting Components
 
-Panes are configured with `remain-on-exit on`, so after Ctrl-C the pane stays open (shows "Pane is dead"). To restart:
-
 ```bash
-# Respawn backend pane - reruns the original command
-tmux respawn-pane -t track-leader:dev.1
+# Restart specific services
+./scripts/restart-service.sh backend
+./scripts/restart-service.sh frontend
+./scripts/restart-service.sh postgres
 
-# Respawn frontend pane
-tmux respawn-pane -t track-leader:dev.2
-
-# Respawn postgres pane
-tmux respawn-pane -t track-leader:dev.0
+# Restart everything (with proper sequencing)
+./scripts/restart-service.sh all
 ```
 
-Or interactively: attach to the session, select the dead pane, and press `Ctrl+b` then type `:respawn-pane`
+### Attaching to the Session
+
+```bash
+# Attach to see pane output directly
+./scripts/attach-dev.sh
+# or: zellij attach track-leader
+
+# Detach: Ctrl+o, then d
+```
 
 ### Stopping Everything
 
 ```bash
-tmux kill-session -t track-leader
+./scripts/stop-dev.sh
 ```
 
 ### Why This Matters
 
-- User can peek at the tmux session to see what's happening
+- User can peek at the zellij session to see what's happening
 - Logs are preserved in `logs/` directory
 - All components run from correct directories
 - Prevents issues like running from wrong project directory

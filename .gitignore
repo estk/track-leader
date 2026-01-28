@@ -55,6 +55,9 @@ uploads
 # Development logs
 logs/
 
+# Generated zellij layout
+scripts/.dev-layout-generated.kdl
+
 # Playwright test artifacts
 test-results/
 playwright-report/

@@ -1,9 +1,9 @@
 #!/bin/bash
-# start-dev.sh - Start all Track Leader development components in tmux
+# start-dev.sh - Start all Track Leader development components in zellij
 #
 # Usage: ./scripts/start-dev.sh
 #
-# Creates a tmux session with 3 panes:
+# Creates a zellij session with 3 panes:
 #   - PostgreSQL (docker)
 #   - Backend (Rust/Axum on port 3001)
 #   - Frontend (Next.js on port 3000)
@@ -11,6 +11,9 @@
 # Logs are saved to ./logs/ directory
 
 set -e
+
+# Add nix profile to PATH if it exists (for zellij)
+[ -d "$HOME/.nix-profile/bin" ] && export PATH="$HOME/.nix-profile/bin:$PATH"
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
@@ -45,7 +48,7 @@ echo "  - Frontend:   $FRONTEND_LOG"
 echo ""
 
 # Kill existing session if it exists
-tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
+zellij delete-session "$SESSION_NAME" --force 2>/dev/null || true
 
 # Kill any stray processes on our ports
 for port in 3000 3001; do
@@ -57,38 +60,71 @@ for port in 3000 3001; do
     fi
 done
 
-# Create new tmux session with PostgreSQL pane
-tmux new-session -d -s "$SESSION_NAME" -n "dev" \
-    "echo '=== PostgreSQL ===' && cd '$PROJECT_ROOT/crates/tracks' && docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'"
+# Generate the layout file with actual paths embedded
+LAYOUT_FILE="$PROJECT_ROOT/scripts/.dev-layout-generated.kdl"
 
-# Keep panes alive after process exits (allows Ctrl-C then respawn)
-# Set this immediately after session creation, before any pane could exit
-tmux set-option -t "$SESSION_NAME" remain-on-exit on
+cat > "$LAYOUT_FILE" << EOF
+// Auto-generated zellij layout for Track Leader
+// Generated at: $(date)
 
-# Wait a moment for tmux to initialize
+layout {
+    pane size=1 borderless=true {
+        plugin location="tab-bar"
+    }
+
+    pane split_direction="vertical" {
+        // PostgreSQL pane (narrower, on the left)
+        pane size="30%" name="postgres" {
+            command "bash"
+            args "-c" "echo '=== PostgreSQL ===' && cd '$PROJECT_ROOT/crates/tracks' && docker-compose up postgres 2>&1 | tee '$POSTGRES_LOG'"
+        }
+
+        // Right side split horizontally
+        pane split_direction="horizontal" {
+            // Backend pane
+            pane name="backend" {
+                command "bash"
+                args "-c" "echo '=== Backend (port 3001) ===' && echo 'Waiting for PostgreSQL...' && sleep 3 && cd '$PROJECT_ROOT/crates/tracks' && RUST_LOG=info DATABASE_URL='postgres://tracks_user:tracks_password@localhost:5432/tracks_db' cargo run 2>&1 | tee '$BACKEND_LOG'"
+            }
+
+            // Frontend pane
+            pane name="frontend" {
+                command "bash"
+                args "-c" "echo '=== Frontend (port 3000) ===' && echo 'Waiting for backend...' && sleep 5 && cd '$PROJECT_ROOT' && npm run dev 2>&1 | tee '$FRONTEND_LOG'"
+            }
+        }
+    }
+
+    pane size=2 borderless=true {
+        plugin location="status-bar"
+    }
+}
+EOF
+
+# Create background session
+zellij attach -b -c "$SESSION_NAME"
 sleep 0.5
 
-# Split horizontally for backend
-tmux split-window -h -t "$SESSION_NAME:dev" \
-    "echo '=== Backend (port 3001) ===' && echo 'Waiting for PostgreSQL...' && sleep 3 && cd '$PROJECT_ROOT/crates/tracks' && RUST_LOG=info DATABASE_URL='postgres://tracks_user:tracks_password@localhost:5432/tracks_db' cargo run 2>&1 | tee '$BACKEND_LOG'"
+# Load layout into the session (creates new tab)
+ZELLIJ_SESSION_NAME="$SESSION_NAME" zellij action new-tab -l "$LAYOUT_FILE" -n "dev"
 
-# Split the right pane vertically for frontend
-tmux split-window -v -t "$SESSION_NAME:dev.1" \
-    "echo '=== Frontend (port 3000) ===' && echo 'Waiting for backend...' && sleep 5 && cd '$PROJECT_ROOT' && npm run dev 2>&1 | tee '$FRONTEND_LOG'"
+# Close the initial empty tab
+ZELLIJ_SESSION_NAME="$SESSION_NAME" zellij action go-to-tab 1
+ZELLIJ_SESSION_NAME="$SESSION_NAME" zellij action close-tab
 
-# Adjust pane sizes (make left pane narrower for postgres)
-tmux select-layout -t "$SESSION_NAME:dev" main-vertical
-
-# Enable pane border status to show titles
-tmux set-option -t "$SESSION_NAME" pane-border-status top
-tmux set-option -t "$SESSION_NAME" pane-border-format "#{pane_index}: #{pane_title}"
-
-echo "tmux session '$SESSION_NAME' created!"
+echo "zellij session '$SESSION_NAME' created!"
 echo ""
-echo "To attach: tmux attach -t $SESSION_NAME"
-echo "To detach: Ctrl+b, then d"
-echo "To kill:   tmux kill-session -t $SESSION_NAME"
+echo "To attach: zellij attach $SESSION_NAME"
+echo "           or: ./scripts/attach-dev.sh"
+echo "To detach: Ctrl+o, then d"
+echo "To kill:   ./scripts/stop-dev.sh"
+echo ""
+echo "Restart services with:"
+echo "  ./scripts/restart-service.sh backend"
+echo "  ./scripts/restart-service.sh frontend"
+echo "  ./scripts/restart-service.sh postgres"
 echo ""
 echo "Monitor logs with:"
+echo "  ./scripts/watch-logs.sh"
 echo "  tail -f $LOG_DIR/backend_latest.log"
 echo "  tail -f $LOG_DIR/frontend_latest.log"
