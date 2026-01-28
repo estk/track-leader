@@ -40,10 +40,14 @@ services:
     ports:
       - "${BACKEND_PORT:-3001}:${BACKEND_INTERNAL_PORT:-3001}"
     volumes:
-      - ./crates/tracks/src:/app/src:cached
-      - ./crates/tracks/migrations:/app/migrations:cached
-      - ./crates/tracks/Cargo.toml:/app/Cargo.toml:cached
-      - ./crates/tracks/Cargo.lock:/app/Cargo.lock:cached
+      # Mount workspace root for dependency resolution
+      - ./Cargo.toml:/app/Cargo.toml:cached
+      - ./Cargo.lock:/app/Cargo.lock:cached
+      # Mount the tracks crate
+      - ./crates/tracks/src:/app/crates/tracks/src:cached
+      - ./crates/tracks/migrations:/app/crates/tracks/migrations:cached
+      - ./crates/tracks/Cargo.toml:/app/crates/tracks/Cargo.toml:cached
+      - ./crates/tracks/.sqlx:/app/crates/tracks/.sqlx:cached
       - cargo_cache:/usr/local/cargo/registry
       - target_cache:/app/target
       - uploads:/app/uploads
@@ -56,8 +60,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    # Use cargo-watch for hot reloading
-    command: cargo watch -x run
+    # Use cargo-watch for hot reloading; run the tracks crate from workspace
+    command: cargo watch -p tracks -x run
 
   frontend:
     build:

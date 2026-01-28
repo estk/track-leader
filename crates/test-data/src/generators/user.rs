@@ -81,8 +81,9 @@ impl UserGenerator {
         let name: String = Name().fake_with_rng(rng);
         let email = self.generate_email(&name, rng);
 
-        // Placeholder password hash (argon2 hash of "password")
-        let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$salt$hash".to_string();
+        // Hash using the same algorithm the auth system uses
+        let password_hash = tracks::auth::hash_password("password")
+            .expect("Failed to hash password");
 
         let (gender, birth_year, weight_kg, country, region) =
             if rng.r#gen::<f64>() < self.config.demographics_fill_rate {
