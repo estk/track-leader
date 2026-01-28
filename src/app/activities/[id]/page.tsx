@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,65 +23,11 @@ const ACTIVITY_TYPES = [
   { value: "Unknown", label: "Other" },
 ];
 
-// Haversine distance between two points in meters
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // Earth radius in meters
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// Calculate segment metrics from selected track points
-function calculateSegmentMetrics(points: TrackPoint[]): {
-  distance: number;
-  elevationGain: number;
-  elevationLoss: number;
-  averageGrade: number | null;
-  climbCategory: string | null;
-} | null {
-  if (points.length < 2) return null;
-
-  let distance = 0;
-  let elevationGain = 0;
-  let elevationLoss = 0;
-  let hasElevation = false;
-
-  for (let i = 1; i < points.length; i++) {
-    distance += haversineDistance(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon);
-
-    if (points[i - 1].ele !== null && points[i].ele !== null) {
-      hasElevation = true;
-      const diff = points[i].ele! - points[i - 1].ele!;
-      if (diff > 0) elevationGain += diff;
-      else elevationLoss += Math.abs(diff);
-    }
-  }
-
-  let averageGrade: number | null = null;
-  if (hasElevation && distance > 0) {
-    const netElevation = elevationGain - elevationLoss;
-    averageGrade = (netElevation / distance) * 100;
-  }
-
-  // Calculate climb category
-  let climbCategory: string | null = null;
-  if (hasElevation && elevationGain >= 20 && averageGrade !== null && averageGrade >= 1) {
-    const distanceKm = distance / 1000;
-    const gradeFactor = averageGrade < 4 ? 1 : averageGrade < 6 ? 1.5 : averageGrade < 8 ? 2 : averageGrade < 10 ? 2.5 : 3;
-    const points = elevationGain * distanceKm * gradeFactor / 100;
-
-    if (points >= 320) climbCategory = "HC";
-    else if (points >= 160) climbCategory = "Cat 1";
-    else if (points >= 80) climbCategory = "Cat 2";
-    else if (points >= 40) climbCategory = "Cat 3";
-    else if (points >= 20) climbCategory = "Cat 4";
-  }
-
-  return { distance, elevationGain, elevationLoss, averageGrade, climbCategory };
+// Convert climb category number to display string
+function formatClimbCategory(category: number | null): string | null {
+  if (category === null) return null;
+  if (category === 0) return "HC";
+  return `Cat ${category}`;
 }
 
 export default function ActivityDetailPage() {
@@ -115,6 +61,8 @@ export default function ActivityDetailPage() {
   const [segmentName, setSegmentName] = useState("");
   const [segmentDescription, setSegmentDescription] = useState("");
   const [creatingSegment, setCreatingSegment] = useState(false);
+  const [segmentPreview, setSegmentPreview] = useState<PreviewSegmentResponse | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const activityId = params.id as string;
 
@@ -139,6 +87,35 @@ export default function ActivityDetailPage() {
         .finally(() => setLoading(false));
     }
   }, [user, authLoading, activityId, router]);
+
+  // Fetch segment preview when selection changes
+  useEffect(() => {
+    if (!trackData || segmentStart === null || segmentEnd === null) {
+      setSegmentPreview(null);
+      return;
+    }
+
+    const startIdx = Math.min(segmentStart, segmentEnd);
+    const endIdx = Math.max(segmentStart, segmentEnd);
+    const selectedPoints = trackData.points.slice(startIdx, endIdx + 1);
+
+    if (selectedPoints.length < 2) {
+      setSegmentPreview(null);
+      return;
+    }
+
+    setPreviewLoading(true);
+    const points = selectedPoints.map(p => ({
+      lat: p.lat,
+      lon: p.lon,
+      ele: p.ele ?? undefined,
+    }));
+
+    api.previewSegment(points)
+      .then(setSegmentPreview)
+      .catch(() => setSegmentPreview(null))
+      .finally(() => setPreviewLoading(false));
+  }, [trackData, segmentStart, segmentEnd]);
 
   const handleEdit = () => {
     if (activity) {
@@ -410,70 +387,55 @@ export default function ActivityDetailPage() {
                   rows={3}
                 />
               </div>
-              {trackData && segmentStart !== null && segmentEnd !== null && (() => {
-                const startIdx = Math.min(segmentStart, segmentEnd);
-                const endIdx = Math.max(segmentStart, segmentEnd);
-                const selectedPoints = trackData.points.slice(startIdx, endIdx + 1);
-                const metrics = calculateSegmentMetrics(selectedPoints);
-                if (!metrics) return null;
-
-                // Validation checks
-                const minPoints = 10;
-                const minLength = 100; // meters
-                const maxLength = 50000; // meters
-                const validationErrors: string[] = [];
-                if (selectedPoints.length < minPoints) {
-                  validationErrors.push(`Need at least ${minPoints} points (got ${selectedPoints.length})`);
-                }
-                if (metrics.distance < minLength) {
-                  validationErrors.push(`Must be at least ${minLength}m (got ${Math.round(metrics.distance)}m)`);
-                }
-                if (metrics.distance > maxLength) {
-                  validationErrors.push(`Must be under ${maxLength / 1000}km (got ${(metrics.distance / 1000).toFixed(1)}km)`);
-                }
-
-                return (
+              {segmentStart !== null && segmentEnd !== null && (
+                previewLoading ? (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-sm text-muted-foreground">Calculating preview...</p>
+                  </div>
+                ) : segmentPreview && (
                   <div className="space-y-2">
                     <div className="bg-muted/50 rounded-lg p-3 space-y-2">
                       <p className="text-sm font-medium">Segment Preview</p>
                       <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
                         <div>
                           <span className="font-medium">Distance:</span>{" "}
-                          {metrics.distance >= 1000
-                            ? `${(metrics.distance / 1000).toFixed(2)} km`
-                            : `${Math.round(metrics.distance)} m`}
+                          {segmentPreview.distance_meters >= 1000
+                            ? `${(segmentPreview.distance_meters / 1000).toFixed(2)} km`
+                            : `${Math.round(segmentPreview.distance_meters)} m`}
                         </div>
                         <div>
                           <span className="font-medium">Elevation Gain:</span>{" "}
-                          {Math.round(metrics.elevationGain)} m
+                          {segmentPreview.elevation_gain_meters !== null
+                            ? `${Math.round(segmentPreview.elevation_gain_meters)} m`
+                            : "N/A"}
                         </div>
-                        {metrics.averageGrade !== null && (
+                        {segmentPreview.average_grade !== null && (
                           <div>
                             <span className="font-medium">Grade:</span>{" "}
-                          {metrics.averageGrade.toFixed(1)}%
-                        </div>
-                      )}
-                        {metrics.climbCategory && (
+                            {segmentPreview.average_grade.toFixed(1)}%
+                          </div>
+                        )}
+                        {formatClimbCategory(segmentPreview.climb_category) && (
                           <div>
                             <span className="font-medium">Category:</span>{" "}
-                            {metrics.climbCategory}
+                            {formatClimbCategory(segmentPreview.climb_category)}
                           </div>
                         )}
                       </div>
                     </div>
-                    {validationErrors.length > 0 && (
+                    {!segmentPreview.validation.is_valid && (
                       <div className="bg-destructive/10 text-destructive rounded-lg p-3">
                         <p className="text-sm font-medium mb-1">Cannot create segment:</p>
                         <ul className="text-sm list-disc list-inside">
-                          {validationErrors.map((err, i) => (
+                          {segmentPreview.validation.errors.map((err, i) => (
                             <li key={i}>{err}</li>
                           ))}
                         </ul>
                       </div>
                     )}
                   </div>
-                );
-              })()}
+                )
+              )}
               <div className="flex gap-2 pt-4">
                 <Button
                   variant="outline"
@@ -486,14 +448,13 @@ export default function ActivityDetailPage() {
                 <Button
                   className="flex-1"
                   onClick={handleCreateSegment}
-                  disabled={creatingSegment || !segmentName.trim() || (() => {
-                    if (!trackData || segmentStart === null || segmentEnd === null) return true;
-                    const startIdx = Math.min(segmentStart, segmentEnd);
-                    const endIdx = Math.max(segmentStart, segmentEnd);
-                    const pts = trackData.points.slice(startIdx, endIdx + 1);
-                    const m = calculateSegmentMetrics(pts);
-                    return !m || pts.length < 10 || m.distance < 100 || m.distance > 50000;
-                  })()}
+                  disabled={
+                    creatingSegment ||
+                    !segmentName.trim() ||
+                    previewLoading ||
+                    !segmentPreview ||
+                    !segmentPreview.validation.is_valid
+                  }
                 >
                   {creatingSegment ? "Creating..." : "Create Segment"}
                 </Button>

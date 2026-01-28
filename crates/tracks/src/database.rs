@@ -374,6 +374,112 @@ impl Database {
         Ok(segments)
     }
 
+    /// List segments with filtering and sorting support.
+    /// Supports: name search, activity type filter, distance range, climb category, sorting.
+    pub async fn list_segments_filtered(
+        &self,
+        params: &crate::handlers::ListSegmentsQuery,
+    ) -> Result<Vec<Segment>, AppError> {
+        use crate::handlers::{SegmentSortBy, SortOrder};
+
+        // Build WHERE clause dynamically
+        let mut conditions: Vec<String> =
+            vec!["deleted_at IS NULL".into(), "visibility = 'public'".into()];
+        let mut param_idx = 1;
+
+        // Activity type filter
+        if params.activity_type.is_some() {
+            conditions.push(format!("activity_type = ${param_idx}"));
+            param_idx += 1;
+        }
+
+        // Name search (case-insensitive)
+        let search_pattern = params
+            .search
+            .as_ref()
+            .map(|s| format!("%{}%", s.to_lowercase()));
+        if search_pattern.is_some() {
+            conditions.push(format!("LOWER(name) LIKE ${param_idx}"));
+            param_idx += 1;
+        }
+
+        // Min distance filter
+        if params.min_distance_meters.is_some() {
+            conditions.push(format!("distance_meters >= ${param_idx}"));
+            param_idx += 1;
+        }
+
+        // Max distance filter
+        if params.max_distance_meters.is_some() {
+            conditions.push(format!("distance_meters <= ${param_idx}"));
+            param_idx += 1;
+        }
+
+        // Climb category filter
+        if let Some(ref cat) = params.climb_category {
+            if cat.is_flat() {
+                conditions.push("climb_category IS NULL".into());
+            } else {
+                conditions.push(format!("climb_category = ${param_idx}"));
+                param_idx += 1;
+            }
+        }
+
+        // Build ORDER BY clause
+        let order_col = match params.sort_by {
+            SegmentSortBy::CreatedAt => "created_at",
+            SegmentSortBy::Name => "name",
+            SegmentSortBy::Distance => "distance_meters",
+            SegmentSortBy::ElevationGain => "COALESCE(elevation_gain_meters, 0)",
+        };
+        let order_dir = match params.sort_order {
+            SortOrder::Asc => "ASC",
+            SortOrder::Desc => "DESC",
+        };
+
+        // Build the final query
+        let limit_param_idx = param_idx;
+        let where_clause = conditions.join(" AND ");
+        let query = format!(
+            r#"
+            SELECT id, creator_id, name, description, activity_type,
+                   distance_meters, elevation_gain_meters, elevation_loss_meters,
+                   average_grade, max_grade, climb_category,
+                   visibility, created_at
+            FROM segments
+            WHERE {where_clause}
+            ORDER BY {order_col} {order_dir}
+            LIMIT ${limit_param_idx}
+            "#
+        );
+
+        // Build the query with bindings
+        let mut q = sqlx::query_as::<_, Segment>(&query);
+
+        // Bind parameters in the same order we added conditions
+        if let Some(ref at) = params.activity_type {
+            q = q.bind(at);
+        }
+        if let Some(ref pattern) = search_pattern {
+            q = q.bind(pattern);
+        }
+        if let Some(min) = params.min_distance_meters {
+            q = q.bind(min);
+        }
+        if let Some(max) = params.max_distance_meters {
+            q = q.bind(max);
+        }
+        if let Some(ref cat) = params.climb_category {
+            if !cat.is_flat() {
+                q = q.bind(cat.to_db_value());
+            }
+        }
+        q = q.bind(params.limit);
+
+        let segments = q.fetch_all(&self.pool).await?;
+        Ok(segments)
+    }
+
     pub async fn get_user_segments(&self, user_id: Uuid) -> Result<Vec<Segment>, AppError> {
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
@@ -568,7 +674,10 @@ impl Database {
         let coords: Vec<String> = points
             .iter()
             .map(|p| {
-                let epoch = p.timestamp.map(|t| t.unix_timestamp() as f64).unwrap_or(0.0);
+                let epoch = p
+                    .timestamp
+                    .map(|t| t.unix_timestamp() as f64)
+                    .unwrap_or(0.0);
                 let ele = p.elevation.unwrap_or(0.0);
                 format!("{} {} {} {}", p.lon, p.lat, ele, epoch)
             })
@@ -1773,7 +1882,11 @@ impl Database {
     }
 
     /// Check if a user is following another user.
-    pub async fn is_following(&self, follower_id: Uuid, following_id: Uuid) -> Result<bool, AppError> {
+    pub async fn is_following(
+        &self,
+        follower_id: Uuid,
+        following_id: Uuid,
+    ) -> Result<bool, AppError> {
         let row: Option<(i32,)> = sqlx::query_as(
             r#"
             SELECT 1 FROM follows
@@ -1972,12 +2085,10 @@ impl Database {
 
         if result.rows_affected() > 0 {
             // Update kudos count
-            sqlx::query(
-                r#"UPDATE activities SET kudos_count = kudos_count + 1 WHERE id = $1"#,
-            )
-            .bind(activity_id)
-            .execute(&self.pool)
-            .await?;
+            sqlx::query(r#"UPDATE activities SET kudos_count = kudos_count + 1 WHERE id = $1"#)
+                .bind(activity_id)
+                .execute(&self.pool)
+                .await?;
             Ok(true)
         } else {
             Ok(false) // Already gave kudos
@@ -1986,13 +2097,11 @@ impl Database {
 
     /// Remove kudos from an activity.
     pub async fn remove_kudos(&self, user_id: Uuid, activity_id: Uuid) -> Result<bool, AppError> {
-        let result = sqlx::query(
-            r#"DELETE FROM kudos WHERE user_id = $1 AND activity_id = $2"#,
-        )
-        .bind(user_id)
-        .bind(activity_id)
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query(r#"DELETE FROM kudos WHERE user_id = $1 AND activity_id = $2"#)
+            .bind(user_id)
+            .bind(activity_id)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() > 0 {
             // Update kudos count
@@ -2009,14 +2118,17 @@ impl Database {
     }
 
     /// Check if user gave kudos to an activity.
-    pub async fn has_given_kudos(&self, user_id: Uuid, activity_id: Uuid) -> Result<bool, AppError> {
-        let row: Option<(i32,)> = sqlx::query_as(
-            r#"SELECT 1 FROM kudos WHERE user_id = $1 AND activity_id = $2"#,
-        )
-        .bind(user_id)
-        .bind(activity_id)
-        .fetch_optional(&self.pool)
-        .await?;
+    pub async fn has_given_kudos(
+        &self,
+        user_id: Uuid,
+        activity_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let row: Option<(i32,)> =
+            sqlx::query_as(r#"SELECT 1 FROM kudos WHERE user_id = $1 AND activity_id = $2"#)
+                .bind(user_id)
+                .bind(activity_id)
+                .fetch_optional(&self.pool)
+                .await?;
 
         Ok(row.is_some())
     }
@@ -2072,12 +2184,10 @@ impl Database {
         .await?;
 
         // Update comment count
-        sqlx::query(
-            r#"UPDATE activities SET comment_count = comment_count + 1 WHERE id = $1"#,
-        )
-        .bind(activity_id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query(r#"UPDATE activities SET comment_count = comment_count + 1 WHERE id = $1"#)
+            .bind(activity_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(comment)
     }
@@ -2123,13 +2233,11 @@ impl Database {
         .await?;
 
         if let Some((activity_id,)) = activity_id {
-            sqlx::query(
-                r#"UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND user_id = $2"#,
-            )
-            .bind(comment_id)
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
+            sqlx::query(r#"UPDATE comments SET deleted_at = NOW() WHERE id = $1 AND user_id = $2"#)
+                .bind(comment_id)
+                .bind(user_id)
+                .execute(&self.pool)
+                .await?;
 
             // Update comment count
             sqlx::query(
@@ -2231,7 +2339,11 @@ impl Database {
     }
 
     /// Mark a notification as read.
-    pub async fn mark_notification_read(&self, notification_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
+    pub async fn mark_notification_read(
+        &self,
+        notification_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, AppError> {
         let result = sqlx::query(
             r#"
             UPDATE notifications

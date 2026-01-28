@@ -230,10 +230,7 @@ pub async fn get_activity_track(
     db.get_activity(id).await?.ok_or(AppError::NotFound)?;
 
     // Get track points from database
-    let track_points = db
-        .get_track_points(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let track_points = db.get_track_points(id).await?.ok_or(AppError::NotFound)?;
 
     if track_points.is_empty() {
         return Err(AppError::NotFound);
@@ -728,11 +725,74 @@ pub async fn get_segment(
     }
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SegmentSortBy {
+    #[default]
+    CreatedAt,
+    Name,
+    Distance,
+    ElevationGain,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SortOrder {
+    Asc,
+    #[default]
+    Desc,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClimbCategoryFilter {
+    Hc,
+    Cat1,
+    Cat2,
+    Cat3,
+    Cat4,
+    Flat,
+}
+
+impl ClimbCategoryFilter {
+    /// Returns the database value for this filter.
+    /// `None` means flat/uncategorized, `Some(n)` means category n (0=HC, 1-4=Cat 1-4).
+    pub fn to_db_value(self) -> Option<i32> {
+        match self {
+            ClimbCategoryFilter::Hc => Some(0),
+            ClimbCategoryFilter::Cat1 => Some(1),
+            ClimbCategoryFilter::Cat2 => Some(2),
+            ClimbCategoryFilter::Cat3 => Some(3),
+            ClimbCategoryFilter::Cat4 => Some(4),
+            ClimbCategoryFilter::Flat => None,
+        }
+    }
+
+    /// Whether this filter matches flat/uncategorized segments.
+    pub fn is_flat(self) -> bool {
+        matches!(self, ClimbCategoryFilter::Flat)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ListSegmentsQuery {
     pub activity_type: Option<ActivityType>,
     #[serde(default = "default_limit")]
     pub limit: i64,
+    /// Case-insensitive name search
+    pub search: Option<String>,
+    /// Sort field
+    #[serde(default)]
+    pub sort_by: SegmentSortBy,
+    /// Sort order
+    #[serde(default)]
+    pub sort_order: SortOrder,
+    /// Minimum distance in meters
+    pub min_distance_meters: Option<f64>,
+    /// Maximum distance in meters
+    pub max_distance_meters: Option<f64>,
+    /// Filter by climb category
+    pub climb_category: Option<ClimbCategoryFilter>,
 }
 
 fn default_limit() -> i64 {
@@ -743,9 +803,7 @@ pub async fn list_segments(
     Extension(db): Extension<Database>,
     Query(params): Query<ListSegmentsQuery>,
 ) -> Result<Json<Vec<Segment>>, AppError> {
-    let segments = db
-        .list_segments(params.activity_type.as_ref(), params.limit)
-        .await?;
+    let segments = db.list_segments_filtered(&params).await?;
     Ok(Json(segments))
 }
 
@@ -828,6 +886,93 @@ pub async fn get_segment_track(
             max_lat,
             min_lon,
             max_lon,
+        },
+    }))
+}
+
+// -- Segment Preview Endpoint --
+
+#[derive(Debug, Deserialize)]
+pub struct PreviewSegmentRequest {
+    pub points: Vec<SegmentPoint>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PreviewSegmentResponse {
+    pub distance_meters: f64,
+    pub elevation_gain_meters: Option<f64>,
+    pub elevation_loss_meters: Option<f64>,
+    pub average_grade: Option<f64>,
+    pub max_grade: Option<f64>,
+    pub climb_category: Option<i32>,
+    pub point_count: usize,
+    pub validation: SegmentValidation,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SegmentValidation {
+    pub is_valid: bool,
+    pub errors: Vec<String>,
+}
+
+/// Calculate segment metrics from a list of points without creating the segment.
+/// Useful for previewing what a segment would look like before creation.
+pub async fn preview_segment(
+    Json(req): Json<PreviewSegmentRequest>,
+) -> Result<Json<PreviewSegmentResponse>, AppError> {
+    let mut errors = Vec::new();
+
+    // Validation checks (same as create_segment but we collect all errors)
+    const MIN_POINTS: usize = 10;
+    if req.points.len() < MIN_POINTS {
+        errors.push(format!(
+            "Segment must have at least {MIN_POINTS} points (got {})",
+            req.points.len()
+        ));
+    }
+
+    // Calculate distance
+    let distance_meters = calculate_total_distance(&req.points);
+
+    // Validation: minimum length (100m)
+    const MIN_LENGTH_METERS: f64 = 100.0;
+    if distance_meters < MIN_LENGTH_METERS {
+        errors.push(format!(
+            "Segment must be at least {MIN_LENGTH_METERS}m long (got {:.0}m)",
+            distance_meters
+        ));
+    }
+
+    // Validation: maximum length (50km)
+    const MAX_LENGTH_METERS: f64 = 50_000.0;
+    if distance_meters > MAX_LENGTH_METERS {
+        errors.push(format!(
+            "Segment must be at most {}km long (got {:.1}km)",
+            MAX_LENGTH_METERS / 1000.0,
+            distance_meters / 1000.0
+        ));
+    }
+
+    // Calculate elevation metrics
+    let (elevation_gain, elevation_loss) = calculate_elevation_change(&req.points);
+
+    // Calculate grades
+    let (average_grade, max_grade) = calculate_grades(&req.points);
+
+    // Calculate climb category
+    let climb_category = calculate_climb_category(elevation_gain, distance_meters, average_grade);
+
+    Ok(Json(PreviewSegmentResponse {
+        distance_meters,
+        elevation_gain_meters: elevation_gain,
+        elevation_loss_meters: elevation_loss,
+        average_grade,
+        max_grade,
+        climb_category,
+        point_count: req.points.len(),
+        validation: SegmentValidation {
+            is_valid: errors.is_empty(),
+            errors,
         },
     }))
 }
@@ -1331,9 +1476,7 @@ pub async fn get_followers(
     // Get follow counts
     let (follower_count, _) = db.get_follow_counts(user_id).await?;
 
-    let followers = db
-        .get_followers(user_id, query.limit, query.offset)
-        .await?;
+    let followers = db.get_followers(user_id, query.limit, query.offset).await?;
 
     Ok(Json(FollowListResponse {
         users: followers,
@@ -1350,9 +1493,7 @@ pub async fn get_following(
     // Get follow counts
     let (_, following_count) = db.get_follow_counts(user_id).await?;
 
-    let following = db
-        .get_following(user_id, query.limit, query.offset)
-        .await?;
+    let following = db.get_following(user_id, query.limit, query.offset).await?;
 
     Ok(Json(FollowListResponse {
         users: following,
@@ -1472,11 +1613,16 @@ pub async fn give_kudos(
     Path(activity_id): Path<Uuid>,
 ) -> Result<Json<KudosResponse>, AppError> {
     // Get activity to check it exists and get owner
-    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+    let activity = db
+        .get_activity(activity_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     // Can't give kudos to your own activity
     if activity.user_id == claims.sub {
-        return Err(AppError::InvalidInput("Cannot give kudos to your own activity".to_string()));
+        return Err(AppError::InvalidInput(
+            "Cannot give kudos to your own activity".to_string(),
+        ));
     }
 
     let was_new = db.give_kudos(claims.sub, activity_id).await?;
@@ -1495,7 +1641,10 @@ pub async fn give_kudos(
     }
 
     // Get updated count
-    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+    let activity = db
+        .get_activity(activity_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     Ok(Json(KudosResponse {
         given: true,
@@ -1555,7 +1704,10 @@ pub async fn add_comment(
     Json(req): Json<AddCommentRequest>,
 ) -> Result<Json<crate::models::CommentWithUser>, AppError> {
     // Verify activity exists
-    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+    let activity = db
+        .get_activity(activity_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     let comment = db
         .add_comment(claims.sub, activity_id, &req.content, req.parent_id)

@@ -77,7 +77,10 @@ impl ActivityQueue {
 
                 // Save track geometry with elevation and timestamps
                 let track_saved = if !track_points.is_empty() {
-                    match db.save_track_geometry_with_data(uid, id, &track_points).await {
+                    match db
+                        .save_track_geometry_with_data(uid, id, &track_points)
+                        .await
+                    {
                         Ok(()) => true,
                         Err(e) => {
                             tracing::error!("Failed to save track geometry: {e}");
@@ -122,9 +125,13 @@ fn extract_track_points(gpx: &gpx::Gpx) -> Vec<TrackPointData> {
                 let timestamp = pt.time.as_ref().and_then(|t| {
                     // gpx::Time has a format() method that returns ISO 8601 string
                     // We need to parse it to OffsetDateTime
-                    t.format()
+                    t.format().ok().and_then(|s| {
+                        time::OffsetDateTime::parse(
+                            &s,
+                            &time::format_description::well_known::Rfc3339,
+                        )
                         .ok()
-                        .and_then(|s| time::OffsetDateTime::parse(&s, &time::format_description::well_known::Rfc3339).ok())
+                    })
                 });
 
                 points.push(TrackPointData {

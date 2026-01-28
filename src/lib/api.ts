@@ -83,6 +83,37 @@ export interface CreateSegmentRequest {
   source_activity_id?: string;
 }
 
+export type SegmentSortBy = 'created_at' | 'name' | 'distance' | 'elevation_gain';
+export type SortOrder = 'asc' | 'desc';
+export type ClimbCategoryFilter = 'hc' | 'cat1' | 'cat2' | 'cat3' | 'cat4' | 'flat';
+
+export interface ListSegmentsOptions {
+  activityType?: string;
+  search?: string;
+  sortBy?: SegmentSortBy;
+  sortOrder?: SortOrder;
+  minDistanceMeters?: number;
+  maxDistanceMeters?: number;
+  climbCategory?: ClimbCategoryFilter;
+  limit?: number;
+}
+
+export interface SegmentValidation {
+  is_valid: boolean;
+  errors: string[];
+}
+
+export interface PreviewSegmentResponse {
+  distance_meters: number;
+  elevation_gain_meters: number | null;
+  elevation_loss_meters: number | null;
+  average_grade: number | null;
+  max_grade: number | null;
+  climb_category: number | null;
+  point_count: number;
+  validation: SegmentValidation;
+}
+
 export interface ActivitySegmentEffort {
   effort_id: string;
   segment_id: string;
@@ -480,9 +511,34 @@ class ApiClient {
   }
 
   // Segment endpoints
-  async listSegments(activityType?: string): Promise<Segment[]> {
-    const params = activityType ? `?activity_type=${activityType}` : '';
-    return this.request<Segment[]>(`/segments${params}`);
+  async listSegments(options?: ListSegmentsOptions): Promise<Segment[]> {
+    const params = new URLSearchParams();
+    if (options?.activityType) {
+      params.set('activity_type', options.activityType);
+    }
+    if (options?.search) {
+      params.set('search', options.search);
+    }
+    if (options?.sortBy) {
+      params.set('sort_by', options.sortBy);
+    }
+    if (options?.sortOrder) {
+      params.set('sort_order', options.sortOrder);
+    }
+    if (options?.minDistanceMeters !== undefined) {
+      params.set('min_distance_meters', options.minDistanceMeters.toString());
+    }
+    if (options?.maxDistanceMeters !== undefined) {
+      params.set('max_distance_meters', options.maxDistanceMeters.toString());
+    }
+    if (options?.climbCategory) {
+      params.set('climb_category', options.climbCategory);
+    }
+    if (options?.limit !== undefined) {
+      params.set('limit', options.limit.toString());
+    }
+    const queryString = params.toString();
+    return this.request<Segment[]>(`/segments${queryString ? `?${queryString}` : ''}`);
   }
 
   async getSegment(id: string): Promise<Segment> {
@@ -505,6 +561,13 @@ class ApiClient {
     return this.request<Segment>('/segments', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  async previewSegment(points: { lat: number; lon: number; ele?: number }[]): Promise<PreviewSegmentResponse> {
+    return this.request<PreviewSegmentResponse>('/segments/preview', {
+      method: 'POST',
+      body: JSON.stringify({ points }),
     });
   }
 

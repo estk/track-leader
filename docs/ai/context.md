@@ -71,6 +71,48 @@ DATABASE_URL="postgres://tracks_user:tracks_password@localhost:5432/tracks_db" \
 - Use `cargo nextest run` for tests
 - Import unused traits as `use MyTrait as _`
 
+### Backend/Frontend Architecture
+
+**Business logic lives in Rust.** The frontend should only:
+- Render UI
+- Handle user input
+- Call Rust APIs
+- Display results
+
+Key calculations are in `handlers.rs`:
+- `haversine_distance()` - distance between GPS points
+- `calculate_total_distance()` - segment length
+- `calculate_elevation_change()` - gain/loss
+- `calculate_grades()` - average and max grade
+- `calculate_climb_category()` - HC through Cat 4
+
+**Segment filtering/sorting** is server-side via query parameters on `GET /segments`:
+- `search`, `sort_by`, `sort_order`, `min_distance_meters`, `max_distance_meters`, `climb_category`
+
+**Segment preview** via `POST /segments/preview` returns metrics without creating a segment. Used for real-time preview in segment creation UI.
+
+### Dynamic SQL in Database Layer
+
+For endpoints with optional filters, use dynamic SQL building:
+
+```rust
+let mut conditions: Vec<String> = vec!["deleted_at IS NULL".into()];
+let mut param_idx = 1;
+
+if params.search.is_some() {
+    conditions.push(format!("LOWER(name) LIKE ${param_idx}"));
+    param_idx += 1;
+}
+
+let query = format!("SELECT ... WHERE {} LIMIT ${}", conditions.join(" AND "), param_idx);
+let mut q = sqlx::query_as::<_, Model>(&query);
+
+// Bind in same order as conditions were added
+if let Some(ref pattern) = search_pattern {
+    q = q.bind(pattern);
+}
+```
+
 ### Unused Imports Warning
 
 There are currently unused imports in `database.rs` (line 5-6):

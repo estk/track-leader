@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { api, Segment, StarredSegmentEffort } from "@/lib/api";
+import { api, Segment, StarredSegmentEffort, ListSegmentsOptions, SegmentSortBy, SortOrder, ClimbCategoryFilter } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,52 +71,51 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "elevation-asc", label: "Elevation (lowest)" },
 ];
 
-function sortSegments(segments: Segment[], sortBy: SortOption): Segment[] {
-  const sorted = [...segments];
-  switch (sortBy) {
-    case "newest":
-      return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    case "oldest":
-      return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    case "name-asc":
-      return sorted.sort((a, b) => a.name.localeCompare(b.name));
-    case "name-desc":
-      return sorted.sort((a, b) => b.name.localeCompare(a.name));
-    case "distance-asc":
-      return sorted.sort((a, b) => a.distance_meters - b.distance_meters);
-    case "distance-desc":
-      return sorted.sort((a, b) => b.distance_meters - a.distance_meters);
-    case "elevation-desc":
-      return sorted.sort((a, b) => (b.elevation_gain_meters ?? 0) - (a.elevation_gain_meters ?? 0));
-    case "elevation-asc":
-      return sorted.sort((a, b) => (a.elevation_gain_meters ?? 0) - (b.elevation_gain_meters ?? 0));
-    default:
-      return sorted;
-  }
-}
-
 type DistanceFilter = "all" | "under1k" | "1k-5k" | "5k-10k" | "10k-20k" | "over20k";
 
-const DISTANCE_FILTERS: { value: DistanceFilter; label: string; min: number; max: number }[] = [
-  { value: "all", label: "Any distance", min: 0, max: Infinity },
-  { value: "under1k", label: "< 1 km", min: 0, max: 1000 },
+// Distance filter options with min/max values for API calls
+const DISTANCE_FILTERS: { value: DistanceFilter; label: string; min?: number; max?: number }[] = [
+  { value: "all", label: "Any distance" },
+  { value: "under1k", label: "< 1 km", max: 1000 },
   { value: "1k-5k", label: "1-5 km", min: 1000, max: 5000 },
   { value: "5k-10k", label: "5-10 km", min: 5000, max: 10000 },
   { value: "10k-20k", label: "10-20 km", min: 10000, max: 20000 },
-  { value: "over20k", label: "> 20 km", min: 20000, max: Infinity },
+  { value: "over20k", label: "> 20 km", min: 20000 },
 ];
 
 type ClimbFilter = "all" | "hc" | "cat1" | "cat2" | "cat3" | "cat4" | "flat";
 
-const CLIMB_FILTERS: { value: ClimbFilter; label: string; categories: (number | null)[] }[] = [
-  { value: "all", label: "Any climb", categories: [] },
-  { value: "hc", label: "HC", categories: [0] },
-  { value: "cat1", label: "Cat 1", categories: [1] },
-  { value: "cat2", label: "Cat 2", categories: [2] },
-  { value: "cat3", label: "Cat 3", categories: [3] },
-  { value: "cat4", label: "Cat 4", categories: [4] },
-  { value: "flat", label: "Flat/NC", categories: [null] },
+const CLIMB_FILTERS: { value: ClimbFilter; label: string; apiValue?: ClimbCategoryFilter }[] = [
+  { value: "all", label: "Any climb" },
+  { value: "hc", label: "HC", apiValue: "hc" },
+  { value: "cat1", label: "Cat 1", apiValue: "cat1" },
+  { value: "cat2", label: "Cat 2", apiValue: "cat2" },
+  { value: "cat3", label: "Cat 3", apiValue: "cat3" },
+  { value: "cat4", label: "Cat 4", apiValue: "cat4" },
+  { value: "flat", label: "Flat/NC", apiValue: "flat" },
 ];
+
+// Helper to convert UI sort option to API parameters
+function sortOptionToApi(sortBy: SortOption): { sortBy: SegmentSortBy; sortOrder: SortOrder } {
+  switch (sortBy) {
+    case "newest":
+      return { sortBy: "created_at", sortOrder: "desc" };
+    case "oldest":
+      return { sortBy: "created_at", sortOrder: "asc" };
+    case "name-asc":
+      return { sortBy: "name", sortOrder: "asc" };
+    case "name-desc":
+      return { sortBy: "name", sortOrder: "desc" };
+    case "distance-asc":
+      return { sortBy: "distance", sortOrder: "asc" };
+    case "distance-desc":
+      return { sortBy: "distance", sortOrder: "desc" };
+    case "elevation-desc":
+      return { sortBy: "elevation_gain", sortOrder: "desc" };
+    case "elevation-asc":
+      return { sortBy: "elevation_gain", sortOrder: "asc" };
+  }
+}
 
 export default function SegmentsPage() {
   const router = useRouter();
@@ -145,13 +144,12 @@ export default function SegmentsPage() {
 
   useEffect(() => {
     setLoading(true);
-    const typeFilter = activityTypeFilter === "All" ? undefined : activityTypeFilter;
 
     // Check token directly to avoid race condition with isLoggedIn state
     const hasToken = !!api.getToken();
 
     if (showStarred && hasToken) {
-      // Fetch starred segments with effort data
+      // Fetch starred segments with effort data (client-side filtering still applies)
       api.getStarredSegmentEfforts()
         .then((efforts) => {
           setStarredEfforts(efforts);
@@ -163,16 +161,31 @@ export default function SegmentsPage() {
       setStarredEfforts([]);
       let fetchSegments: Promise<Segment[]>;
       if (showNearby && userLocation) {
+        // Nearby segments use a different endpoint without server-side filtering
         fetchSegments = api.getNearbySegments(userLocation.lat, userLocation.lon, nearbyRadius);
       } else {
-        fetchSegments = api.listSegments(typeFilter);
+        // Build API options with server-side filtering and sorting
+        const distFilter = DISTANCE_FILTERS.find((f) => f.value === distanceFilter);
+        const climbFilterConfig = CLIMB_FILTERS.find((f) => f.value === climbFilter);
+        const { sortBy: apiSortBy, sortOrder: apiSortOrder } = sortOptionToApi(sortBy);
+
+        const options: ListSegmentsOptions = {
+          activityType: activityTypeFilter === "All" ? undefined : activityTypeFilter,
+          search: searchQuery || undefined,
+          sortBy: apiSortBy,
+          sortOrder: apiSortOrder,
+          minDistanceMeters: distFilter?.min,
+          maxDistanceMeters: distFilter?.max,
+          climbCategory: climbFilterConfig?.apiValue,
+        };
+        fetchSegments = api.listSegments(options);
       }
       fetchSegments
         .then(setSegments)
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
     }
-  }, [showStarred, showNearby, userLocation, nearbyRadius, isLoggedIn, activityTypeFilter]);
+  }, [showStarred, showNearby, userLocation, nearbyRadius, isLoggedIn, activityTypeFilter, searchQuery, sortBy, distanceFilter, climbFilter]);
 
   const handleNearMeClick = () => {
     if (showNearby) {
@@ -363,7 +376,6 @@ export default function SegmentsPage() {
         searchQuery={searchQuery}
         distanceFilter={distanceFilter}
         climbFilter={climbFilter}
-        sortBy={sortBy}
         showStarred={showStarred}
         showNearby={showNearby}
         viewMode={viewMode}
@@ -380,7 +392,6 @@ interface SegmentsContentProps {
   searchQuery: string;
   distanceFilter: DistanceFilter;
   climbFilter: ClimbFilter;
-  sortBy: SortOption;
   showStarred: boolean;
   showNearby: boolean;
   viewMode: ViewMode;
@@ -394,38 +405,27 @@ function SegmentsContent({
   searchQuery,
   distanceFilter,
   climbFilter,
-  sortBy,
   showStarred,
   showNearby,
   viewMode,
   router,
 }: SegmentsContentProps) {
-  // Filter and sort starred efforts
+  // Filter starred efforts client-side (starred endpoint doesn't support server-side filtering)
   const filteredStarredEfforts = useMemo(() => {
     if (!showStarred) return [];
-    const distFilter = DISTANCE_FILTERS.find((f) => f.value === distanceFilter) || DISTANCE_FILTERS[0];
+    const distFilter = DISTANCE_FILTERS.find((f) => f.value === distanceFilter);
     return starredEfforts.filter((e) => {
-      const matchesSearch = e.segment_name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDistance = e.distance_meters >= distFilter.min && e.distance_meters < distFilter.max;
-      return matchesSearch && matchesDistance;
+      const matchesSearch = searchQuery
+        ? e.segment_name.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
+      const matchesMinDistance = distFilter?.min === undefined || e.distance_meters >= distFilter.min;
+      const matchesMaxDistance = distFilter?.max === undefined || e.distance_meters < distFilter.max;
+      return matchesSearch && matchesMinDistance && matchesMaxDistance;
     });
   }, [starredEfforts, searchQuery, distanceFilter, showStarred]);
 
-  const filteredSegments = useMemo(() => {
-    if (showStarred) return [];
-    const distFilter = DISTANCE_FILTERS.find((f) => f.value === distanceFilter) || DISTANCE_FILTERS[0];
-    const climbFilterConfig = CLIMB_FILTERS.find((f) => f.value === climbFilter) || CLIMB_FILTERS[0];
-    return sortSegments(
-      segments.filter((s) => {
-        const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesDistance = s.distance_meters >= distFilter.min && s.distance_meters < distFilter.max;
-        const matchesClimb = climbFilterConfig.categories.length === 0 ||
-          climbFilterConfig.categories.includes(s.climb_category);
-        return matchesSearch && matchesDistance && matchesClimb;
-      }),
-      sortBy
-    );
-  }, [segments, searchQuery, distanceFilter, climbFilter, sortBy, showStarred]);
+  // Regular segments are now filtered server-side, so just use them directly
+  const filteredSegments = showStarred ? [] : segments;
 
   const hasFilters = searchQuery || distanceFilter !== "all" || climbFilter !== "all";
   const isEmpty = showStarred ? filteredStarredEfforts.length === 0 : filteredSegments.length === 0;

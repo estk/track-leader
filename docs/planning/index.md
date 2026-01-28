@@ -99,6 +99,8 @@ These items were planned but deferred for post-launch:
 - Internationalization
 - Equipment type filters (e-bike vs acoustic)
 - Weight class filters
+-. **Teams** - What does it look like to be on a team, publish activities to teams you are a member of
+-. **Multi-Sport Activity** - Can we start to introduce a concept of multi-sport activities? Ride+Dig Ride+Ski etc. This should be general so any activities can be done together, and we should also allow users to create new activity types
 
 ---
 
