@@ -2,7 +2,7 @@
 
 **Date:** January 2026
 **Last Updated:** January 27, 2026
-**Status:** Phase 4 Complete, Beginning Phase 5
+**Status:** Phase 5 Complete, Ready for Phase 6
 
 ## Executive Summary
 
@@ -11,13 +11,14 @@ Track Leader is a GPS activity tracking application with aspirations to become a
 1. **A functional Rust backend** - Well-architected Axum service with PostgreSQL/PostGIS
 2. **A functional Next.js frontend** - Integrated with backend, mobile responsive
 
-**Current Phase:** Phase 5 (Social Features) - Starting
+**Current Phase:** Phase 6 (Polish) - Not Started
 
 **Completed Phases:**
 - ✅ Phase 1: Foundation (Auth, Activity Upload, Basic UI)
 - ✅ Phase 2: Core Features (Activity Management, Maps, Profiles)
 - ✅ Phase 3: Segments (Creation, Matching, PRs, Starring)
 - ✅ Phase 4: Leaderboards (Filters, Demographics, Achievements, Global Leaderboards)
+- ✅ Phase 5: Social Features (Follows, Feed, Kudos, Comments, Notifications)
 
 ---
 
@@ -42,6 +43,11 @@ Track Leader is a GPS activity tracking application with aspirations to become a
 | Demographics | ✅ | Gender, birth year, weight, location |
 | Achievements | ✅ | KOM/QOM/Local Legend schema |
 | Global leaderboards | ✅ | Crown count, distance rankings |
+| Follow system | ✅ | Follow/unfollow, follower lists |
+| Activity feed | ✅ | From followed users with pagination |
+| Kudos | ✅ | Give/remove with counts |
+| Comments | ✅ | Add/delete on activities |
+| Notifications | ✅ | Follow, kudos, comment events |
 
 ### Frontend Features
 
@@ -60,6 +66,10 @@ Track Leader is a GPS activity tracking application with aspirations to become a
 | Achievements | Crown gallery with filters |
 | Rankings | Personal segment rankings |
 | Global Leaderboards | Crown count, distance rankings |
+| Activity Feed | Activities from followed users |
+| User Profiles | Public profiles with follow button |
+| Kudos & Comments | Give kudos, add/delete comments |
+| Notifications | Bell dropdown, full page, mark read |
 | Mobile Responsive | Hamburger menu, touch-friendly |
 
 ---
@@ -83,11 +93,11 @@ Track Leader is a GPS activity tracking application with aspirations to become a
 - MapLibre GL v5.16
 - Recharts v3.7
 
-### Database Schema (Migrations 001-010)
+### Database Schema (Migrations 001-013)
 
 **Core Tables:**
-- `users` - Auth, profile, demographics
-- `activities` - User activities with metadata
+- `users` - Auth, profile, demographics, follower counts
+- `activities` - User activities with metadata, kudos/comment counts
 - `tracks` - PostGIS GEOGRAPHY LineString Z
 - `scores` - Computed metrics
 - `segments` - User-created trail segments
@@ -95,6 +105,10 @@ Track Leader is a GPS activity tracking application with aspirations to become a
 - `starred_segments` - User favorites
 - `leaderboard_cache` - Cached filtered leaderboards
 - `achievements` - KOM/QOM/Local Legend records
+- `follows` - User follow relationships
+- `notifications` - User notifications with actor/target
+- `kudos` - Activity kudos
+- `comments` - Activity comments with threading
 
 ---
 
@@ -112,6 +126,9 @@ track-leader/
 │   ├── components/         # React components
 │   │   ├── activity/       # Map, elevation profile
 │   │   ├── leaderboard/    # Table, filters, badges
+│   │   ├── social/         # Follow, kudos, comments
+│   │   ├── notifications/  # Notification bell, list
+│   │   ├── feed/           # Activity feed cards
 │   │   └── ui/             # Shadcn-style primitives
 │   └── lib/                # Utilities
 │       ├── api.ts          # API client
@@ -172,20 +189,53 @@ track-leader/
 
 ---
 
-## What's Next: Phase 5 Social Features
+## Phase 5 Completion Summary
+
+### What Was Built
+
+1. **Database Migrations (011-013)**
+   - Follows table with denormalized counts on users
+   - Notifications table with actor/target pattern
+   - Kudos table with denormalized count on activities
+   - Comments table with soft delete support
+
+2. **Backend Endpoints**
+   - Follow/unfollow with status checks
+   - Followers/following lists with pagination
+   - Activity feed from followed users
+   - Kudos give/remove with givers list
+   - Comments add/delete with threading support
+   - Notifications with mark read and mark all read
+
+3. **Frontend Pages & Components**
+   - `/feed` - Activity feed with kudos and comments
+   - `/profile/[userId]` - Public profile with follow button
+   - `/profile/[userId]/followers` - Followers list
+   - `/profile/[userId]/following` - Following list
+   - `/notifications` - Full notifications page
+   - NotificationBell component with dropdown in header
+   - FollowButton, FollowStats, KudosButton, CommentsSection components
+   - FeedCard component for activity display
+
+---
+
+## What's Next: Phase 6 Polish
 
 ### Core Scope
-- Follow system
-- Activity feed from followed users
-- Kudos and comments
-- Notifications
+- Performance optimization
+- Error handling improvements
+- Loading states and skeletons
+- SEO and accessibility
+- Testing coverage
 
 ### Potential Extensions (Your Ideas)
-- **Teams** - Team visibility, team pages, team feeds (likely Phase 5 extension or Phase 7)
+- **Teams** - Team visibility, team pages, team feeds (Phase 7)
 - **Synthetic test data** - Generate or import test data
 - **API type generation** - Protobuf/Swagger for Rust-Node interface
 
 ### Stretch Goals
+- SSE real-time updates for leaderboards and notifications
+- Auto-achievement processing on effort creation
 - Enhanced leaderboard filters (weight class, equipment)
 - GPS refresh rate in track stats
 - Data quality-based segment matching tolerance
