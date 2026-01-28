@@ -31,6 +31,23 @@ Supports random ports for parallel workspaces. See [docs/ai/development.md](./do
 - **Imports**: Import unused traits as `use MyTrait as _`
 - **Format strings**: Use inline variables: `println!("Hello, {name}!")`
 
+## Token-Efficient Build Commands
+
+When running builds, filter verbose output to save context tokens:
+
+```bash
+# Cargo - filter out compile/download progress, show only errors/warnings
+cargo build 2>&1 | grep -v -E "^\s*(Compiling|Downloading|Downloaded|Fresh|Blocking|Updating)"
+
+# Cargo test - show only test results and failures
+cargo nextest run 2>&1 | grep -v -E "^\s*(Compiling|Fresh|Blocking)"
+
+# npm/Next.js - filter module counts and progress
+npm run build 2>&1 | grep -v -E "^\s*(○|✓|▲).*modules"
+```
+
+For build errors, the unfiltered output is often needed - run without filters when debugging.
+
 ## Project Structure
 
 ```
