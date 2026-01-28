@@ -244,6 +244,19 @@ Fixed activity detail "Not Found" bug by storing track data in PostgreSQL instea
 
 ## What's Next: Phase 6 Polish
 
+### Pre-Launch Advantage
+
+Since we haven't launched yet, we have **no migration debt**:
+- All migrations can be collapsed into a single `001_init.sql` before launch
+- No backwards compatibility concerns - can freely change schema
+- No data to migrate - production DB will be created fresh
+
+### Focus Areas
+
+1. **Simplification** - Remove dead code, consolidate similar functionality
+2. **Deprecated feature removal** - Delete unused endpoints, tables, and UI components
+3. **Performance** - Optimize queries and indexes before data exists
+
 ### Core Scope
 - Performance optimization
 - Error handling improvements

@@ -7,6 +7,21 @@
 
 ---
 
+## Pre-Launch Advantage: No Migration Debt
+
+**Key insight:** Since we haven't launched yet, we have no users with existing data to migrate. This means:
+
+1. **Collapse migrations** - All 14+ migration files can be collapsed into a single `001_init.sql` before launch
+2. **No backwards compatibility concerns** - Can freely change schema without migration scripts
+3. **Clean slate deployment** - Production DB will be created fresh from final schema
+
+**Focus areas for Phase 6:**
+- **Simplification** - Remove dead code, consolidate similar functionality
+- **Deprecated feature removal** - Delete unused endpoints, tables, and UI components
+- **Performance** - Optimize queries and indexes before data exists
+
+---
+
 ## Known Bugs (from Phase 5 Testing)
 
 These bugs were discovered during Phase 5 manual verification and should be fixed early in Phase 6:
@@ -15,43 +30,27 @@ These bugs were discovered during Phase 5 manual verification and should be fixe
 
 **Severity:** High
 **Location:** `/activities/[id]` page
-**Status:** Open - Requires Tracks Table Refactoring
+**Status:** ✅ Fixed (January 28, 2026)
 
 **Description:**
-Clicking on an activity (e.g., "reno tour") from the activities list navigates to the activity detail page, but it shows "Not found" instead of the activity details.
+Clicking on an activity from the activities list navigates to the activity detail page, but it shows "Not found" instead of the activity details.
 
-**Root Cause (Investigated):**
-The `/activities/{id}/track` endpoint returns 404 because it tries to read the raw GPX file from object storage, but the file doesn't exist (activity metadata was created without uploading actual GPX).
+**Root Cause:**
+The `/activities/{id}/track` endpoint was re-parsing the raw GPX file from object storage on every request. This was inefficient, fragile, and duplicative.
 
-**Architectural Problem:**
-Currently `get_activity_track` re-parses the GPX file from object storage on every request. This is:
-1. Inefficient (parsing on every request)
-2. Fragile (depends on GPX file existing in object store)
-3. Duplicative (we already parse GPX during upload)
+**Fix Applied:**
+Refactored track storage to use PostGIS LineStringZM (4D geometry):
+- X=longitude, Y=latitude, Z=elevation(meters), M=timestamp(unix epoch)
+- Track data stored during upload, retrieved from database
+- No dependency on GPX file existing in object store
 
-**Fix Required - Tracks Table Refactoring:**
-Extend the existing `tracks` table to store elevation and timestamp data alongside the geometry:
+**Files modified:**
+- `migrations/014_tracks_linestringzm.sql` - Schema change
+- `database.rs` - New save/get methods for track points
+- `handlers.rs` - Read from database instead of object storage
+- `activity_queue.rs` - Extract elevation/timestamps during upload
 
-1. **Migration** (`014_tracks_elevation_time.sql` - already created):
-   ```sql
-   ALTER TABLE tracks
-   ADD COLUMN elevations double precision[],
-   ADD COLUMN recorded_times timestamptz[];
-   ```
-
-2. **Update `save_track_geometry`** to also save elevation/time arrays when processing GPX
-
-3. **Update `get_activity_track`** to read from `tracks` table instead of re-parsing GPX:
-   - Extract points from `geo` LineString using `ST_DumpPoints`
-   - Combine with `elevations` and `recorded_times` arrays
-   - Return TrackData response
-
-4. **Backfill existing activities** - Re-process any activities that have GPX files to populate the new columns
-
-**Files to modify:**
-- `crates/tracks/src/database.rs` - Update save_track_geometry, add get_track_data
-- `crates/tracks/src/handlers.rs` - Update get_activity_track to use DB
-- `crates/tracks/src/activity_queue.rs` - Save elevation/time during processing
+See `docs/learnings/bug-p6-001-track-storage.md` for full details.
 
 ---
 
