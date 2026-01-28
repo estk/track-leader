@@ -51,6 +51,11 @@ export function Header() {
           <Link href="/leaderboards" className="text-muted-foreground hover:text-foreground">
             Leaderboards
           </Link>
+          {user && (
+            <Link href="/teams" className="text-muted-foreground hover:text-foreground">
+              Teams
+            </Link>
+          )}
           <div className="flex items-center gap-2 ml-4 pl-4 border-l">
             {loading ? (
               <span className="text-muted-foreground text-sm">Loading...</span>
@@ -152,6 +157,15 @@ export function Header() {
             >
               Leaderboards
             </Link>
+            {user && (
+              <Link
+                href="/teams"
+                className="text-muted-foreground hover:text-foreground py-2"
+                onClick={closeMobileMenu}
+              >
+                Teams
+              </Link>
+            )}
             <div className="border-t pt-4 flex flex-col gap-4">
               {loading ? (
                 <span className="text-muted-foreground text-sm">Loading...</span>

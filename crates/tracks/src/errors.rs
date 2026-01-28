@@ -30,6 +30,9 @@ pub enum AppError {
     #[error("Unauthorized")]
     Unauthorized,
 
+    #[error("Forbidden")]
+    Forbidden,
+
     #[error("Internal server error")]
     Internal,
 
@@ -78,6 +81,7 @@ impl IntoResponse for AppError {
                     AppError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
                     AppError::NotFound => (StatusCode::NOT_FOUND, "Not found"),
                     AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
+                    AppError::Forbidden => (StatusCode::FORBIDDEN, "Forbidden"),
                     AppError::Internal => {
                         (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
                     }

@@ -731,3 +731,299 @@ pub struct TrackPointData {
     pub elevation: Option<f64>,
     pub timestamp: Option<OffsetDateTime>,
 }
+
+// ============================================================================
+// Team Models
+// ============================================================================
+
+/// Team role enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default)]
+#[sqlx(type_name = "team_role", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum TeamRole {
+    Owner,
+    Admin,
+    #[default]
+    Member,
+}
+
+impl TeamRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TeamRole::Owner => "owner",
+            TeamRole::Admin => "admin",
+            TeamRole::Member => "member",
+        }
+    }
+
+    /// Returns true if this role can manage members (invite, remove, change roles)
+    pub fn can_manage_members(&self) -> bool {
+        matches!(self, TeamRole::Owner | TeamRole::Admin)
+    }
+
+    /// Returns true if this role can modify team settings
+    pub fn can_modify_team(&self) -> bool {
+        matches!(self, TeamRole::Owner | TeamRole::Admin)
+    }
+
+    /// Returns true if this role can delete the team
+    pub fn can_delete_team(&self) -> bool {
+        matches!(self, TeamRole::Owner)
+    }
+}
+
+impl std::str::FromStr for TeamRole {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "owner" => Ok(TeamRole::Owner),
+            "admin" => Ok(TeamRole::Admin),
+            "member" => Ok(TeamRole::Member),
+            _ => Err(format!("unknown team role: {s}")),
+        }
+    }
+}
+
+/// Team visibility (whether team is discoverable)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default)]
+#[sqlx(type_name = "team_visibility", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum TeamVisibility {
+    /// Team is discoverable in team listings
+    Public,
+    /// Team is only visible to members
+    #[default]
+    Private,
+}
+
+impl TeamVisibility {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TeamVisibility::Public => "public",
+            TeamVisibility::Private => "private",
+        }
+    }
+}
+
+impl std::str::FromStr for TeamVisibility {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "public" => Ok(TeamVisibility::Public),
+            "private" => Ok(TeamVisibility::Private),
+            _ => Err(format!("unknown team visibility: {s}")),
+        }
+    }
+}
+
+/// Team join policy
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default)]
+#[sqlx(type_name = "team_join_policy", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum TeamJoinPolicy {
+    /// Anyone can join without approval
+    Open,
+    /// Users can request to join, requires admin approval
+    Request,
+    /// Users can only join via invitation
+    #[default]
+    Invitation,
+}
+
+impl TeamJoinPolicy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TeamJoinPolicy::Open => "open",
+            TeamJoinPolicy::Request => "request",
+            TeamJoinPolicy::Invitation => "invitation",
+        }
+    }
+}
+
+impl std::str::FromStr for TeamJoinPolicy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "open" => Ok(TeamJoinPolicy::Open),
+            "request" => Ok(TeamJoinPolicy::Request),
+            "invitation" => Ok(TeamJoinPolicy::Invitation),
+            _ => Err(format!("unknown team join policy: {s}")),
+        }
+    }
+}
+
+/// A team for sharing activities and segments
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Team {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub visibility: TeamVisibility,
+    pub join_policy: TeamJoinPolicy,
+    pub owner_id: Uuid,
+    pub member_count: i32,
+    pub activity_count: i32,
+    pub segment_count: i32,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde(with = "rfc3339::option")]
+    pub updated_at: Option<OffsetDateTime>,
+}
+
+/// Team with additional context for the current user
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TeamWithMembership {
+    #[serde(flatten)]
+    pub team: Team,
+    pub user_role: Option<TeamRole>,
+    pub is_member: bool,
+    pub owner_name: String,
+}
+
+/// A membership in a team
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TeamMembership {
+    pub team_id: Uuid,
+    pub user_id: Uuid,
+    pub role: TeamRole,
+    pub invited_by: Option<Uuid>,
+    #[serde(with = "rfc3339")]
+    pub joined_at: OffsetDateTime,
+}
+
+/// Team member with user details
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TeamMember {
+    pub user_id: Uuid,
+    pub user_name: String,
+    pub role: TeamRole,
+    #[serde(with = "rfc3339")]
+    pub joined_at: OffsetDateTime,
+    pub invited_by: Option<Uuid>,
+    pub invited_by_name: Option<String>,
+}
+
+/// Request to join a team
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TeamJoinRequest {
+    pub id: Uuid,
+    pub team_id: Uuid,
+    pub user_id: Uuid,
+    pub message: Option<String>,
+    pub status: String,
+    pub reviewed_by: Option<Uuid>,
+    #[serde(with = "rfc3339::option")]
+    pub reviewed_at: Option<OffsetDateTime>,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Join request with user details for admin review
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TeamJoinRequestWithUser {
+    pub id: Uuid,
+    pub team_id: Uuid,
+    pub user_id: Uuid,
+    pub user_name: String,
+    pub message: Option<String>,
+    pub status: String,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// An invitation to join a team
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TeamInvitation {
+    pub id: Uuid,
+    pub team_id: Uuid,
+    pub email: String,
+    pub invited_by: Uuid,
+    pub role: TeamRole,
+    pub token: String,
+    #[serde(with = "rfc3339")]
+    pub expires_at: OffsetDateTime,
+    #[serde(with = "rfc3339::option")]
+    pub accepted_at: Option<OffsetDateTime>,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Invitation with additional context
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TeamInvitationWithDetails {
+    pub id: Uuid,
+    pub team_id: Uuid,
+    pub team_name: String,
+    pub email: String,
+    pub invited_by: Uuid,
+    pub invited_by_name: String,
+    pub role: TeamRole,
+    #[serde(with = "rfc3339")]
+    pub expires_at: OffsetDateTime,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Request to create a team
+#[derive(Debug, Deserialize)]
+pub struct CreateTeamRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub visibility: TeamVisibility,
+    #[serde(default)]
+    pub join_policy: TeamJoinPolicy,
+}
+
+/// Request to update a team
+#[derive(Debug, Deserialize)]
+pub struct UpdateTeamRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub visibility: Option<TeamVisibility>,
+    pub join_policy: Option<TeamJoinPolicy>,
+}
+
+/// Request to invite a user to a team
+#[derive(Debug, Deserialize)]
+pub struct InviteToTeamRequest {
+    pub email: String,
+    #[serde(default)]
+    pub role: TeamRole,
+}
+
+/// Request to change a member's role
+#[derive(Debug, Deserialize)]
+pub struct ChangeMemberRoleRequest {
+    pub role: TeamRole,
+}
+
+/// Request to join a team
+#[derive(Debug, Deserialize)]
+pub struct JoinTeamRequest {
+    pub message: Option<String>,
+}
+
+/// Request to share activity/segment with teams
+#[derive(Debug, Deserialize)]
+pub struct ShareWithTeamsRequest {
+    pub team_ids: Vec<Uuid>,
+}
+
+/// Team summary for listings
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct TeamSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub member_count: i32,
+    pub activity_count: i32,
+    pub segment_count: i32,
+}

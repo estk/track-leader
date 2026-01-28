@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,7 @@ export default function ActivityDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState("");
-  const [editVisibility, setEditVisibility] = useState<"public" | "private">("public");
+  const [editVisibility, setEditVisibility] = useState<ActivityVisibility>("public");
   const [saving, setSaving] = useState(false);
 
   // Delete modal state
@@ -278,7 +278,7 @@ export default function ActivityDetailPage() {
               </div>
               <div className="space-y-2">
                 <Label>Visibility</Label>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -301,7 +301,23 @@ export default function ActivityDetailPage() {
                     />
                     <span>Private</span>
                   </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="edit-visibility"
+                      value="teams_only"
+                      checked={editVisibility === "teams_only"}
+                      onChange={() => setEditVisibility("teams_only")}
+                      className="w-4 h-4"
+                    />
+                    <span>Teams Only</span>
+                  </label>
                 </div>
+                {editVisibility === "teams_only" && (
+                  <p className="text-xs text-muted-foreground">
+                    To change which teams can see this activity, use the activity sharing settings.
+                  </p>
+                )}
               </div>
               <div className="flex gap-2 pt-4">
                 <Button
@@ -508,8 +524,8 @@ export default function ActivityDetailPage() {
           <h1 className="text-2xl md:text-3xl font-bold">{activity.name}</h1>
           <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2">
             <Badge variant="secondary">{activity.activity_type}</Badge>
-            <Badge variant={activity.visibility === "private" ? "outline" : "default"}>
-              {activity.visibility === "private" ? "Private" : "Public"}
+            <Badge variant={activity.visibility === "public" ? "default" : "outline"}>
+              {activity.visibility === "public" ? "Public" : activity.visibility === "private" ? "Private" : "Teams Only"}
             </Badge>
             <span className="text-sm md:text-base text-muted-foreground">
               {new Date(activity.submitted_at).toLocaleDateString(undefined, {

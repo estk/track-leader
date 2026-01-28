@@ -465,6 +465,138 @@ Authorization: Bearer {token}
 
 ---
 
+## Teams
+
+Teams enable group-based sharing for activities and segments.
+
+### Create Team
+
+```http
+POST /teams
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "Trail Runners Club",
+  "description": "Local trail running group",
+  "visibility": "private",
+  "join_policy": "invitation"
+}
+```
+
+**Visibility:** `public` (discoverable) or `private`
+**Join Policy:** `open`, `request`, or `invitation`
+
+### List My Teams
+
+```http
+GET /teams
+Authorization: Bearer {token}
+```
+
+### Discover Teams
+
+```http
+GET /teams/discover
+```
+
+Returns teams with `visibility: public`.
+
+### Get Team
+
+```http
+GET /teams/{id}
+Authorization: Bearer {token}
+```
+
+### Update Team
+
+```http
+PATCH /teams/{id}
+Authorization: Bearer {token}
+```
+
+Requires `admin` or `owner` role.
+
+### Delete Team
+
+```http
+DELETE /teams/{id}
+Authorization: Bearer {token}
+```
+
+Requires `owner` role.
+
+### Team Members
+
+```http
+GET /teams/{id}/members
+DELETE /teams/{id}/members/{user_id}
+PATCH /teams/{id}/members/{user_id}
+Authorization: Bearer {token}
+```
+
+### Join/Leave Team
+
+```http
+POST /teams/{id}/join
+POST /teams/{id}/leave
+Authorization: Bearer {token}
+```
+
+Join behavior depends on team's `join_policy`.
+
+### Team Invitations
+
+```http
+POST /teams/{id}/invitations
+GET /teams/{id}/invitations
+DELETE /teams/{id}/invitations/{invitation_id}
+Authorization: Bearer {token}
+```
+
+```http
+GET /invitations/{token}
+POST /invitations/{token}/accept
+Authorization: Bearer {token}
+```
+
+### Join Requests
+
+```http
+GET /teams/{id}/join-requests
+POST /teams/{id}/join-requests/{request_id}
+Authorization: Bearer {token}
+```
+
+### Activity-Team Sharing
+
+```http
+GET /activities/{id}/teams
+POST /activities/{id}/teams
+DELETE /activities/{id}/teams/{team_id}
+Authorization: Bearer {token}
+```
+
+### Segment-Team Sharing
+
+```http
+GET /segments/{id}/teams
+POST /segments/{id}/teams
+DELETE /segments/{id}/teams/{team_id}
+Authorization: Bearer {token}
+```
+
+### Team Content
+
+```http
+GET /teams/{id}/activities
+GET /teams/{id}/segments
+Authorization: Bearer {token}
+```
+
+---
+
 ## Error Responses
 
 All errors return consistent JSON:

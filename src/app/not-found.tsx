@@ -12,7 +12,7 @@ export default function NotFoundPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-center">
           <p className="text-muted-foreground">
-            The page you're looking for doesn't exist or has been moved.
+            The page you&apos;re looking for doesn&apos;t exist or has been moved.
           </p>
           <div className="flex gap-2 justify-center pt-4">
             <Button variant="outline" asChild>

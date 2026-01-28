@@ -3,6 +3,8 @@ use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
     ActivitySegmentEffort, ActivityType, CrownCountEntry, DistanceLeaderEntry, GenderFilter,
     LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Scores, Segment, SegmentEffort,
+    Team, TeamInvitation, TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser,
+    TeamMember, TeamMembership, TeamRole, TeamSummary, TeamVisibility, TeamWithMembership,
     UpdateDemographicsRequest, User, UserWithDemographics,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
@@ -2414,5 +2416,913 @@ impl Database {
             segments_created: segments_created.0,
             activities_uploaded: activities_uploaded.0,
         })
+    }
+
+    // ========================================================================
+    // Team Methods
+    // ========================================================================
+
+    /// Create a new team.
+    pub async fn create_team(
+        &self,
+        name: &str,
+        description: Option<&str>,
+        avatar_url: Option<&str>,
+        visibility: TeamVisibility,
+        join_policy: crate::models::TeamJoinPolicy,
+        owner_id: Uuid,
+    ) -> Result<Team, AppError> {
+        let team: Team = sqlx::query_as(
+            r#"
+            INSERT INTO teams (name, description, avatar_url, visibility, join_policy, owner_id, member_count, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, 1, NOW())
+            RETURNING id, name, description, avatar_url, visibility, join_policy, owner_id,
+                      member_count, activity_count, segment_count, created_at, updated_at
+            "#,
+        )
+        .bind(name)
+        .bind(description)
+        .bind(avatar_url)
+        .bind(visibility)
+        .bind(join_policy)
+        .bind(owner_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Add owner as a member with 'owner' role
+        sqlx::query(
+            r#"
+            INSERT INTO team_memberships (team_id, user_id, role, joined_at)
+            VALUES ($1, $2, 'owner', NOW())
+            "#,
+        )
+        .bind(team.id)
+        .bind(owner_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(team)
+    }
+
+    /// Get a team by ID.
+    pub async fn get_team(&self, id: Uuid) -> Result<Option<Team>, AppError> {
+        let team: Option<Team> = sqlx::query_as(
+            r#"
+            SELECT id, name, description, avatar_url, visibility, join_policy, owner_id,
+                   member_count, activity_count, segment_count, created_at, updated_at
+            FROM teams
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(team)
+    }
+
+    /// Get a team with membership context for a user.
+    pub async fn get_team_with_membership(
+        &self,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<TeamWithMembership>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct TeamRow {
+            id: Uuid,
+            name: String,
+            description: Option<String>,
+            avatar_url: Option<String>,
+            visibility: TeamVisibility,
+            join_policy: crate::models::TeamJoinPolicy,
+            owner_id: Uuid,
+            member_count: i32,
+            activity_count: i32,
+            segment_count: i32,
+            created_at: time::OffsetDateTime,
+            updated_at: Option<time::OffsetDateTime>,
+            owner_name: String,
+            user_role: Option<TeamRole>,
+        }
+
+        let row: Option<TeamRow> = sqlx::query_as(
+            r#"
+            SELECT t.id, t.name, t.description, t.avatar_url, t.visibility, t.join_policy, t.owner_id,
+                   t.member_count, t.activity_count, t.segment_count, t.created_at, t.updated_at,
+                   u.name as owner_name,
+                   tm.role as user_role
+            FROM teams t
+            JOIN users u ON u.id = t.owner_id
+            LEFT JOIN team_memberships tm ON tm.team_id = t.id AND tm.user_id = $2
+            WHERE t.id = $1 AND t.deleted_at IS NULL
+            "#,
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| TeamWithMembership {
+            team: Team {
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                avatar_url: r.avatar_url,
+                visibility: r.visibility,
+                join_policy: r.join_policy,
+                owner_id: r.owner_id,
+                member_count: r.member_count,
+                activity_count: r.activity_count,
+                segment_count: r.segment_count,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            },
+            user_role: r.user_role,
+            is_member: r.user_role.is_some(),
+            owner_name: r.owner_name,
+        }))
+    }
+
+    /// Update a team.
+    pub async fn update_team(
+        &self,
+        id: Uuid,
+        name: Option<&str>,
+        description: Option<&str>,
+        avatar_url: Option<&str>,
+        visibility: Option<TeamVisibility>,
+        join_policy: Option<crate::models::TeamJoinPolicy>,
+    ) -> Result<Option<Team>, AppError> {
+        let team: Option<Team> = sqlx::query_as(
+            r#"
+            UPDATE teams
+            SET name = COALESCE($2, name),
+                description = COALESCE($3, description),
+                avatar_url = COALESCE($4, avatar_url),
+                visibility = COALESCE($5, visibility),
+                join_policy = COALESCE($6, join_policy),
+                updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING id, name, description, avatar_url, visibility, join_policy, owner_id,
+                      member_count, activity_count, segment_count, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(description)
+        .bind(avatar_url)
+        .bind(visibility)
+        .bind(join_policy)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(team)
+    }
+
+    /// Delete a team (soft delete).
+    pub async fn delete_team(&self, id: Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE teams SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// List teams for a user (teams they are a member of).
+    pub async fn list_user_teams(&self, user_id: Uuid) -> Result<Vec<TeamWithMembership>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct TeamRow {
+            id: Uuid,
+            name: String,
+            description: Option<String>,
+            avatar_url: Option<String>,
+            visibility: TeamVisibility,
+            join_policy: crate::models::TeamJoinPolicy,
+            owner_id: Uuid,
+            member_count: i32,
+            activity_count: i32,
+            segment_count: i32,
+            created_at: time::OffsetDateTime,
+            updated_at: Option<time::OffsetDateTime>,
+            owner_name: String,
+            user_role: TeamRole,
+        }
+
+        let rows: Vec<TeamRow> = sqlx::query_as(
+            r#"
+            SELECT t.id, t.name, t.description, t.avatar_url, t.visibility, t.join_policy, t.owner_id,
+                   t.member_count, t.activity_count, t.segment_count, t.created_at, t.updated_at,
+                   u.name as owner_name,
+                   tm.role as user_role
+            FROM teams t
+            JOIN team_memberships tm ON tm.team_id = t.id
+            JOIN users u ON u.id = t.owner_id
+            WHERE tm.user_id = $1 AND t.deleted_at IS NULL
+            ORDER BY tm.joined_at DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| TeamWithMembership {
+                team: Team {
+                    id: r.id,
+                    name: r.name,
+                    description: r.description,
+                    avatar_url: r.avatar_url,
+                    visibility: r.visibility,
+                    join_policy: r.join_policy,
+                    owner_id: r.owner_id,
+                    member_count: r.member_count,
+                    activity_count: r.activity_count,
+                    segment_count: r.segment_count,
+                    created_at: r.created_at,
+                    updated_at: r.updated_at,
+                },
+                user_role: Some(r.user_role),
+                is_member: true,
+                owner_name: r.owner_name,
+            })
+            .collect())
+    }
+
+    /// List discoverable teams (for browsing).
+    pub async fn list_discoverable_teams(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<TeamSummary>, AppError> {
+        let teams: Vec<TeamSummary> = sqlx::query_as(
+            r#"
+            SELECT id, name, description, avatar_url, member_count, activity_count, segment_count
+            FROM teams
+            WHERE visibility = 'public' AND deleted_at IS NULL
+            ORDER BY member_count DESC, created_at DESC
+            LIMIT $1 OFFSET $2
+            "#,
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(teams)
+    }
+
+    // ========================================================================
+    // Team Membership Methods
+    // ========================================================================
+
+    /// Get a user's membership in a team.
+    pub async fn get_team_membership(
+        &self,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<TeamMembership>, AppError> {
+        let membership: Option<TeamMembership> = sqlx::query_as(
+            r#"
+            SELECT team_id, user_id, role, invited_by, joined_at
+            FROM team_memberships
+            WHERE team_id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(membership)
+    }
+
+    /// Add a member to a team.
+    pub async fn add_team_member(
+        &self,
+        team_id: Uuid,
+        user_id: Uuid,
+        role: TeamRole,
+        invited_by: Option<Uuid>,
+    ) -> Result<TeamMembership, AppError> {
+        let membership: TeamMembership = sqlx::query_as(
+            r#"
+            INSERT INTO team_memberships (team_id, user_id, role, invited_by, joined_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            RETURNING team_id, user_id, role, invited_by, joined_at
+            "#,
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .bind(role)
+        .bind(invited_by)
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Update member count
+        sqlx::query(r#"UPDATE teams SET member_count = member_count + 1 WHERE id = $1"#)
+            .bind(team_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(membership)
+    }
+
+    /// Remove a member from a team.
+    pub async fn remove_team_member(&self, team_id: Uuid, user_id: Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM team_memberships WHERE team_id = $1 AND user_id = $2
+            "#,
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            // Update member count
+            sqlx::query(
+                r#"UPDATE teams SET member_count = GREATEST(member_count - 1, 0) WHERE id = $1"#,
+            )
+            .bind(team_id)
+            .execute(&self.pool)
+            .await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Change a member's role in a team.
+    pub async fn change_team_member_role(
+        &self,
+        team_id: Uuid,
+        user_id: Uuid,
+        new_role: TeamRole,
+    ) -> Result<Option<TeamMembership>, AppError> {
+        let membership: Option<TeamMembership> = sqlx::query_as(
+            r#"
+            UPDATE team_memberships
+            SET role = $3
+            WHERE team_id = $1 AND user_id = $2
+            RETURNING team_id, user_id, role, invited_by, joined_at
+            "#,
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .bind(new_role)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(membership)
+    }
+
+    /// List members of a team.
+    pub async fn list_team_members(&self, team_id: Uuid) -> Result<Vec<TeamMember>, AppError> {
+        let members: Vec<TeamMember> = sqlx::query_as(
+            r#"
+            SELECT
+                tm.user_id,
+                u.name as user_name,
+                tm.role,
+                tm.joined_at,
+                tm.invited_by,
+                ib.name as invited_by_name
+            FROM team_memberships tm
+            JOIN users u ON u.id = tm.user_id
+            LEFT JOIN users ib ON ib.id = tm.invited_by
+            WHERE tm.team_id = $1
+            ORDER BY
+                CASE tm.role
+                    WHEN 'owner' THEN 1
+                    WHEN 'admin' THEN 2
+                    ELSE 3
+                END,
+                tm.joined_at ASC
+            "#,
+        )
+        .bind(team_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(members)
+    }
+
+    // ========================================================================
+    // Team Join Request Methods
+    // ========================================================================
+
+    /// Create a join request for a team.
+    pub async fn create_team_join_request(
+        &self,
+        team_id: Uuid,
+        user_id: Uuid,
+        message: Option<&str>,
+    ) -> Result<TeamJoinRequest, AppError> {
+        let request: TeamJoinRequest = sqlx::query_as(
+            r#"
+            INSERT INTO team_join_requests (team_id, user_id, message, status, created_at)
+            VALUES ($1, $2, $3, 'pending', NOW())
+            ON CONFLICT (team_id, user_id) DO UPDATE SET
+                message = COALESCE($3, team_join_requests.message),
+                status = 'pending',
+                reviewed_by = NULL,
+                reviewed_at = NULL,
+                created_at = NOW()
+            RETURNING id, team_id, user_id, message, status, reviewed_by, reviewed_at, created_at
+            "#,
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .bind(message)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(request)
+    }
+
+    /// Get pending join requests for a team.
+    pub async fn get_pending_join_requests(
+        &self,
+        team_id: Uuid,
+    ) -> Result<Vec<TeamJoinRequestWithUser>, AppError> {
+        let requests: Vec<TeamJoinRequestWithUser> = sqlx::query_as(
+            r#"
+            SELECT
+                jr.id, jr.team_id, jr.user_id, u.name as user_name,
+                jr.message, jr.status, jr.created_at
+            FROM team_join_requests jr
+            JOIN users u ON u.id = jr.user_id
+            WHERE jr.team_id = $1 AND jr.status = 'pending'
+            ORDER BY jr.created_at ASC
+            "#,
+        )
+        .bind(team_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(requests)
+    }
+
+    /// Approve or reject a join request.
+    pub async fn review_join_request(
+        &self,
+        request_id: Uuid,
+        reviewer_id: Uuid,
+        approved: bool,
+    ) -> Result<Option<TeamJoinRequest>, AppError> {
+        let status = if approved { "approved" } else { "rejected" };
+        let request: Option<TeamJoinRequest> = sqlx::query_as(
+            r#"
+            UPDATE team_join_requests
+            SET status = $2, reviewed_by = $3, reviewed_at = NOW()
+            WHERE id = $1 AND status = 'pending'
+            RETURNING id, team_id, user_id, message, status, reviewed_by, reviewed_at, created_at
+            "#,
+        )
+        .bind(request_id)
+        .bind(status)
+        .bind(reviewer_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(request)
+    }
+
+    /// Get a join request by ID.
+    pub async fn get_join_request(&self, id: Uuid) -> Result<Option<TeamJoinRequest>, AppError> {
+        let request: Option<TeamJoinRequest> = sqlx::query_as(
+            r#"
+            SELECT id, team_id, user_id, message, status, reviewed_by, reviewed_at, created_at
+            FROM team_join_requests
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(request)
+    }
+
+    /// Check if a user has a pending join request for a team.
+    pub async fn has_pending_join_request(
+        &self,
+        team_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let row: Option<(i32,)> = sqlx::query_as(
+            r#"
+            SELECT 1 FROM team_join_requests
+            WHERE team_id = $1 AND user_id = $2 AND status = 'pending'
+            LIMIT 1
+            "#,
+        )
+        .bind(team_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    // ========================================================================
+    // Team Invitation Methods
+    // ========================================================================
+
+    /// Create an invitation to join a team.
+    pub async fn create_team_invitation(
+        &self,
+        team_id: Uuid,
+        email: &str,
+        invited_by: Uuid,
+        role: TeamRole,
+        token: &str,
+        expires_at: time::OffsetDateTime,
+    ) -> Result<TeamInvitation, AppError> {
+        let invitation: TeamInvitation = sqlx::query_as(
+            r#"
+            INSERT INTO team_invitations (team_id, email, invited_by, role, token, expires_at, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            ON CONFLICT (team_id, email) DO UPDATE SET
+                invited_by = $3,
+                role = $4,
+                token = $5,
+                expires_at = $6,
+                accepted_at = NULL,
+                created_at = NOW()
+            RETURNING id, team_id, email, invited_by, role, token, expires_at, accepted_at, created_at
+            "#,
+        )
+        .bind(team_id)
+        .bind(email)
+        .bind(invited_by)
+        .bind(role)
+        .bind(token)
+        .bind(expires_at)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(invitation)
+    }
+
+    /// Get a team invitation by token.
+    pub async fn get_invitation_by_token(
+        &self,
+        token: &str,
+    ) -> Result<Option<TeamInvitationWithDetails>, AppError> {
+        let invitation: Option<TeamInvitationWithDetails> = sqlx::query_as(
+            r#"
+            SELECT
+                ti.id, ti.team_id, t.name as team_name, ti.email,
+                ti.invited_by, u.name as invited_by_name, ti.role,
+                ti.expires_at, ti.created_at
+            FROM team_invitations ti
+            JOIN teams t ON t.id = ti.team_id
+            JOIN users u ON u.id = ti.invited_by
+            WHERE ti.token = $1 AND ti.accepted_at IS NULL AND t.deleted_at IS NULL
+            "#,
+        )
+        .bind(token)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(invitation)
+    }
+
+    /// Mark an invitation as accepted.
+    pub async fn accept_invitation(&self, token: &str) -> Result<Option<TeamInvitation>, AppError> {
+        let invitation: Option<TeamInvitation> = sqlx::query_as(
+            r#"
+            UPDATE team_invitations
+            SET accepted_at = NOW()
+            WHERE token = $1 AND accepted_at IS NULL AND expires_at > NOW()
+            RETURNING id, team_id, email, invited_by, role, token, expires_at, accepted_at, created_at
+            "#,
+        )
+        .bind(token)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(invitation)
+    }
+
+    /// Get pending invitations for a team.
+    pub async fn get_pending_invitations(
+        &self,
+        team_id: Uuid,
+    ) -> Result<Vec<TeamInvitation>, AppError> {
+        let invitations: Vec<TeamInvitation> = sqlx::query_as(
+            r#"
+            SELECT id, team_id, email, invited_by, role, token, expires_at, accepted_at, created_at
+            FROM team_invitations
+            WHERE team_id = $1 AND accepted_at IS NULL AND expires_at > NOW()
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(team_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(invitations)
+    }
+
+    /// Revoke (delete) an invitation.
+    pub async fn revoke_invitation(&self, invitation_id: Uuid) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM team_invitations WHERE id = $1 AND accepted_at IS NULL
+            "#,
+        )
+        .bind(invitation_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    // ========================================================================
+    // Activity-Team Sharing Methods
+    // ========================================================================
+
+    /// Share an activity with teams.
+    pub async fn share_activity_with_teams(
+        &self,
+        activity_id: Uuid,
+        team_ids: &[Uuid],
+        shared_by: Uuid,
+    ) -> Result<(), AppError> {
+        for team_id in team_ids {
+            sqlx::query(
+                r#"
+                INSERT INTO activity_teams (activity_id, team_id, shared_at, shared_by)
+                VALUES ($1, $2, NOW(), $3)
+                ON CONFLICT (activity_id, team_id) DO NOTHING
+                "#,
+            )
+            .bind(activity_id)
+            .bind(team_id)
+            .bind(shared_by)
+            .execute(&self.pool)
+            .await?;
+
+            // Update team activity count
+            sqlx::query(r#"UPDATE teams SET activity_count = activity_count + 1 WHERE id = $1"#)
+                .bind(team_id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Get teams an activity is shared with.
+    pub async fn get_activity_teams(&self, activity_id: Uuid) -> Result<Vec<TeamSummary>, AppError> {
+        let teams: Vec<TeamSummary> = sqlx::query_as(
+            r#"
+            SELECT t.id, t.name, t.description, t.avatar_url, t.member_count, t.activity_count, t.segment_count
+            FROM teams t
+            JOIN activity_teams at ON at.team_id = t.id
+            WHERE at.activity_id = $1 AND t.deleted_at IS NULL
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(teams)
+    }
+
+    /// Unshare an activity from a team.
+    pub async fn unshare_activity_from_team(
+        &self,
+        activity_id: Uuid,
+        team_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM activity_teams WHERE activity_id = $1 AND team_id = $2
+            "#,
+        )
+        .bind(activity_id)
+        .bind(team_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            // Update team activity count
+            sqlx::query(
+                r#"UPDATE teams SET activity_count = GREATEST(activity_count - 1, 0) WHERE id = $1"#,
+            )
+            .bind(team_id)
+            .execute(&self.pool)
+            .await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Check if user has access to an activity through team membership.
+    pub async fn user_has_activity_team_access(
+        &self,
+        user_id: Uuid,
+        activity_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let row: Option<(i32,)> = sqlx::query_as(
+            r#"
+            SELECT 1 FROM activity_teams at
+            JOIN team_memberships tm ON tm.team_id = at.team_id
+            WHERE at.activity_id = $1 AND tm.user_id = $2
+            LIMIT 1
+            "#,
+        )
+        .bind(activity_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    // ========================================================================
+    // Segment-Team Sharing Methods
+    // ========================================================================
+
+    /// Share a segment with teams.
+    pub async fn share_segment_with_teams(
+        &self,
+        segment_id: Uuid,
+        team_ids: &[Uuid],
+    ) -> Result<(), AppError> {
+        for team_id in team_ids {
+            sqlx::query(
+                r#"
+                INSERT INTO segment_teams (segment_id, team_id, shared_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (segment_id, team_id) DO NOTHING
+                "#,
+            )
+            .bind(segment_id)
+            .bind(team_id)
+            .execute(&self.pool)
+            .await?;
+
+            // Update team segment count
+            sqlx::query(r#"UPDATE teams SET segment_count = segment_count + 1 WHERE id = $1"#)
+                .bind(team_id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Get teams a segment is shared with.
+    pub async fn get_segment_teams(&self, segment_id: Uuid) -> Result<Vec<TeamSummary>, AppError> {
+        let teams: Vec<TeamSummary> = sqlx::query_as(
+            r#"
+            SELECT t.id, t.name, t.description, t.avatar_url, t.member_count, t.activity_count, t.segment_count
+            FROM teams t
+            JOIN segment_teams st ON st.team_id = t.id
+            WHERE st.segment_id = $1 AND t.deleted_at IS NULL
+            "#,
+        )
+        .bind(segment_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(teams)
+    }
+
+    /// Unshare a segment from a team.
+    pub async fn unshare_segment_from_team(
+        &self,
+        segment_id: Uuid,
+        team_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM segment_teams WHERE segment_id = $1 AND team_id = $2
+            "#,
+        )
+        .bind(segment_id)
+        .bind(team_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            // Update team segment count
+            sqlx::query(
+                r#"UPDATE teams SET segment_count = GREATEST(segment_count - 1, 0) WHERE id = $1"#,
+            )
+            .bind(team_id)
+            .execute(&self.pool)
+            .await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Check if user has access to a segment through team membership.
+    pub async fn user_has_segment_team_access(
+        &self,
+        user_id: Uuid,
+        segment_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let row: Option<(i32,)> = sqlx::query_as(
+            r#"
+            SELECT 1 FROM segment_teams st
+            JOIN team_memberships tm ON tm.team_id = st.team_id
+            WHERE st.segment_id = $1 AND tm.user_id = $2
+            LIMIT 1
+            "#,
+        )
+        .bind(segment_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    // ========================================================================
+    // Team Activity/Segment List Methods
+    // ========================================================================
+
+    /// Get activities shared with a team.
+    pub async fn get_team_activities(
+        &self,
+        team_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::FeedActivity>, AppError> {
+        let activities: Vec<crate::models::FeedActivity> = sqlx::query_as(
+            r#"
+            SELECT
+                a.id,
+                a.user_id,
+                a.name,
+                a.activity_type,
+                a.submitted_at,
+                a.visibility,
+                u.name as user_name,
+                s.distance,
+                s.duration,
+                s.elevation_gain,
+                COALESCE(a.kudos_count, 0) as kudos_count,
+                COALESCE(a.comment_count, 0) as comment_count
+            FROM activities a
+            JOIN activity_teams at ON at.activity_id = a.id
+            JOIN users u ON a.user_id = u.id
+            LEFT JOIN scores s ON a.id = s.activity_id
+            WHERE at.team_id = $1 AND a.deleted_at IS NULL
+            ORDER BY at.shared_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(team_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(activities)
+    }
+
+    /// Get segments shared with a team.
+    pub async fn get_team_segments(
+        &self,
+        team_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Segment>, AppError> {
+        let segments: Vec<Segment> = sqlx::query_as(
+            r#"
+            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type,
+                   s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                   s.average_grade, s.max_grade, s.climb_category,
+                   s.visibility, s.created_at
+            FROM segments s
+            JOIN segment_teams st ON st.segment_id = s.id
+            WHERE st.team_id = $1 AND s.deleted_at IS NULL
+            ORDER BY st.shared_at DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(team_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(segments)
     }
 }

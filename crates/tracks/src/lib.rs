@@ -26,18 +26,24 @@ use crate::{
     auth::{login, me, register},
     database::Database,
     handlers::{
-        add_comment, all_users, create_segment, delete_activity, delete_comment, download_gpx_file,
-        follow_user, get_activity, get_activity_segments, get_activity_track, get_comments,
-        get_crown_leaderboard, get_distance_leaderboard, get_feed, get_filtered_leaderboard,
-        get_follow_status, get_followers, get_following, get_kudos_givers, get_kudos_status,
+        accept_invitation, add_comment, all_users, change_member_role, create_segment, create_team,
+        delete_activity, delete_comment, delete_team, discover_teams, download_gpx_file,
+        follow_user, get_activity, get_activity_segments, get_activity_teams, get_activity_track,
+        get_comments, get_crown_leaderboard, get_distance_leaderboard, get_feed,
+        get_filtered_leaderboard, get_follow_status, get_followers, get_following,
+        get_invitation, get_join_requests, get_kudos_givers, get_kudos_status,
         get_leaderboard_position, get_my_achievements, get_my_demographics, get_my_segment_efforts,
         get_nearby_segments, get_notifications, get_segment, get_segment_achievements,
-        get_segment_leaderboard, get_segment_track, get_starred_segment_efforts,
-        get_starred_segments, get_stats, get_user_achievements, get_user_activities,
-        get_user_profile, give_kudos, health_check, is_segment_starred, list_segments,
-        mark_all_notifications_read, mark_notification_read, new_activity, new_user,
-        preview_segment, remove_kudos, reprocess_segment, star_segment, unfollow_user,
-        unstar_segment, update_activity, update_my_demographics,
+        get_segment_leaderboard, get_segment_teams, get_segment_track, get_starred_segment_efforts,
+        get_starred_segments, get_stats, get_team, get_team_activities, get_team_invitations,
+        get_team_segments, get_user_achievements, get_user_activities, get_user_profile,
+        give_kudos, health_check, invite_to_team, is_segment_starred, join_team, leave_team,
+        list_my_teams, list_segments, list_team_members, mark_all_notifications_read,
+        mark_notification_read, new_activity, new_user, preview_segment, remove_kudos,
+        remove_team_member, reprocess_segment, review_join_request, revoke_invitation,
+        share_activity_with_teams, share_segment_with_teams, star_segment, unfollow_user,
+        unshare_activity_from_team, unshare_segment_from_team, unstar_segment, update_activity,
+        update_my_demographics, update_team,
     },
     object_store_service::ObjectStoreService,
 };
@@ -142,6 +148,42 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             get(get_comments).post(add_comment),
         )
         .route("/comments/{id}", axum::routing::delete(delete_comment))
+        // Team routes
+        .route("/teams", get(list_my_teams).post(create_team))
+        .route("/teams/discover", get(discover_teams))
+        .route(
+            "/teams/{id}",
+            get(get_team).patch(update_team).delete(delete_team),
+        )
+        .route("/teams/{id}/members", get(list_team_members))
+        .route("/teams/{id}/members/{user_id}", axum::routing::delete(remove_team_member))
+        .route("/teams/{id}/members/{user_id}/role", axum::routing::patch(change_member_role))
+        .route("/teams/{id}/join", post(join_team))
+        .route("/teams/{id}/leave", post(leave_team))
+        .route("/teams/{id}/join-requests", get(get_join_requests))
+        .route("/teams/{id}/join-requests/{request_id}", post(review_join_request))
+        .route(
+            "/teams/{id}/invitations",
+            get(get_team_invitations).post(invite_to_team),
+        )
+        .route("/teams/{id}/invitations/{invitation_id}", axum::routing::delete(revoke_invitation))
+        .route("/teams/{id}/activities", get(get_team_activities))
+        .route("/teams/{id}/segments", get(get_team_segments))
+        // Invitation acceptance (public route, token-based)
+        .route("/invitations/{token}", get(get_invitation))
+        .route("/invitations/{token}/accept", post(accept_invitation))
+        // Activity-team sharing
+        .route(
+            "/activities/{id}/teams",
+            get(get_activity_teams).post(share_activity_with_teams),
+        )
+        .route("/activities/{id}/teams/{team_id}", axum::routing::delete(unshare_activity_from_team))
+        // Segment-team sharing
+        .route(
+            "/segments/{id}/teams",
+            get(get_segment_teams).post(share_segment_with_teams),
+        )
+        .route("/segments/{id}/teams/{team_id}", axum::routing::delete(unshare_segment_from_team))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))

@@ -445,6 +445,105 @@ CREATE INDEX idx_activities_user_date ON activities(user_id, submitted_at DESC);
 
 ---
 
+### Phase 7: Teams (Implemented)
+
+Teams enable group-based access control for activities and segments on private/sensitive property.
+
+```sql
+-- Team roles
+CREATE TYPE team_role AS ENUM ('owner', 'admin', 'member');
+CREATE TYPE team_visibility AS ENUM ('public', 'private');
+CREATE TYPE team_join_policy AS ENUM ('open', 'request', 'invitation');
+
+-- Teams table
+CREATE TABLE teams (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    avatar_url TEXT,
+    visibility team_visibility NOT NULL DEFAULT 'private',
+    join_policy team_join_policy NOT NULL DEFAULT 'invitation',
+    owner_id UUID NOT NULL REFERENCES users(id),
+    member_count INTEGER NOT NULL DEFAULT 1,
+    activity_count INTEGER NOT NULL DEFAULT 0,
+    segment_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+-- Team memberships (composite PK)
+CREATE TABLE team_memberships (
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role team_role NOT NULL DEFAULT 'member',
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    invited_by UUID REFERENCES users(id),
+    PRIMARY KEY (team_id, user_id)
+);
+
+-- Team invitations (email-based)
+CREATE TABLE team_invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    invited_by UUID NOT NULL REFERENCES users(id),
+    role team_role NOT NULL DEFAULT 'member',
+    token TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    accepted_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Team join requests (for request-based teams)
+CREATE TABLE team_join_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    reviewed_by UUID REFERENCES users(id),
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (team_id, user_id)
+);
+
+-- Activity-team sharing (many-to-many)
+CREATE TABLE activity_teams (
+    activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    shared_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    shared_by UUID REFERENCES users(id),
+    PRIMARY KEY (activity_id, team_id)
+);
+
+-- Segment-team sharing (many-to-many)
+CREATE TABLE segment_teams (
+    segment_id UUID NOT NULL REFERENCES segments(id) ON DELETE CASCADE,
+    team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    shared_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (segment_id, team_id)
+);
+```
+
+**Visibility Model:**
+- `public` - Anyone can view
+- `private` - Only owner can view
+- `teams_only` - Owner + members of shared teams can view
+
+**Access Control Pattern:**
+```rust
+match visibility {
+    "public" => true,
+    "private" => user_id == owner_id,
+    "teams_only" => user_id == owner_id || db.user_has_team_access(user_id, resource_id).await?,
+}
+```
+
+**Security Note:** Return 404 (not 403) for unauthorized access to avoid leaking resource existence.
+
+---
+
 ## Migration Strategy
 
 1. **Backup existing data**

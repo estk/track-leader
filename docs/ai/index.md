@@ -77,9 +77,9 @@ Both support random ports for running multiple workspaces simultaneously.
 
 ### Core Tables
 - `users` - Auth, profile, demographics, follower counts
-- `activities` - User activities with metadata
+- `activities` - User activities with metadata, visibility (public/private/teams_only)
 - `tracks` - PostGIS GEOGRAPHY LineStringZM (lon, lat, elevation, timestamp)
-- `segments` - User-created trail segments
+- `segments` - User-created trail segments, visibility (public/private/teams_only)
 - `segment_efforts` - Matched efforts with timing
 
 ### Social Tables
@@ -87,6 +87,14 @@ Both support random ports for running multiple workspaces simultaneously.
 - `kudos` - Activity likes
 - `comments` - Activity comments
 - `notifications` - User notifications (actor/target pattern)
+
+### Teams Tables
+- `teams` - Named groups with visibility and join policies
+- `team_memberships` - User-team relationships with roles (owner/admin/member)
+- `team_invitations` - Email-based invitations with tokens
+- `team_join_requests` - Request-to-join workflow
+- `activity_teams` - Many-to-many for team-shared activities
+- `segment_teams` - Many-to-many for team-shared segments
 
 ## Important Patterns
 

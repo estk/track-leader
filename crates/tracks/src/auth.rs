@@ -149,6 +149,27 @@ where
     }
 }
 
+// Optional extractor for authenticated user - returns None if not authenticated
+pub struct OptionalAuthUser(pub Option<Claims>);
+
+impl<S> FromRequestParts<S> for OptionalAuthUser
+where
+    S: Send + Sync,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let claims = parts
+            .headers
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|auth_header| auth_header.strip_prefix("Bearer "))
+            .and_then(|token| verify_token(token).ok());
+
+        Ok(OptionalAuthUser(claims))
+    }
+}
+
 // Handler for user registration
 pub async fn register(
     Extension(db): Extension<Database>,

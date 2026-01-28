@@ -11,6 +11,8 @@ export interface AuthResponse {
   user: User;
 }
 
+export type ActivityVisibility = 'public' | 'private' | 'teams_only';
+
 export interface Activity {
   id: string;
   user_id: string;
@@ -18,7 +20,7 @@ export interface Activity {
   name: string;
   object_store_path: string;
   submitted_at: string;
-  visibility: 'public' | 'private';
+  visibility: ActivityVisibility;
 }
 
 export interface TrackPoint {
@@ -40,6 +42,8 @@ export interface TrackData {
   bounds: TrackBounds;
 }
 
+export type SegmentVisibility = 'public' | 'private' | 'teams_only';
+
 export interface Segment {
   id: string;
   creator_id: string;
@@ -52,7 +56,7 @@ export interface Segment {
   average_grade: number | null;
   max_grade: number | null;
   climb_category: number | null;
-  visibility: 'public' | 'private';
+  visibility: SegmentVisibility;
   created_at: string;
 }
 
@@ -78,9 +82,11 @@ export interface CreateSegmentRequest {
   /** Optional if source_activity_id is provided (inherits from the activity). Required otherwise. */
   activity_type?: string;
   points: { lat: number; lon: number; ele?: number }[];
-  visibility?: 'public' | 'private';
+  visibility?: SegmentVisibility;
   /** If provided, the segment inherits its activity_type from this activity. */
   source_activity_id?: string;
+  /** Team IDs to share segment with when visibility is 'teams_only'. */
+  team_ids?: string[];
 }
 
 export type SegmentSortBy = 'created_at' | 'name' | 'distance' | 'elevation_gain';
@@ -368,6 +374,121 @@ export interface Stats {
   activities_uploaded: number;
 }
 
+// Team types
+export type TeamRole = 'owner' | 'admin' | 'member';
+export type TeamVisibility = 'public' | 'private';
+export type TeamJoinPolicy = 'open' | 'request' | 'invitation';
+
+export interface Team {
+  id: string;
+  name: string;
+  description: string | null;
+  avatar_url: string | null;
+  visibility: TeamVisibility;
+  join_policy: TeamJoinPolicy;
+  owner_id: string;
+  member_count: number;
+  activity_count: number;
+  segment_count: number;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface TeamWithMembership {
+  id: string;
+  name: string;
+  description: string | null;
+  avatar_url: string | null;
+  visibility: TeamVisibility;
+  join_policy: TeamJoinPolicy;
+  owner_id: string;
+  member_count: number;
+  activity_count: number;
+  segment_count: number;
+  created_at: string;
+  updated_at: string | null;
+  user_role: TeamRole | null;
+  is_member: boolean;
+  owner_name: string;
+}
+
+export interface TeamSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  avatar_url: string | null;
+  member_count: number;
+  activity_count: number;
+  segment_count: number;
+}
+
+export interface TeamMember {
+  user_id: string;
+  user_name: string;
+  role: TeamRole;
+  joined_at: string;
+  invited_by: string | null;
+  invited_by_name: string | null;
+}
+
+export interface TeamMembership {
+  team_id: string;
+  user_id: string;
+  role: TeamRole;
+  invited_by: string | null;
+  joined_at: string;
+}
+
+export interface TeamJoinRequest {
+  id: string;
+  team_id: string;
+  user_id: string;
+  user_name: string;
+  message: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface TeamInvitation {
+  id: string;
+  team_id: string;
+  email: string;
+  invited_by: string;
+  role: TeamRole;
+  token: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export interface TeamInvitationWithDetails {
+  id: string;
+  team_id: string;
+  team_name: string;
+  email: string;
+  invited_by: string;
+  invited_by_name: string;
+  role: TeamRole;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface CreateTeamRequest {
+  name: string;
+  description?: string;
+  avatar_url?: string;
+  visibility?: TeamVisibility;
+  join_policy?: TeamJoinPolicy;
+}
+
+export interface UpdateTeamRequest {
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+  visibility?: TeamVisibility;
+  join_policy?: TeamJoinPolicy;
+}
+
 class ApiClient {
   private token: string | null = null;
 
@@ -461,7 +582,7 @@ class ApiClient {
 
   async updateActivity(
     id: string,
-    data: { name?: string; activity_type?: string; visibility?: 'public' | 'private' }
+    data: { name?: string; activity_type?: string; visibility?: ActivityVisibility }
   ): Promise<Activity> {
     return this.request<Activity>(`/activities/${id}`, {
       method: 'PATCH',
@@ -480,7 +601,8 @@ class ApiClient {
     file: File,
     name: string,
     activityType: string,
-    visibility: 'public' | 'private' = 'public'
+    visibility: ActivityVisibility = 'public',
+    teamIds?: string[]
   ): Promise<Activity> {
     const token = this.getToken();
     const formData = new FormData();
@@ -492,6 +614,11 @@ class ApiClient {
       name: name,
       visibility: visibility,
     });
+
+    // Add team_ids as comma-separated list if provided
+    if (teamIds && teamIds.length > 0) {
+      params.set('team_ids', teamIds.join(','));
+    }
 
     const response = await fetch(
       `${API_BASE}/activities/new?${params.toString()}`,
@@ -793,6 +920,170 @@ class ApiClient {
   // Stats endpoint
   async getStats(): Promise<Stats> {
     return this.request<Stats>('/stats');
+  }
+
+  // ============================================================================
+  // Team endpoints
+  // ============================================================================
+
+  async createTeam(data: CreateTeamRequest): Promise<Team> {
+    return this.request<Team>('/teams', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getTeam(id: string): Promise<TeamWithMembership> {
+    return this.request<TeamWithMembership>(`/teams/${id}`);
+  }
+
+  async listMyTeams(): Promise<TeamWithMembership[]> {
+    return this.request<TeamWithMembership[]>('/teams');
+  }
+
+  async discoverTeams(limit?: number, offset?: number): Promise<TeamSummary[]> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    return this.request<TeamSummary[]>(`/teams/discover${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async updateTeam(id: string, data: UpdateTeamRequest): Promise<Team> {
+    return this.request<Team>(`/teams/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTeam(id: string): Promise<void> {
+    await this.request<void>(`/teams/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Team membership endpoints
+  async listTeamMembers(teamId: string): Promise<TeamMember[]> {
+    return this.request<TeamMember[]>(`/teams/${teamId}/members`);
+  }
+
+  async removeTeamMember(teamId: string, userId: string): Promise<void> {
+    await this.request<void>(`/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async changeTeamMemberRole(teamId: string, userId: string, role: TeamRole): Promise<TeamMembership> {
+    return this.request<TeamMembership>(`/teams/${teamId}/members/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  // Team join endpoints
+  async joinTeam(teamId: string, message?: string): Promise<void> {
+    await this.request<void>(`/teams/${teamId}/join`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
+  async leaveTeam(teamId: string): Promise<void> {
+    await this.request<void>(`/teams/${teamId}/leave`, {
+      method: 'POST',
+    });
+  }
+
+  async getJoinRequests(teamId: string): Promise<TeamJoinRequest[]> {
+    return this.request<TeamJoinRequest[]>(`/teams/${teamId}/join-requests`);
+  }
+
+  async reviewJoinRequest(teamId: string, requestId: string, approved: boolean): Promise<void> {
+    await this.request<void>(`/teams/${teamId}/join-requests/${requestId}`, {
+      method: 'POST',
+      body: JSON.stringify({ approved }),
+    });
+  }
+
+  // Team invitation endpoints
+  async inviteToTeam(teamId: string, email: string, role: TeamRole = 'member'): Promise<TeamInvitation> {
+    return this.request<TeamInvitation>(`/teams/${teamId}/invitations`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    });
+  }
+
+  async getTeamInvitations(teamId: string): Promise<TeamInvitation[]> {
+    return this.request<TeamInvitation[]>(`/teams/${teamId}/invitations`);
+  }
+
+  async revokeInvitation(teamId: string, invitationId: string): Promise<void> {
+    await this.request<void>(`/teams/${teamId}/invitations/${invitationId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getInvitation(token: string): Promise<TeamInvitationWithDetails> {
+    return this.request<TeamInvitationWithDetails>(`/invitations/${token}`);
+  }
+
+  async acceptInvitation(token: string): Promise<void> {
+    await this.request<void>(`/invitations/${token}/accept`, {
+      method: 'POST',
+    });
+  }
+
+  // Activity-team sharing endpoints
+  async getActivityTeams(activityId: string): Promise<TeamSummary[]> {
+    return this.request<TeamSummary[]>(`/activities/${activityId}/teams`);
+  }
+
+  async shareActivityWithTeams(activityId: string, teamIds: string[]): Promise<void> {
+    await this.request<void>(`/activities/${activityId}/teams`, {
+      method: 'POST',
+      body: JSON.stringify({ team_ids: teamIds }),
+    });
+  }
+
+  async unshareActivityFromTeam(activityId: string, teamId: string): Promise<void> {
+    await this.request<void>(`/activities/${activityId}/teams/${teamId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Segment-team sharing endpoints
+  async getSegmentTeams(segmentId: string): Promise<TeamSummary[]> {
+    return this.request<TeamSummary[]>(`/segments/${segmentId}/teams`);
+  }
+
+  async shareSegmentWithTeams(segmentId: string, teamIds: string[]): Promise<void> {
+    await this.request<void>(`/segments/${segmentId}/teams`, {
+      method: 'POST',
+      body: JSON.stringify({ team_ids: teamIds }),
+    });
+  }
+
+  async unshareSegmentFromTeam(segmentId: string, teamId: string): Promise<void> {
+    await this.request<void>(`/segments/${segmentId}/teams/${teamId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Team content endpoints
+  async getTeamActivities(teamId: string, limit?: number, offset?: number): Promise<FeedActivity[]> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    return this.request<FeedActivity[]>(`/teams/${teamId}/activities${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getTeamSegments(teamId: string, limit?: number, offset?: number): Promise<Segment[]> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    const queryString = params.toString();
+    return this.request<Segment[]>(`/teams/${teamId}/segments${queryString ? `?${queryString}` : ''}`);
   }
 }
 
