@@ -50,6 +50,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_INTERNAL_PORT:-3001}/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     # Use cargo-watch for hot reloading
     command: cargo watch -x run
 
@@ -79,6 +85,12 @@ services:
       - next_cache:/app/.next
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${FRONTEND_INTERNAL_PORT:-3000}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 # Volumes are prefixed with project name automatically (e.g., tl_ws1_pgdata)
 volumes:

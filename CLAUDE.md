@@ -5,14 +5,23 @@ Essential instructions for Claude Code. For detailed documentation, see [docs/ai
 ## Quick Start
 
 ```bash
-# Zellij-based (native processes)
-./scripts/start-dev.sh
+# Start dev environment (foreground with logs)
+./scripts/dev.sh
 
-# Docker-based (containerized, recommended)
-./scripts/start-dev-docker.sh
+# Start detached
+./scripts/dev.sh -d
+
+# Check status
+./scripts/dev.sh status
+
+# View logs
+./scripts/dev.sh logs [backend|frontend|postgres]
+
+# Stop
+./scripts/dev.sh stop
 ```
 
-Both support random ports for parallel workspaces. See [docs/ai/development.md](./docs/ai/development.md) for details.
+Supports random ports for parallel workspaces. See [docs/ai/development.md](./docs/ai/development.md) for details.
 
 ## Key Rules
 
