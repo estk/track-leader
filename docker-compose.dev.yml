@@ -1,5 +1,5 @@
 # Development Docker Compose configuration
-# Usage: ./scripts/start-dev-docker.sh
+# Usage: ./scripts/dev.sh
 #
 # Supports random ports for running multiple workspaces simultaneously.
 # All services use multi-arch images for Apple Silicon (M1/M2) compatibility.
@@ -28,8 +28,8 @@ services:
 
   backend:
     build:
-      context: ./crates/tracks
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: crates/tracks/Dockerfile.dev
     container_name: ${COMPOSE_PROJECT_NAME:-tl}_backend
     environment:
       DATABASE_URL: postgres://tracks_user:tracks_password@postgres:5432/tracks_db

@@ -8,8 +8,8 @@ See [development.md](./development.md) for full setup instructions.
 
 **Quick start:**
 ```bash
-./scripts/start-dev.sh          # Zellij-based
-./scripts/start-dev-docker.sh   # Docker-based (recommended)
+./scripts/dev.sh     # Docker-based (recommended)
+./scripts/dev.sh -d  # Detached mode
 ```
 
 ## Version Control
@@ -35,10 +35,10 @@ Migrations are in `crates/tracks/migrations/` and use SQLx.
 Migrations run automatically on backend startup. To check/run manually:
 ```bash
 DATABASE_URL="postgres://tracks_user:tracks_password@localhost:5432/tracks_db" \
-  cargo sqlx migrate info --source /Users/estk/git/tl-ws1/crates/tracks/migrations
+  cargo sqlx migrate info --source crates/tracks/migrations
 
 DATABASE_URL="postgres://tracks_user:tracks_password@localhost:5432/tracks_db" \
-  cargo sqlx migrate run --source /Users/estk/git/tl-ws1/crates/tracks/migrations
+  cargo sqlx migrate run --source crates/tracks/migrations
 ```
 
 ### Current Schema (16 migrations)
@@ -112,13 +112,6 @@ if let Some(ref pattern) = search_pattern {
     q = q.bind(pattern);
 }
 ```
-
-### Unused Imports Warning
-
-There are currently unused imports in `database.rs` (line 5-6):
-- `Notification`, `NotificationWithActor`, `UserProfile`, `UserSummary`
-
-These are likely for upcoming features.
 
 ## File Locations
 

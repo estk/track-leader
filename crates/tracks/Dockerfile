@@ -3,25 +3,26 @@ FROM rust:1.83-bookworm as builder
 
 WORKDIR /app
 
-# Copy cargo files
-COPY Cargo.toml Cargo.lock ./
+# Copy workspace manifest and crate manifest
+COPY Cargo.toml ./
+COPY crates/tracks/Cargo.toml crates/tracks/Cargo.lock ./crates/tracks/
 
 # Create src directory and dummy main.rs to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN mkdir -p crates/tracks/src && echo "fn main() {}" > crates/tracks/src/main.rs
 
 # Build dependencies (this will be cached)
-RUN cargo build --release --bin tracks
+RUN cargo build --release -p tracks
 
 # Remove dummy main.rs and copy actual source
-RUN rm -rf src
+RUN rm -rf crates/tracks/src
 
 # Copy source code
-COPY src ./src
-COPY migrations ./migrations
-COPY .sqlx ./sqlx
+COPY crates/tracks/src ./crates/tracks/src
+COPY crates/tracks/migrations ./crates/tracks/migrations
+COPY crates/tracks/.sqlx ./crates/tracks/.sqlx
 
 # Build the actual application
-RUN touch src/main.rs && cargo build --release --bin tracks
+RUN touch crates/tracks/src/main.rs && cargo build --release -p tracks
 
 # Runtime stage
 FROM debian:bookworm-slim

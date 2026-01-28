@@ -20,7 +20,7 @@ WORKDIR /app
 # Dependencies will be compiled on first run and cached via Docker volume.
 
 # Copy sqlx offline data for compile-time query checking
-COPY .sqlx ./crates/tracks/.sqlx
+COPY crates/tracks/.sqlx ./crates/tracks/.sqlx
 
 # The actual source is mounted as a volume at runtime
 # migrations are also mounted

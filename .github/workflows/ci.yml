@@ -44,19 +44,16 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/tracks
+          workspaces: .
 
       - name: Check formatting
         run: cargo fmt --all --check
-        working-directory: crates/tracks
 
       - name: Run clippy
         run: cargo clippy --workspace -- -D warnings
-        working-directory: crates/tracks
 
       - name: Run tests
         run: cargo nextest run --workspace
-        working-directory: crates/tracks
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/tracks_test
 
@@ -75,6 +72,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Type check
         run: npx tsc --noEmit

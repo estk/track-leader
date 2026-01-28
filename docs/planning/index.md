@@ -94,13 +94,15 @@ These items were planned but deferred for post-launch:
 
 ### Future Enhancements (Phase 7+)
 - Teams feature (team pages, team leaderboards)
+-. **Teams** - What does it look like to be on a team, publish activities to teams you are a member of, or selective publish
 - Strava import
 - Mobile app (PWA or native)
 - Internationalization
 - Equipment type filters (e-bike vs acoustic)
 - Weight class filters
--. **Teams** - What does it look like to be on a team, publish activities to teams you are a member of
+- User defined metrics that allow them to create and share a custom leaderboard
 -. **Multi-Sport Activity** - Can we start to introduce a concept of multi-sport activities? Ride+Dig Ride+Ski etc. This should be general so any activities can be done together, and we should also allow users to create new activity types
+- Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one
 
 ---
 

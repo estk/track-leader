@@ -2,9 +2,8 @@ use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
     ActivitySegmentEffort, ActivityType, CrownCountEntry, DistanceLeaderEntry, GenderFilter,
-    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Notification, NotificationWithActor,
-    Scores, Segment, SegmentEffort, UpdateDemographicsRequest, User, UserProfile, UserSummary,
-    UserWithDemographics,
+    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Scores, Segment, SegmentEffort,
+    UpdateDemographicsRequest, User, UserWithDemographics,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use serde::Serialize;
@@ -40,7 +39,7 @@ impl Database {
         )
         .bind(activity.id)
         .bind(activity.user_id)
-        .bind(&activity.activity_type)
+        .bind(activity.activity_type)
         .bind(&activity.name)
         .bind(&activity.object_store_path)
         .bind(activity.submitted_at)
@@ -469,10 +468,10 @@ impl Database {
         if let Some(max) = params.max_distance_meters {
             q = q.bind(max);
         }
-        if let Some(ref cat) = params.climb_category {
-            if !cat.is_flat() {
-                q = q.bind(cat.to_db_value());
-            }
+        if let Some(ref cat) = params.climb_category
+            && !cat.is_flat()
+        {
+            q = q.bind(cat.to_db_value());
         }
         q = q.bind(params.limit);
 
@@ -1515,7 +1514,7 @@ impl Database {
             "#,
         )
         .bind(user_id)
-        .bind(&req.gender)
+        .bind(req.gender)
         .bind(req.birth_year)
         .bind(req.weight_kg)
         .bind(&req.country)

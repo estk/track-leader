@@ -24,6 +24,18 @@ Fully containerized development environment using Docker Compose with hot reload
 ./scripts/dev.sh restart backend
 ```
 
+## Host Commands
+
+Run from project root:
+
+| Task | Command |
+|------|---------|
+| Rust lint | `cargo clippy` |
+| Rust format | `cargo +nightly fmt` |
+| Rust tests | `cargo nextest run` |
+| Frontend lint | `npm run lint` |
+| Frontend build | `npm run build` |
+
 ## Commands Reference
 
 | Command | Description |

@@ -395,10 +395,10 @@ pub async fn create_segment(
         let activity = db.get_activity(source_id).await?.ok_or_else(|| {
             AppError::InvalidInput(format!("Source activity {source_id} not found"))
         })?;
-        let activity_type = activity.activity_type.clone();
+        let activity_type = activity.activity_type;
         (activity_type, Some(activity))
     } else {
-        let activity_type = req.activity_type.clone().ok_or_else(|| {
+        let activity_type = req.activity_type.ok_or_else(|| {
             AppError::InvalidInput(
                 "activity_type is required when source_activity_id is not provided".to_string(),
             )
@@ -447,20 +447,19 @@ pub async fn create_segment(
             .is_none()
         {
             // Track not in database, try to save it
-            if let Ok(file_bytes) = store.get_file(&activity.object_store_path).await {
-                if let Ok(gpx) = gpx::read(std::io::BufReader::new(file_bytes.as_ref())) {
-                    if let Some(wkt) = build_track_wkt(&gpx) {
-                        if let Err(e) = db
-                            .save_track_geometry(activity.user_id, source_id, &wkt)
-                            .await
-                        {
-                            tracing::warn!(
-                                "Failed to save track geometry for source activity {source_id}: {e}"
-                            );
-                        } else {
-                            tracing::info!("Saved track geometry for source activity {source_id}");
-                        }
-                    }
+            if let Ok(file_bytes) = store.get_file(&activity.object_store_path).await
+                && let Ok(gpx) = gpx::read(std::io::BufReader::new(file_bytes.as_ref()))
+                && let Some(wkt) = build_track_wkt(&gpx)
+            {
+                if let Err(e) = db
+                    .save_track_geometry(activity.user_id, source_id, &wkt)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to save track geometry for source activity {source_id}: {e}"
+                    );
+                } else {
+                    tracing::info!("Saved track geometry for source activity {source_id}");
                 }
             }
         }
@@ -1641,7 +1640,7 @@ pub async fn give_kudos(
     }
 
     // Get updated count
-    let activity = db
+    let _activity = db
         .get_activity(activity_id)
         .await?
         .ok_or(AppError::NotFound)?;

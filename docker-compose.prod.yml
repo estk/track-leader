@@ -31,8 +31,8 @@ services:
 
   backend:
     build:
-      context: ./crates/tracks
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: crates/tracks/Dockerfile
     container_name: tracks_backend_prod
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-tracks_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tracks_db}
