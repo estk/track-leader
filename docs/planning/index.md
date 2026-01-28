@@ -78,6 +78,7 @@ Phase documentation has been archived.
 These items were planned but deferred for post-launch:
 
 ### Future Enhancements (Phase 7+)
+- use pasetors and use paseto for user auth
 - Live tracking, based on your privacy prefs (teams, followers etc) you can show your live location to logged in users with the right permissions
 - Teams feature (team pages, team leaderboards)
 -. **Teams** - What does it look like to be on a team, publish activities to teams you are a member of, or selective publish

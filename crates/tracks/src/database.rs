@@ -2,8 +2,8 @@ use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
     ActivitySegmentEffort, ActivityType, CrownCountEntry, DistanceLeaderEntry, GenderFilter,
-    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Scores, Segment, SegmentEffort,
-    Team, TeamInvitation, TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser,
+    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Scores, Segment, SegmentEffort, Team,
+    TeamInvitation, TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser,
     TeamMember, TeamMembership, TeamRole, TeamSummary, TeamVisibility, TeamWithMembership,
     UpdateDemographicsRequest, User, UserWithDemographics,
 };
@@ -2594,7 +2594,10 @@ impl Database {
     }
 
     /// List teams for a user (teams they are a member of).
-    pub async fn list_user_teams(&self, user_id: Uuid) -> Result<Vec<TeamWithMembership>, AppError> {
+    pub async fn list_user_teams(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<TeamWithMembership>, AppError> {
         #[derive(sqlx::FromRow)]
         struct TeamRow {
             id: Uuid,
@@ -3083,7 +3086,10 @@ impl Database {
     }
 
     /// Get teams an activity is shared with.
-    pub async fn get_activity_teams(&self, activity_id: Uuid) -> Result<Vec<TeamSummary>, AppError> {
+    pub async fn get_activity_teams(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Vec<TeamSummary>, AppError> {
         let teams: Vec<TeamSummary> = sqlx::query_as(
             r#"
             SELECT t.id, t.name, t.description, t.avatar_url, t.member_count, t.activity_count, t.segment_count

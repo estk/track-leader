@@ -46,6 +46,6 @@ enum-map = "2.7.3"
 
 # Auth
 argon2 = "0.5"
-jsonwebtoken = "9.3"
+pasetors = "0.7"
 rand.workspace = true
 validator = { version = "0.18", features = ["derive"] }

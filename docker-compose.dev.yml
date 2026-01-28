@@ -34,6 +34,7 @@ services:
     environment:
       DATABASE_URL: postgres://tracks_user:tracks_password@postgres:5432/tracks_db
       OBJECT_STORE_PATH: /app/uploads
+      PASETO_KEY: ${PASETO_KEY:-track-leader-dev-secret-change-in-production}
       PORT: ${BACKEND_INTERNAL_PORT:-3001}
       RUST_LOG: ${RUST_LOG:-info}
       CARGO_TARGET_DIR: /app/target

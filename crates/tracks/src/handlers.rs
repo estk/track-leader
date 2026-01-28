@@ -21,7 +21,8 @@ use crate::{
         JoinTeamRequest, LeaderboardFilters, LeaderboardFiltersResponse, LeaderboardPosition,
         LeaderboardResponse, Segment, SegmentAchievements, SegmentEffort, ShareWithTeamsRequest,
         Stats, Team, TeamInvitationWithDetails, TeamMember, TeamRole, TeamSummary,
-        TeamWithMembership, UpdateDemographicsRequest, UpdateTeamRequest, User, UserWithDemographics,
+        TeamWithMembership, UpdateDemographicsRequest, UpdateTeamRequest, User,
+        UserWithDemographics,
     },
     object_store_service::{FileType, ObjectStoreService},
 };
@@ -861,7 +862,9 @@ pub async fn get_segment(
     // Check visibility-based access control
     let has_access = match segment.visibility.as_str() {
         "public" => true,
-        "private" => claims.as_ref().map_or(false, |c| c.sub == segment.creator_id),
+        "private" => claims
+            .as_ref()
+            .map_or(false, |c| c.sub == segment.creator_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 // Creator always has access
@@ -1009,7 +1012,9 @@ pub async fn get_segment_track(
     // Check visibility-based access control
     let has_access = match segment.visibility.as_str() {
         "public" => true,
-        "private" => claims.as_ref().map_or(false, |c| c.sub == segment.creator_id),
+        "private" => claims
+            .as_ref()
+            .map_or(false, |c| c.sub == segment.creator_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 if c.sub == segment.creator_id {
@@ -1985,7 +1990,9 @@ pub async fn create_team(
     Json(req): Json<CreateTeamRequest>,
 ) -> Result<(StatusCode, Json<Team>), AppError> {
     if req.name.trim().is_empty() {
-        return Err(AppError::InvalidInput("Team name cannot be empty".to_string()));
+        return Err(AppError::InvalidInput(
+            "Team name cannot be empty".to_string(),
+        ));
     }
 
     let team = db
@@ -2043,7 +2050,9 @@ pub async fn discover_teams(
     Extension(db): Extension<Database>,
     Query(query): Query<DiscoverTeamsQuery>,
 ) -> Result<Json<Vec<TeamSummary>>, AppError> {
-    let teams = db.list_discoverable_teams(query.limit, query.offset).await?;
+    let teams = db
+        .list_discoverable_teams(query.limit, query.offset)
+        .await?;
     Ok(Json(teams))
 }
 
@@ -2161,7 +2170,9 @@ pub async fn remove_team_member(
 
         // Can't remove someone with equal or higher role
         if target_membership.role == TeamRole::Owner {
-            return Err(AppError::InvalidInput("Cannot remove the team owner".to_string()));
+            return Err(AppError::InvalidInput(
+                "Cannot remove the team owner".to_string(),
+            ));
         }
         if target_membership.role == TeamRole::Admin && my_membership.role == TeamRole::Admin {
             return Err(AppError::InvalidInput(
@@ -2209,7 +2220,9 @@ pub async fn change_member_role(
         .ok_or(AppError::NotFound)?;
 
     if target_membership.role == TeamRole::Owner && claims.sub != user_id {
-        return Err(AppError::InvalidInput("Cannot change the owner's role".to_string()));
+        return Err(AppError::InvalidInput(
+            "Cannot change the owner's role".to_string(),
+        ));
     }
 
     let membership = db
@@ -2235,7 +2248,9 @@ pub async fn join_team(
 
     // Check if already a member
     if db.get_team_membership(team_id, claims.sub).await?.is_some() {
-        return Err(AppError::InvalidInput("Already a member of this team".to_string()));
+        return Err(AppError::InvalidInput(
+            "Already a member of this team".to_string(),
+        ));
     }
 
     match team.join_policy {
@@ -2251,11 +2266,9 @@ pub async fn join_team(
                 .await?;
             Ok(StatusCode::ACCEPTED)
         }
-        crate::models::TeamJoinPolicy::Invitation => {
-            Err(AppError::InvalidInput(
-                "This team is invitation-only".to_string(),
-            ))
-        }
+        crate::models::TeamJoinPolicy::Invitation => Err(AppError::InvalidInput(
+            "This team is invitation-only".to_string(),
+        )),
     }
 }
 
@@ -2340,8 +2353,13 @@ pub async fn review_join_request(
     if let Some(reviewed_request) = result {
         if req.approved {
             // Add the user as a member
-            db.add_team_member(team_id, reviewed_request.user_id, TeamRole::Member, Some(claims.sub))
-                .await?;
+            db.add_team_member(
+                team_id,
+                reviewed_request.user_id,
+                TeamRole::Member,
+                Some(claims.sub),
+            )
+            .await?;
 
             // Notify the user they were accepted
             db.create_notification(
@@ -2410,7 +2428,9 @@ pub async fn invite_to_team(
     let expires_at = time::OffsetDateTime::now_utc() + time::Duration::days(7);
 
     let invitation = db
-        .create_team_invitation(team_id, &req.email, claims.sub, req.role, &token, expires_at)
+        .create_team_invitation(
+            team_id, &req.email, claims.sub, req.role, &token, expires_at,
+        )
         .await?;
 
     Ok((StatusCode::CREATED, Json(invitation)))
@@ -2540,11 +2560,16 @@ pub async fn get_activity_teams(
     Path(activity_id): Path<Uuid>,
 ) -> Result<Json<Vec<TeamSummary>>, AppError> {
     // Verify activity exists and user has access
-    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+    let activity = db
+        .get_activity(activity_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     // Only owner or team members can see sharing
     let is_owner = activity.user_id == claims.sub;
-    let has_team_access = db.user_has_activity_team_access(claims.sub, activity_id).await?;
+    let has_team_access = db
+        .user_has_activity_team_access(claims.sub, activity_id)
+        .await?;
 
     if !is_owner && !has_team_access && activity.visibility != "public" {
         return Err(AppError::NotFound);
@@ -2562,7 +2587,10 @@ pub async fn share_activity_with_teams(
     Json(req): Json<ShareWithTeamsRequest>,
 ) -> Result<StatusCode, AppError> {
     // Verify activity exists and user is owner
-    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+    let activity = db
+        .get_activity(activity_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     if activity.user_id != claims.sub {
         return Err(AppError::Forbidden);
@@ -2570,7 +2598,11 @@ pub async fn share_activity_with_teams(
 
     // Verify user is a member of all target teams
     for team_id in &req.team_ids {
-        if db.get_team_membership(*team_id, claims.sub).await?.is_none() {
+        if db
+            .get_team_membership(*team_id, claims.sub)
+            .await?
+            .is_none()
+        {
             return Err(AppError::InvalidInput(format!(
                 "You are not a member of team {team_id}"
             )));
@@ -2590,7 +2622,10 @@ pub async fn unshare_activity_from_team(
     Path((activity_id, team_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     // Verify activity exists and user is owner
-    let activity = db.get_activity(activity_id).await?.ok_or(AppError::NotFound)?;
+    let activity = db
+        .get_activity(activity_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     if activity.user_id != claims.sub {
         return Err(AppError::Forbidden);
@@ -2614,11 +2649,16 @@ pub async fn get_segment_teams(
     Path(segment_id): Path<Uuid>,
 ) -> Result<Json<Vec<TeamSummary>>, AppError> {
     // Verify segment exists
-    let segment = db.get_segment(segment_id).await?.ok_or(AppError::NotFound)?;
+    let segment = db
+        .get_segment(segment_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     // Only creator or team members can see sharing
     let is_creator = segment.creator_id == claims.sub;
-    let has_team_access = db.user_has_segment_team_access(claims.sub, segment_id).await?;
+    let has_team_access = db
+        .user_has_segment_team_access(claims.sub, segment_id)
+        .await?;
 
     if !is_creator && !has_team_access && segment.visibility != "public" {
         return Err(AppError::NotFound);
@@ -2636,7 +2676,10 @@ pub async fn share_segment_with_teams(
     Json(req): Json<ShareWithTeamsRequest>,
 ) -> Result<StatusCode, AppError> {
     // Verify segment exists and user is creator
-    let segment = db.get_segment(segment_id).await?.ok_or(AppError::NotFound)?;
+    let segment = db
+        .get_segment(segment_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     if segment.creator_id != claims.sub {
         return Err(AppError::Forbidden);
@@ -2644,14 +2687,19 @@ pub async fn share_segment_with_teams(
 
     // Verify user is a member of all target teams
     for team_id in &req.team_ids {
-        if db.get_team_membership(*team_id, claims.sub).await?.is_none() {
+        if db
+            .get_team_membership(*team_id, claims.sub)
+            .await?
+            .is_none()
+        {
             return Err(AppError::InvalidInput(format!(
                 "You are not a member of team {team_id}"
             )));
         }
     }
 
-    db.share_segment_with_teams(segment_id, &req.team_ids).await?;
+    db.share_segment_with_teams(segment_id, &req.team_ids)
+        .await?;
 
     Ok(StatusCode::OK)
 }
@@ -2663,7 +2711,10 @@ pub async fn unshare_segment_from_team(
     Path((segment_id, team_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     // Verify segment exists and user is creator
-    let segment = db.get_segment(segment_id).await?.ok_or(AppError::NotFound)?;
+    let segment = db
+        .get_segment(segment_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     if segment.creator_id != claims.sub {
         return Err(AppError::Forbidden);
@@ -2700,7 +2751,9 @@ pub async fn get_team_activities(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let activities = db.get_team_activities(team_id, query.limit, query.offset).await?;
+    let activities = db
+        .get_team_activities(team_id, query.limit, query.offset)
+        .await?;
     Ok(Json(activities))
 }
 
@@ -2716,6 +2769,8 @@ pub async fn get_team_segments(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let segments = db.get_team_segments(team_id, query.limit, query.offset).await?;
+    let segments = db
+        .get_team_segments(team_id, query.limit, query.offset)
+        .await?;
     Ok(Json(segments))
 }
