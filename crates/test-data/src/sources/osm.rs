@@ -37,6 +37,7 @@ enum OverpassElement {
         lat: f64,
         lon: f64,
         #[serde(default)]
+        #[allow(dead_code)]
         tags: HashMap<String, String>,
     },
     #[serde(rename = "way")]

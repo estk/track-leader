@@ -364,8 +364,9 @@ impl ScenarioBuilder {
         }
 
         // Auto-extract climbs if enabled
-        if self.auto_extract_climbs && reference_track.is_some() {
-            let track = reference_track.as_ref().unwrap();
+        if let Some(track) = reference_track.as_ref()
+            && self.auto_extract_climbs
+        {
             let creator = &users[rng.gen_range(0..users.len())];
             let auto_climbs =
                 segment_gen.extract_climbs(creator.id, track, self.activity_type, rng);

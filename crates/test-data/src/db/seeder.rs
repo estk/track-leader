@@ -29,6 +29,7 @@ pub enum SeedError {
 }
 
 /// Progress callback type for long-running operations.
+#[allow(dead_code)]
 pub type ProgressCallback = Box<dyn Fn(usize, usize) + Send + Sync>;
 
 /// Database seeder for inserting generated test data.

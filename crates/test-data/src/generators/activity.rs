@@ -177,10 +177,10 @@ impl ActivityGenerator {
             total_distance += haversine_distance(p1.lat, p1.lon, p2.lat, p2.lon);
 
             // Elevation gain (only count uphill)
-            if let (Some(e1), Some(e2)) = (p1.elevation, p2.elevation) {
-                if e2 > e1 {
-                    total_gain += e2 - e1;
-                }
+            if let (Some(e1), Some(e2)) = (p1.elevation, p2.elevation)
+                && e2 > e1
+            {
+                total_gain += e2 - e1;
             }
         }
 

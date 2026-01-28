@@ -164,6 +164,7 @@ impl ElevationGenerator {
 /// Utility to add random GPS jitter to elevation readings.
 ///
 /// Real GPS devices have elevation accuracy of ±3-20m depending on conditions.
+#[allow(dead_code)]
 pub fn add_elevation_jitter(elevation: f64, rng: &mut impl Rng, std_dev: f64) -> f64 {
     use rand_distr::{Distribution, Normal};
     let normal = Normal::new(0.0, std_dev).unwrap();

@@ -56,7 +56,7 @@ impl GpxLoader {
                 for waypoint in &segment.points {
                     let point = waypoint.point();
                     // gpx::Time wraps time::OffsetDateTime and implements From
-                    let timestamp = waypoint.time.map(|t| OffsetDateTime::from(t));
+                    let timestamp = waypoint.time.map(OffsetDateTime::from);
 
                     points.push(TrackPointData {
                         lat: point.y(),

@@ -25,12 +25,6 @@ export function CommentsSection({
   const [submitting, setSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState(initialCommentCount);
 
-  useEffect(() => {
-    if (expanded && comments.length === 0) {
-      loadComments();
-    }
-  }, [expanded]);
-
   const loadComments = async () => {
     setLoading(true);
     try {
@@ -42,6 +36,13 @@ export function CommentsSection({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (expanded && comments.length === 0) {
+      loadComments();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

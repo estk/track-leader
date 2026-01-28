@@ -82,6 +82,7 @@ impl SegmentGenerator {
     /// * `end_fraction` - End position as fraction of track (0.0 - 1.0)
     /// * `activity_type` - Activity type for the segment
     /// * `name` - Segment name
+    #[allow(clippy::too_many_arguments)]
     pub fn extract_from_track(
         &self,
         creator_id: Uuid,
@@ -206,22 +207,21 @@ impl SegmentGenerator {
                 current_loss += -delta;
 
                 // If we lose significant elevation, end the climb
-                if current_loss > self.config.min_climb_gain_m / 2.0 {
-                    if let Some(start) = climb_start {
-                        if current_gain >= self.config.min_climb_gain_m {
-                            let climb_points = &points[start..i];
-                            if let Some(mut seg) = self.from_points(
-                                creator_id,
-                                climb_points,
-                                activity_type,
-                                "", // Name will be set below
-                                rng,
-                            ) {
-                                let climb_num = segments.len() + 1;
-                                self.set_climb_name_and_description(&mut seg, climb_num);
-                                segments.push(seg);
-                            }
-                        }
+                if current_loss > self.config.min_climb_gain_m / 2.0
+                    && let Some(start) = climb_start
+                    && current_gain >= self.config.min_climb_gain_m
+                {
+                    let climb_points = &points[start..i];
+                    if let Some(mut seg) = self.from_points(
+                        creator_id,
+                        climb_points,
+                        activity_type,
+                        "", // Name will be set below
+                        rng,
+                    ) {
+                        let climb_num = segments.len() + 1;
+                        self.set_climb_name_and_description(&mut seg, climb_num);
+                        segments.push(seg);
                     }
                     climb_start = None;
                     current_gain = 0.0;
@@ -231,16 +231,16 @@ impl SegmentGenerator {
         }
 
         // Handle climb at end of track
-        if let Some(start) = climb_start {
-            if current_gain >= self.config.min_climb_gain_m {
-                let climb_points = &points[start..];
-                if let Some(mut seg) =
-                    self.from_points(creator_id, climb_points, activity_type, "", rng)
-                {
-                    let climb_num = segments.len() + 1;
-                    self.set_climb_name_and_description(&mut seg, climb_num);
-                    segments.push(seg);
-                }
+        if let Some(start) = climb_start
+            && current_gain >= self.config.min_climb_gain_m
+        {
+            let climb_points = &points[start..];
+            if let Some(mut seg) =
+                self.from_points(creator_id, climb_points, activity_type, "", rng)
+            {
+                let climb_num = segments.len() + 1;
+                self.set_climb_name_and_description(&mut seg, climb_num);
+                segments.push(seg);
             }
         }
 
