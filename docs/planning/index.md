@@ -2,8 +2,8 @@
 
 ## Implementation Progress
 
-**Current Phase:** Phase 5 - Social Features
-**Started:** 2026-01-27 (Phase 5 beginning)
+**Current Phase:** Phase 6 - Polish & Launch
+**Last Updated:** 2026-01-27 (Phase 5 complete)
 
 ### Phase 1 Progress (Complete)
 
@@ -84,6 +84,33 @@
 - Leaderboard caching service
 - Auto-achievement processing
 
+### Phase 5 Progress (Complete)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Follows database schema | Done | 011_social_follows.sql with denormalized counts |
+| Notifications database schema | Done | 012_notifications.sql with actor/target pattern |
+| Kudos/comments database schema | Done | 013_kudos_comments.sql with denormalized counts |
+| Follow/unfollow API | Done | POST/DELETE /users/{id}/follow |
+| Followers/following lists API | Done | GET with pagination |
+| Notifications API | Done | GET, mark read, mark all read |
+| Activity feed API | Done | GET /feed from followed users |
+| Kudos API | Done | POST/DELETE /activities/{id}/kudos |
+| Comments API | Done | CRUD endpoints |
+| FollowButton component | Done | Toggle with optimistic updates |
+| FollowStats component | Done | Clickable follower/following counts |
+| NotificationBell component | Done | Dropdown with unread badge |
+| Notifications page | Done | Full page with mark read |
+| Feed page | Done | /feed with activity cards |
+| Public profile page | Done | /profile/[userId] with follow button |
+| Followers/following pages | Done | User lists with avatars |
+| KudosButton component | Done | Toggle with count |
+| CommentsSection component | Done | Expand/collapse, add/delete |
+| FeedCard component | Done | Activity card with kudos/comments |
+
+**Bug Found & Fixed:**
+- FollowButton race condition - button rendered before async follow status loaded. Fixed by adding `followStatusLoaded` state.
+
 ---
 
 ## Vision
@@ -103,12 +130,24 @@ Transform Track Leader from a GPS activity tracker into an **open leaderboard pl
 | [Phase 2](./phase-2-core-features.md) | Core Features | Month 2 | ✅ Complete |
 | [Phase 3](./phase-3-segments.md) | Segments | Month 3 | ✅ Complete |
 | [Phase 4](./phase-4-leaderboards.md) | Leaderboards | Month 4 | ✅ Complete |
-| [Phase 5](./phase-5-social.md) | Social Features | Month 5 | 🔄 Starting |
-| [Phase 6](./phase-6-polish.md) | Polish & Launch | Month 6 | Planned |
+| [Phase 5](./phase-5-social.md) | Social Features | Month 5 | ✅ Complete |
+| [Phase 6](./phase-6-polish.md) | Polish & Launch | Month 6 | 🔄 Next |
 
 ---
 
 ## Learnings Log
+
+### Phase 5 Learnings (2026-01-27)
+
+1. **Async state initialization race conditions** - When a React component's initial state depends on an async call, render conditional UI (loading state or delayed render) until the data is ready. Don't render components with `initialX` props until you've actually fetched X.
+
+2. **Denormalized counts work well** - Storing `follower_count`, `kudos_count`, etc. directly on parent tables (users, activities) avoids expensive COUNT queries. Update counts atomically in the same transaction as the relationship change.
+
+3. **Actor/target pattern for notifications** - Using `actor_id` (who did it) and `target_type`/`target_id` (what it was done to) makes notifications flexible and queryable. Easy to add new notification types without schema changes.
+
+4. **Next.js dev server caching issues** - After modifying files, sometimes the dev server caches stale webpack chunks. Restart with `tmux respawn-pane` to clear the cache.
+
+5. **Browser automation for verification** - Using Claude-in-Chrome MCP tools enables systematic manual testing with screenshots as evidence. Good for catching UI bugs that unit tests miss.
 
 ### Phase 4 Learnings (2026-01-27)
 
@@ -216,6 +255,28 @@ Ideas collected during development that may be incorporated into future phases:
 
 ## Next Steps
 
-1. Begin Phase 5: Social Features
-2. Consider which Future Enhancements to incorporate
-3. Plan test data strategy
+1. **Begin Phase 6: Polish & Launch**
+   - Performance optimization (lazy loading, caching)
+   - Error handling improvements (user-friendly error messages)
+   - Loading states and skeletons throughout the app
+   - SEO and accessibility audit
+   - Testing coverage (integration tests)
+
+2. **Priority Bug Fixes**
+   - Activity detail page shows "Not found" for own activities (needs investigation)
+   - Homepage stats show 0 users/segments/activities (API or query issue)
+
+3. **Test Data Strategy**
+   - Create seed script for development data
+   - Multiple users with activities, follows, kudos, comments
+   - Segments with efforts and achievements
+
+4. **Deferred Items to Address**
+   - SSE real-time updates for notifications and leaderboards
+   - Leaderboard caching service
+   - Auto-achievement processing on effort creation
+
+5. **Future Enhancements to Consider**
+   - Teams feature (Phase 7)
+   - Strava import
+   - Mobile app (PWA or native)
