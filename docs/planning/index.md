@@ -77,22 +77,11 @@ Detailed phase documentation is in [archive/](./archive/).
 
 These items were planned but deferred for post-launch:
 
-### Real-Time Updates
-- SSE for leaderboard updates
-- SSE for notification updates
-
-### Performance
-- Leaderboard caching service
-- Rate limiting integration (tower_governor in Cargo.toml)
-- Virtual scrolling for long lists
-
 ### Features
 - Auto-achievement processing on effort creation
-- OpenAPI/Swagger spec (utoipa)
-- Sentry error tracking integration
-- Screen reader testing
 
 ### Future Enhancements (Phase 7+)
+- Live tracking, based on your privacy prefs (teams, followers etc) you can show your live location to logged in users with the right permissions
 - Teams feature (team pages, team leaderboards)
 -. **Teams** - What does it look like to be on a team, publish activities to teams you are a member of, or selective publish
 - Strava import
@@ -102,7 +91,19 @@ These items were planned but deferred for post-launch:
 - Weight class filters
 - User defined metrics that allow them to create and share a custom leaderboard
 -. **Multi-Sport Activity** - Can we start to introduce a concept of multi-sport activities? Ride+Dig Ride+Ski etc. This should be general so any activities can be done together, and we should also allow users to create new activity types
-- Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one
+- Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one, maybe use utopia
+
+### Real-Time Updates
+- SSE for leaderboard updates
+- SSE for notification updates
+
+
+### Low priority
+- Virtual scrolling for long lists
+- Rate limiting integration (tower_governor in Cargo.toml)
+- Leaderboard caching service
+- Screen reader testing
+- Sentry error tracking integration
 
 ---
 

@@ -20,64 +20,7 @@ A GPS activity tracking application with segment competition features, similar t
 
 ## Development
 
-### Prerequisites
-
-- Node.js 18+
-- Rust (nightly)
-- Docker (for PostgreSQL)
-- tmux (optional, for dev scripts)
-
-### Quick Start
-
-```bash
-# Start all components in tmux with logging
-./scripts/start-dev.sh
-```
-
-This creates a tmux session with 3 labeled panes:
-
-```
-┌─────────────────┬─────────────────┐
-│                 │    Backend      │
-│   PostgreSQL    │   (port 3001)   │
-│                 ├─────────────────┤
-│                 │    Frontend     │
-│                 │   (port 3000)   │
-└─────────────────┴─────────────────┘
-```
-
-Open http://localhost:3000
-
-### Monitoring Logs
-
-Logs are saved to `logs/` directory with timestamps. Symlinks point to latest:
-
-```bash
-# Watch all logs with error highlighting
-./scripts/watch-logs.sh
-
-# Watch specific component
-./scripts/watch-logs.sh backend
-./scripts/watch-logs.sh frontend
-./scripts/watch-logs.sh postgres
-
-# Direct tail
-tail -f logs/backend_latest.log
-```
-
-### Stop Development Environment
-
-```bash
-./scripts/stop-dev.sh
-```
-
-### tmux Controls
-
-- `Ctrl+b, d` - Detach from session (keeps running in background)
-- `tmux attach -t track-leader` - Reattach to session
-- `tmux kill-session -t track-leader` - Kill session
-
-### Manual Start (Alternative)
+### Manual Start 
 
 If you prefer to run components separately:
 
