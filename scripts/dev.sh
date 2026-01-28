@@ -217,6 +217,8 @@ EOF
         echo ""
         echo "Services started in detached mode."
         echo ""
+        echo "Open in browser: http://localhost:$FRONTEND_PORT"
+        echo ""
         echo "Commands:"
         echo "  View status:  ./scripts/dev.sh status"
         echo "  View logs:    ./scripts/dev.sh logs"
