@@ -9,6 +9,7 @@
 #   logs [service]   Show logs (all or specific service: backend, frontend, postgres)
 #   stop             Stop all services
 #   restart [svc]    Restart specific service or all
+#   reset-db         Destroy postgres volume and restart with fresh database
 #
 # Options:
 #   -d, --detach           Start in detached mode
@@ -90,6 +91,7 @@ show_help() {
     echo "  logs [service]   Show logs (all or specific service)"
     echo "  stop             Stop all services"
     echo "  restart [svc]    Restart specific service or all"
+    echo "  reset-db         Destroy postgres volume (fresh database)"
     echo ""
     echo "Options:"
     echo "  -d, --detach           Start in detached mode"
@@ -108,7 +110,7 @@ show_help() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            status|logs|stop|restart)
+            status|logs|stop|restart|reset-db)
                 COMMAND="$1"
                 shift
                 ;;
@@ -309,6 +311,30 @@ cmd_stop() {
     echo "Done."
 }
 
+# Reset database (destroy postgres volume)
+cmd_reset_db() {
+    load_ports
+
+    echo "Resetting database for: $COMPOSE_PROJECT_NAME"
+
+    # Stop postgres container if running
+    docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" stop postgres 2>/dev/null || true
+    docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" rm -f postgres 2>/dev/null || true
+
+    # Remove the pgdata volume
+    VOLUME_NAME="${COMPOSE_PROJECT_NAME}_pgdata"
+    if docker volume ls --format '{{.Name}}' | grep -q "^${VOLUME_NAME}$"; then
+        echo "Removing volume: $VOLUME_NAME"
+        docker volume rm "$VOLUME_NAME"
+    else
+        echo "Volume $VOLUME_NAME does not exist (already clean)"
+    fi
+
+    echo "Database reset complete."
+    echo ""
+    echo "Run './scripts/dev.sh' to start with a fresh database."
+}
+
 # Restart services
 cmd_restart() {
     load_ports
@@ -369,6 +395,9 @@ case "$COMMAND" in
         ;;
     restart)
         cmd_restart
+        ;;
+    reset-db)
+        cmd_reset_db
         ;;
     *)
         echo "Unknown command: $COMMAND"

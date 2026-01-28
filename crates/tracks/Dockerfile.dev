@@ -1,7 +1,7 @@
 # Development Dockerfile for Rust backend with hot reloading
 # Multi-arch support for Apple Silicon (M1/M2)
 
-FROM rust:1.85-bookworm
+FROM rust:1.93-bullseye
 
 # Install cargo-watch for hot reloading and sqlx-cli for migrations
 RUN cargo install cargo-watch sqlx-cli --locked

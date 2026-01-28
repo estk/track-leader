@@ -8,7 +8,7 @@
 
 services:
   postgres:
-    image: postgis/postgis:15-3.3
+    image: ghcr.io/gui/postgis:18-trixie-postgis-3.6.1
     # Multi-arch image - works on both arm64 (M1/M2) and amd64
     container_name: ${COMPOSE_PROJECT_NAME:-tl}_postgres
     environment:
@@ -43,11 +43,12 @@ services:
       # Mount workspace root for dependency resolution
       - ./Cargo.toml:/app/Cargo.toml:cached
       - ./Cargo.lock:/app/Cargo.lock:cached
-      # Mount the tracks crate
+      # Mount workspace crates
       - ./crates/tracks/src:/app/crates/tracks/src:cached
       - ./crates/tracks/migrations:/app/crates/tracks/migrations:cached
       - ./crates/tracks/Cargo.toml:/app/crates/tracks/Cargo.toml:cached
       - ./crates/tracks/.sqlx:/app/crates/tracks/.sqlx:cached
+      - ./crates/test-data:/app/crates/test-data:cached
       - cargo_cache:/usr/local/cargo/registry
       - target_cache:/app/target
       - uploads:/app/uploads
@@ -60,8 +61,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    # Use cargo-watch for hot reloading; run the tracks crate from workspace
-    command: cargo watch -p tracks -x run
+    # Use cargo-watch for hot reloading; run the tracks binary
+    command: cargo watch -p tracks -x "run --bin tracks"
 
   frontend:
     build:

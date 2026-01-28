@@ -5,7 +5,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgis/postgis:15-3.3
+    image: ghcr.io/gui/postgis:18-trixie-postgis-3.6.1
     container_name: tracks_postgres_prod
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tracks_db}
