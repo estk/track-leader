@@ -8,7 +8,17 @@ use crate::generators::{
     GeneratedActivity, GeneratedComment, GeneratedEffort, GeneratedFollow, GeneratedKudos,
     GeneratedSegment, GeneratedUser,
 };
-use tracks::models::ActivityType;
+use tracks::models::{ActivityType, Gender};
+
+/// Convert Gender enum to its database string representation.
+fn gender_to_db_str(gender: &Gender) -> &'static str {
+    match gender {
+        Gender::Male => "male",
+        Gender::Female => "female",
+        Gender::Other => "other",
+        Gender::PreferNotToSay => "prefer_not_to_say",
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum SeedError {
@@ -71,22 +81,21 @@ impl Seeder {
             .execute(&self.pool)
             .await?;
 
-            // Insert demographics if present
+            // Update demographics if present (demographics are columns on users table)
             if user.gender.is_some() || user.birth_year.is_some() {
                 sqlx::query(
                     r#"
-                    INSERT INTO user_demographics (user_id, gender, birth_year, weight_kg, country, region)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (user_id) DO UPDATE SET
-                        gender = COALESCE(EXCLUDED.gender, user_demographics.gender),
-                        birth_year = COALESCE(EXCLUDED.birth_year, user_demographics.birth_year),
-                        weight_kg = COALESCE(EXCLUDED.weight_kg, user_demographics.weight_kg),
-                        country = COALESCE(EXCLUDED.country, user_demographics.country),
-                        region = COALESCE(EXCLUDED.region, user_demographics.region)
+                    UPDATE users SET
+                        gender = COALESCE($2::gender, gender),
+                        birth_year = COALESCE($3, birth_year),
+                        weight_kg = COALESCE($4, weight_kg),
+                        country = COALESCE($5, country),
+                        region = COALESCE($6, region)
+                    WHERE id = $1
                     "#,
                 )
                 .bind(user.id)
-                .bind(user.gender.as_ref().map(|g| format!("{g:?}").to_lowercase()))
+                .bind(user.gender.as_ref().map(gender_to_db_str))
                 .bind(user.birth_year)
                 .bind(user.weight_kg)
                 .bind(&user.country)
@@ -176,9 +185,8 @@ impl Seeder {
         // Insert activity scores
         sqlx::query(
             r#"
-            INSERT INTO activity_scores (user_id, activity_id, distance, duration, elevation_gain, created_at)
+            INSERT INTO scores (user_id, activity_id, distance, duration, elevation_gain, created_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
-            ON CONFLICT (activity_id) DO NOTHING
             "#,
         )
         .bind(activity.user_id)
@@ -337,7 +345,7 @@ impl Seeder {
         for k in kudos {
             sqlx::query(
                 r#"
-                INSERT INTO activity_kudos (user_id, activity_id, created_at)
+                INSERT INTO kudos (user_id, activity_id, created_at)
                 VALUES ($1, $2, $3)
                 ON CONFLICT (user_id, activity_id) DO NOTHING
                 "#,
@@ -360,7 +368,7 @@ impl Seeder {
         for comment in comments {
             sqlx::query(
                 r#"
-                INSERT INTO activity_comments (id, user_id, activity_id, parent_id, content, created_at)
+                INSERT INTO comments (id, user_id, activity_id, parent_id, content, created_at)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (id) DO NOTHING
                 "#,
@@ -386,16 +394,15 @@ impl Seeder {
         info!("Clearing all seeded data...");
 
         // Order matters due to foreign key constraints
-        sqlx::query("DELETE FROM activity_comments").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM activity_kudos").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM comments").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM kudos").execute(&self.pool).await?;
         sqlx::query("DELETE FROM segment_efforts").execute(&self.pool).await?;
         sqlx::query("DELETE FROM segments").execute(&self.pool).await?;
         sqlx::query("DELETE FROM tracks").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM activity_scores").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM scores").execute(&self.pool).await?;
         sqlx::query("DELETE FROM activities").execute(&self.pool).await?;
         sqlx::query("DELETE FROM follows").execute(&self.pool).await?;
         sqlx::query("DELETE FROM notifications").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM user_demographics").execute(&self.pool).await?;
         sqlx::query("DELETE FROM users").execute(&self.pool).await?;
 
         info!("All data cleared");

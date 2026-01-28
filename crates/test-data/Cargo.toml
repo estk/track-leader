@@ -36,3 +36,7 @@ path = "examples/seed_leaderboard.rs"
 [[example]]
 name = "seed_social"
 path = "examples/seed_social.rs"
+
+[[bin]]
+name = "seed"
+path = "src/bin/seed.rs"

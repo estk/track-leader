@@ -311,13 +311,16 @@ impl SegmentGenerator {
         }
     }
 
-    /// Converts points to WKT LineString format.
+    /// Converts points to WKT LineStringZ format with elevation.
     fn points_to_linestring_wkt(&self, points: &[TrackPointData]) -> String {
         let coords: Vec<String> = points
             .iter()
-            .map(|p| format!("{} {}", p.lon, p.lat))
+            .map(|p| {
+                let ele = p.elevation.unwrap_or(0.0);
+                format!("{} {} {}", p.lon, p.lat, ele)
+            })
             .collect();
-        format!("LINESTRING({})", coords.join(", "))
+        format!("LINESTRING Z({})", coords.join(", "))
     }
 }
 
