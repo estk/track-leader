@@ -15,9 +15,9 @@ use crate::{
     database::Database,
     errors::AppError,
     models::{
-        Activity, ChangeMemberRoleRequest, CreateTeamRequest, InviteToTeamRequest, JoinTeamRequest,
-        Segment, ShareWithTeamsRequest, Team, TeamInvitationWithDetails, TeamMember, TeamRole,
-        TeamSummary, TeamWithMembership, UpdateTeamRequest,
+        ChangeMemberRoleRequest, CreateTeamRequest, InviteToTeamRequest, JoinTeamRequest, Segment,
+        ShareWithTeamsRequest, Team, TeamInvitationWithDetails, TeamMember, TeamRole, TeamSummary,
+        TeamWithMembership, UpdateTeamRequest,
     },
 };
 

@@ -3,11 +3,10 @@
 use axum::{
     Extension,
     extract::{Path, Query},
-    http::StatusCode,
     response::Json,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{

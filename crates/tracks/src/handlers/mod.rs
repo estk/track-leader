@@ -2,11 +2,8 @@
 //!
 //! This module re-exports handlers from focused submodules organized by domain.
 
-// Submodules for generic abstractions
-pub mod access;
-pub mod notify;
+// Utility submodules
 pub mod pagination;
-pub mod toggle;
 
 // Handler modules
 pub mod achievements;
