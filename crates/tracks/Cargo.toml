@@ -41,6 +41,7 @@ bytes = "1.0"
 
 # Misc
 rayon = "1.11.0"
+async-trait = "0.1"
 enumflags2 = { version = "0.7.12", features = ["serde"] }
 enum-map = "2.7.3"
 

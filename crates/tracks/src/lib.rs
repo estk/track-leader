@@ -8,6 +8,7 @@ pub mod models;
 pub mod object_store_service;
 pub mod scoring;
 pub mod segment_matching;
+pub mod types;
 
 use axum::{
     Extension, Router,
