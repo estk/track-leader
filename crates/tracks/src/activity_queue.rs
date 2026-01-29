@@ -356,3 +356,443 @@ fn get_activity_type_at_timestamp(
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::builtin_types;
+    use crate::segment_matching::SegmentMatch;
+    use time::Duration;
+
+    /// Create a simple track with timestamps spanning the given duration.
+    fn make_track_points(duration_minutes: i64) -> Vec<TrackPointData> {
+        let start = OffsetDateTime::now_utc();
+        let num_points = 100;
+        (0..num_points)
+            .map(|i| {
+                let fraction = i as f64 / (num_points - 1) as f64;
+                let offset = Duration::minutes((duration_minutes as f64 * fraction) as i64);
+                TrackPointData {
+                    lat: 40.0 + (i as f64 * 0.0001),
+                    lon: -105.3 + (i as f64 * 0.0001),
+                    elevation: Some(1650.0 + (i as f64 * 0.5)),
+                    timestamp: Some(start + offset),
+                }
+            })
+            .collect()
+    }
+
+    // ========================================================================
+    // Tests for fraction_to_timestamp
+    // ========================================================================
+
+    #[test]
+    fn test_fraction_to_timestamp_at_start() {
+        let points = make_track_points(60);
+        let result = fraction_to_timestamp(&points, 0.0);
+        assert!(result.is_some());
+
+        let first_ts = points.first().unwrap().timestamp.unwrap();
+        assert_eq!(result.unwrap(), first_ts);
+    }
+
+    #[test]
+    fn test_fraction_to_timestamp_at_end() {
+        let points = make_track_points(60);
+        let result = fraction_to_timestamp(&points, 1.0);
+        assert!(result.is_some());
+
+        let first_ts = points.first().unwrap().timestamp.unwrap();
+        let last_ts = points.last().unwrap().timestamp.unwrap();
+        let expected = first_ts + Duration::seconds((last_ts - first_ts).whole_seconds());
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_fraction_to_timestamp_at_midpoint() {
+        let points = make_track_points(60);
+        let result = fraction_to_timestamp(&points, 0.5);
+        assert!(result.is_some());
+
+        let first_ts = points.first().unwrap().timestamp.unwrap();
+        let last_ts = points.last().unwrap().timestamp.unwrap();
+        let duration_secs = (last_ts - first_ts).whole_seconds();
+        let expected = first_ts + Duration::seconds(duration_secs / 2);
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_fraction_to_timestamp_empty_track() {
+        let points: Vec<TrackPointData> = vec![];
+        let result = fraction_to_timestamp(&points, 0.5);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_fraction_to_timestamp_no_timestamps() {
+        let points = vec![
+            TrackPointData {
+                lat: 40.0,
+                lon: -105.3,
+                elevation: Some(1650.0),
+                timestamp: None,
+            },
+            TrackPointData {
+                lat: 40.001,
+                lon: -105.299,
+                elevation: Some(1660.0),
+                timestamp: None,
+            },
+        ];
+        let result = fraction_to_timestamp(&points, 0.5);
+        assert!(result.is_none());
+    }
+
+    // ========================================================================
+    // Tests for get_activity_type_at_timestamp
+    // ========================================================================
+
+    #[test]
+    fn test_get_activity_type_at_timestamp_single_segment() {
+        let start = OffsetDateTime::now_utc();
+        let boundaries = vec![start, start + Duration::hours(1)];
+        let types = vec![builtin_types::RUN];
+
+        // At start
+        let result = get_activity_type_at_timestamp(&boundaries, &types, start);
+        assert_eq!(result, Some(builtin_types::RUN));
+
+        // In middle
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start + Duration::minutes(30));
+        assert_eq!(result, Some(builtin_types::RUN));
+
+        // At end (should use last segment)
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start + Duration::hours(1));
+        assert_eq!(result, Some(builtin_types::RUN));
+    }
+
+    #[test]
+    fn test_get_activity_type_at_timestamp_multi_segment() {
+        let start = OffsetDateTime::now_utc();
+        // 3-segment activity: RUN (0-30min), MTB (30-60min), RUN (60-90min)
+        let boundaries = vec![
+            start,
+            start + Duration::minutes(30),
+            start + Duration::minutes(60),
+            start + Duration::minutes(90),
+        ];
+        let types = vec![builtin_types::RUN, builtin_types::MTB, builtin_types::RUN];
+
+        // First segment (0-30 min): RUN
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start + Duration::minutes(15));
+        assert_eq!(result, Some(builtin_types::RUN));
+
+        // Second segment (30-60 min): MTB
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start + Duration::minutes(45));
+        assert_eq!(result, Some(builtin_types::MTB));
+
+        // Third segment (60-90 min): RUN
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start + Duration::minutes(75));
+        assert_eq!(result, Some(builtin_types::RUN));
+
+        // Exactly at boundary between segments
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start + Duration::minutes(30));
+        assert_eq!(result, Some(builtin_types::MTB)); // Should be in second segment
+    }
+
+    #[test]
+    fn test_get_activity_type_at_timestamp_mismatched_arrays() {
+        let start = OffsetDateTime::now_utc();
+        let boundaries = vec![start, start + Duration::hours(1)];
+        let types = vec![builtin_types::RUN, builtin_types::MTB]; // 2 types but only 1 segment
+
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start + Duration::minutes(30));
+        assert!(result.is_none()); // Should fail validation
+    }
+
+    #[test]
+    fn test_get_activity_type_at_timestamp_before_start() {
+        let start = OffsetDateTime::now_utc();
+        let boundaries = vec![start, start + Duration::hours(1)];
+        let types = vec![builtin_types::RUN];
+
+        let result =
+            get_activity_type_at_timestamp(&boundaries, &types, start - Duration::minutes(10));
+        assert!(result.is_none());
+    }
+
+    // ========================================================================
+    // Tests for filter_multi_sport_matches
+    // ========================================================================
+
+    #[test]
+    fn test_filter_multi_sport_matches_matching_type() {
+        let start = OffsetDateTime::now_utc();
+        let points: Vec<TrackPointData> = (0..100)
+            .map(|i| {
+                let offset = Duration::minutes(i);
+                TrackPointData {
+                    lat: 40.0 + (i as f64 * 0.0001),
+                    lon: -105.3 + (i as f64 * 0.0001),
+                    elevation: Some(1650.0),
+                    timestamp: Some(start + offset),
+                }
+            })
+            .collect();
+
+        // Activity: RUN (0-50 min), MTB (50-100 min)
+        let boundaries = vec![
+            start,
+            start + Duration::minutes(50),
+            start + Duration::minutes(99),
+        ];
+        let segment_types = vec![builtin_types::RUN, builtin_types::MTB];
+
+        // A RUN segment in the first half should match
+        let matches = vec![(
+            SegmentMatch {
+                segment_id: Uuid::new_v4(),
+                distance_meters: 1000.0,
+                start_fraction: 0.1, // 10% into track = ~10 min in = RUN portion
+                end_fraction: 0.3,   // 30% into track = ~30 min in = still RUN
+            },
+            builtin_types::RUN,
+        )];
+
+        let result = filter_multi_sport_matches(matches, &points, &boundaries, &segment_types);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_filter_multi_sport_matches_non_matching_type() {
+        let start = OffsetDateTime::now_utc();
+        let points: Vec<TrackPointData> = (0..100)
+            .map(|i| {
+                let offset = Duration::minutes(i);
+                TrackPointData {
+                    lat: 40.0 + (i as f64 * 0.0001),
+                    lon: -105.3 + (i as f64 * 0.0001),
+                    elevation: Some(1650.0),
+                    timestamp: Some(start + offset),
+                }
+            })
+            .collect();
+
+        // Activity: RUN (0-50 min), MTB (50-100 min)
+        let boundaries = vec![
+            start,
+            start + Duration::minutes(50),
+            start + Duration::minutes(99),
+        ];
+        let segment_types = vec![builtin_types::RUN, builtin_types::MTB];
+
+        // An MTB segment in the first half (RUN portion) should NOT match
+        let matches = vec![(
+            SegmentMatch {
+                segment_id: Uuid::new_v4(),
+                distance_meters: 1000.0,
+                start_fraction: 0.1, // 10% into track = RUN portion
+                end_fraction: 0.3,   // 30% into track = still RUN portion
+            },
+            builtin_types::MTB, // But segment expects MTB
+        )];
+
+        let result = filter_multi_sport_matches(matches, &points, &boundaries, &segment_types);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_multi_sport_matches_mixed_results() {
+        let start = OffsetDateTime::now_utc();
+        let points: Vec<TrackPointData> = (0..100)
+            .map(|i| {
+                let offset = Duration::minutes(i);
+                TrackPointData {
+                    lat: 40.0 + (i as f64 * 0.0001),
+                    lon: -105.3 + (i as f64 * 0.0001),
+                    elevation: Some(1650.0),
+                    timestamp: Some(start + offset),
+                }
+            })
+            .collect();
+
+        // Activity: RUN (0-50 min), MTB (50-100 min)
+        let boundaries = vec![
+            start,
+            start + Duration::minutes(50),
+            start + Duration::minutes(99),
+        ];
+        let segment_types = vec![builtin_types::RUN, builtin_types::MTB];
+
+        let run_segment_id = Uuid::new_v4();
+        let mtb_segment_id = Uuid::new_v4();
+        let mtb_wrong_place_id = Uuid::new_v4();
+
+        let matches = vec![
+            // RUN segment in RUN portion - SHOULD MATCH
+            (
+                SegmentMatch {
+                    segment_id: run_segment_id,
+                    distance_meters: 1000.0,
+                    start_fraction: 0.1,
+                    end_fraction: 0.3,
+                },
+                builtin_types::RUN,
+            ),
+            // MTB segment in MTB portion - SHOULD MATCH
+            (
+                SegmentMatch {
+                    segment_id: mtb_segment_id,
+                    distance_meters: 1500.0,
+                    start_fraction: 0.6, // 60% = MTB portion
+                    end_fraction: 0.8,
+                },
+                builtin_types::MTB,
+            ),
+            // MTB segment in RUN portion - SHOULD NOT MATCH
+            (
+                SegmentMatch {
+                    segment_id: mtb_wrong_place_id,
+                    distance_meters: 800.0,
+                    start_fraction: 0.1, // 10% = RUN portion
+                    end_fraction: 0.2,
+                },
+                builtin_types::MTB,
+            ),
+        ];
+
+        let result = filter_multi_sport_matches(matches, &points, &boundaries, &segment_types);
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().any(|m| m.segment_id == run_segment_id));
+        assert!(result.iter().any(|m| m.segment_id == mtb_segment_id));
+        assert!(!result.iter().any(|m| m.segment_id == mtb_wrong_place_id));
+    }
+
+    #[test]
+    fn test_filter_multi_sport_matches_empty_track() {
+        let points: Vec<TrackPointData> = vec![];
+        let boundaries = vec![OffsetDateTime::now_utc()];
+        let segment_types = vec![];
+
+        let matches = vec![(
+            SegmentMatch {
+                segment_id: Uuid::new_v4(),
+                distance_meters: 1000.0,
+                start_fraction: 0.1,
+                end_fraction: 0.3,
+            },
+            builtin_types::RUN,
+        )];
+
+        let result = filter_multi_sport_matches(matches, &points, &boundaries, &segment_types);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_multi_sport_matches_insufficient_boundaries() {
+        let start = OffsetDateTime::now_utc();
+        let points = make_track_points(60);
+        let boundaries = vec![start]; // Only 1 boundary, need at least 2
+        let segment_types = vec![];
+
+        let matches = vec![(
+            SegmentMatch {
+                segment_id: Uuid::new_v4(),
+                distance_meters: 1000.0,
+                start_fraction: 0.1,
+                end_fraction: 0.3,
+            },
+            builtin_types::RUN,
+        )];
+
+        let result = filter_multi_sport_matches(matches, &points, &boundaries, &segment_types);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_multi_sport_segment_spanning_boundary() {
+        let start = OffsetDateTime::now_utc();
+        let points: Vec<TrackPointData> = (0..100)
+            .map(|i| {
+                let offset = Duration::minutes(i);
+                TrackPointData {
+                    lat: 40.0 + (i as f64 * 0.0001),
+                    lon: -105.3 + (i as f64 * 0.0001),
+                    elevation: Some(1650.0),
+                    timestamp: Some(start + offset),
+                }
+            })
+            .collect();
+
+        // Activity: RUN (0-50 min), MTB (50-100 min)
+        // Note: Track is 0-99 minutes, so 50% = 49.5 min which is in RUN portion
+        let boundaries = vec![
+            start,
+            start + Duration::minutes(50),
+            start + Duration::minutes(99),
+        ];
+        let segment_types = vec![builtin_types::RUN, builtin_types::MTB];
+
+        // Segment that spans the boundary (40% to 60%)
+        // Midpoint = 50% of 99 min = 49.5 min, which is < 50 min boundary, so in RUN portion
+        let matches = vec![(
+            SegmentMatch {
+                segment_id: Uuid::new_v4(),
+                distance_meters: 2000.0,
+                start_fraction: 0.4, // 40% into track
+                end_fraction: 0.6,   // 60% into track
+            },
+            builtin_types::RUN, // Segment is RUN type (midpoint is in RUN portion)
+        )];
+
+        let result = filter_multi_sport_matches(matches, &points, &boundaries, &segment_types);
+        // Midpoint (50% of 99min = 49.5min) falls just before the 50min boundary, in RUN portion
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_filter_multi_sport_segment_clearly_in_second_portion() {
+        let start = OffsetDateTime::now_utc();
+        let points: Vec<TrackPointData> = (0..100)
+            .map(|i| {
+                let offset = Duration::minutes(i);
+                TrackPointData {
+                    lat: 40.0 + (i as f64 * 0.0001),
+                    lon: -105.3 + (i as f64 * 0.0001),
+                    elevation: Some(1650.0),
+                    timestamp: Some(start + offset),
+                }
+            })
+            .collect();
+
+        // Activity: RUN (0-50 min), MTB (50-100 min)
+        let boundaries = vec![
+            start,
+            start + Duration::minutes(50),
+            start + Duration::minutes(99),
+        ];
+        let segment_types = vec![builtin_types::RUN, builtin_types::MTB];
+
+        // Segment clearly in the MTB portion (60% to 80%)
+        // Midpoint = 70% of 99 min = 69.3 min, which is > 50 min, so in MTB portion
+        let matches = vec![(
+            SegmentMatch {
+                segment_id: Uuid::new_v4(),
+                distance_meters: 2000.0,
+                start_fraction: 0.6,
+                end_fraction: 0.8,
+            },
+            builtin_types::MTB, // Segment is MTB type
+        )];
+
+        let result = filter_multi_sport_matches(matches, &points, &boundaries, &segment_types);
+        assert_eq!(result.len(), 1);
+    }
+}
