@@ -31,6 +31,17 @@ Supports random ports for parallel workspaces. See [docs/ai/development.md](./do
 - **Imports**: Import unused traits as `use MyTrait as _`
 - **Format strings**: Use inline variables: `println!("Hello, {name}!")`
 
+## Security Rules
+
+**All authorization happens in Rust.** Frontend permission checks are cosmetic only.
+
+- **NEVER** trust user ID from request parameters - always use `AuthUser(claims).sub`
+- **ALWAYS** use `AuthUser` extractor for mutation endpoints (create/update/delete)
+- **NEVER** pass user ID as query param for privileged operations
+- Team membership is verified via database, not stored in tokens (allows immediate revocation)
+
+See [docs/architecture/security.md](./docs/architecture/security.md) for full patterns.
+
 ## Token-Efficient Build Commands
 
 When running builds, filter verbose output to save context tokens:

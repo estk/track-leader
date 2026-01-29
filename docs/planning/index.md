@@ -77,31 +77,40 @@ Phase documentation has been archived.
 
 These items were planned but deferred for post-launch:
 
-### Future Enhancements (Phase 7+)
-- use pasetors and use paseto for user auth
-- Live tracking, based on your privacy prefs (teams, followers etc) you can show your live location to logged in users with the right permissions
-- Teams feature (team pages, team leaderboards)
--. **Teams** - What does it look like to be on a team, publish activities to teams you are a member of, or selective publish
+### High priority
+
+-. **Multi-Sport Activity** - Can we start to introduce a concept of multi-sport activities? Ride+Dig Ride+Ski etc. This should be general so any activities can be done together, and we should also allow users to create new activity types. Since we dont have an app yet, we need to allow for on upload a pre-publish dialog that allows the user to select (via the elevation plot timeline) what times include which activities. We could add a checkbox that indicates its a multisport activity.
+
+### Leaderboard features
+- Much richer leaderboard filters
+  - Equipment type (e-bike vs acoustic)
+  - Weight class 
+- User defined activity metrics that allow them to create and share a custom leaderboard
+
+### Refactor tasks
+- Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one, maybe use utopia
+
+### General
 - Strava import
 - Mobile app (PWA or native)
-- Internationalization
-- Equipment type filters (e-bike vs acoustic)
-- Weight class filters
-- User defined metrics that allow them to create and share a custom leaderboard
--. **Multi-Sport Activity** - Can we start to introduce a concept of multi-sport activities? Ride+Dig Ride+Ski etc. This should be general so any activities can be done together, and we should also allow users to create new activity types
-- Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one, maybe use utopia
+
+### Need mobile app
+- Live tracking, based on your privacy prefs (teams, followers etc) you can show your live location to logged in users with the right permissions
+- Allow manual logging of events such as shuttle entry/exit, dig start/end
 
 ### Real-Time Updates
 - SSE for leaderboard updates
 - SSE for notification updates
 
+### Perf
+- Virtual scrolling for long lists
+- Leaderboard caching service
+- Rate limiting integration (tower_governor in Cargo.toml)
 
 ### Low priority
-- Virtual scrolling for long lists
-- Rate limiting integration (tower_governor in Cargo.toml)
-- Leaderboard caching service
 - Screen reader testing
 - Sentry error tracking integration
+- Internationalization
 
 ---
 

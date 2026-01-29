@@ -71,6 +71,33 @@ DATABASE_URL="postgres://tracks_user:tracks_password@localhost:5432/tracks_db" \
 - Use `cargo nextest run` for tests
 - Import unused traits as `use MyTrait as _`
 
+### Authentication & Authorization
+
+**All auth happens in Rust.** See [docs/architecture/security.md](../architecture/security.md).
+
+```rust
+// CORRECT: Get user from auth token
+pub async fn create_activity(
+    AuthUser(claims): AuthUser,
+    // ...
+) {
+    let user_id = claims.sub;  // From verified PASETO token
+}
+
+// WRONG: User ID from request params (security vulnerability)
+pub async fn create_activity(
+    Query(params): Query<UploadQuery>,  // params.user_id is UNTRUSTED
+) {
+    let user_id = params.user_id;  // NEVER DO THIS
+}
+```
+
+Key rules:
+- Use `AuthUser` extractor for all mutation endpoints
+- Extract user ID from `claims.sub`, never from query/body params
+- Team membership checked via database (not in token) for immediate revocation
+- Frontend permission checks are UX only - backend enforces all access control
+
 ### Backend/Frontend Architecture
 
 **Business logic lives in Rust.** The frontend should only:
