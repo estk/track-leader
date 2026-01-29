@@ -1,14 +1,26 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, ACTIVITY_TYPE_IDS } from "@/lib/api";
+import {
+  api,
+  ActivityVisibility,
+  ACTIVITY_TYPE_OPTIONS,
+  ACTIVITY_TYPE_IDS,
+  TrackPoint,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TeamSelector } from "@/components/teams/team-selector";
+import { parseGpxFile, getTimestampAtIndex, getTrackTimeRange } from "@/lib/gpx-parser";
+import {
+  ElevationProfile,
+  MultiRangeSegment,
+  getActivityTypeColor,
+} from "@/components/activity/elevation-profile";
 
 
 const VISIBILITY_OPTIONS: {
@@ -54,6 +66,7 @@ export default function UploadActivityPage() {
   const { user, loading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Basic form state
   const [name, setName] = useState("");
   const [activityType, setActivityType] = useState<string>(ACTIVITY_TYPE_IDS.RUN);
   const [visibility, setVisibility] = useState<ActivityVisibility>("public");
@@ -62,20 +75,162 @@ export default function UploadActivityPage() {
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  // Parsed GPX preview state
+  const [parsedPoints, setParsedPoints] = useState<TrackPoint[]>([]);
+  const [hasTimestamps, setHasTimestamps] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  // Multi-sport mode state
+  const [isMultiSport, setIsMultiSport] = useState(false);
+  // Boundary indices: always includes 0 (start) and points.length-1 (end) implicitly
+  // This array stores only the interior boundary indices
+  const [boundaryIndices, setBoundaryIndices] = useState<number[]>([]);
+  // Segment types: one activity type UUID per segment
+  // Length = boundaryIndices.length + 1 (one segment between each pair of boundaries)
+  const [segmentTypes, setSegmentTypes] = useState<string[]>([]);
+
+  // Build segments from boundary indices and segment types for the elevation profile
+  const multiRangeSegments = useMemo((): MultiRangeSegment[] => {
+    if (!isMultiSport || parsedPoints.length === 0) return [];
+
+    // All boundaries including start (0) and end (points.length - 1)
+    const allBoundaries = [0, ...boundaryIndices, parsedPoints.length - 1];
+
+    const segments: MultiRangeSegment[] = [];
+    for (let i = 0; i < allBoundaries.length - 1; i++) {
+      segments.push({
+        startIndex: allBoundaries[i],
+        endIndex: allBoundaries[i + 1],
+        activityTypeId: segmentTypes[i] || activityType,
+      });
+    }
+
+    return segments;
+  }, [isMultiSport, parsedPoints.length, boundaryIndices, segmentTypes, activityType]);
+
+  // Handle file selection and parsing
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    setFile(selectedFile);
+    setParseError(null);
+    setParsedPoints([]);
+    setHasTimestamps(false);
+    setIsMultiSport(false);
+    setBoundaryIndices([]);
+    setSegmentTypes([]);
+
+    // Auto-fill name from filename
+    if (!name) {
+      setName(selectedFile.name.replace(/\.(gpx|fit|tcx)$/i, ""));
+    }
+
+    // Parse GPX for preview
+    setParsing(true);
+    try {
+      const result = await parseGpxFile(selectedFile);
+      setParsedPoints(result.points);
+      setHasTimestamps(result.hasTimestamps);
+
+      // Auto-fill name from GPX metadata if available
+      if (result.name && !name) {
+        setName(result.name);
+      }
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : "Failed to parse GPX file");
+    } finally {
+      setParsing(false);
+    }
+  }, [name]);
+
+  // Handle clicking on the elevation profile to add a boundary
+  const handleBoundaryClick = useCallback((index: number) => {
+    if (!isMultiSport) return;
+
+    // Don't allow boundaries at the very start or end
+    if (index <= 0 || index >= parsedPoints.length - 1) return;
+
+    setBoundaryIndices((prev) => {
+      // Check if there's already a boundary near this index (within 5 points)
+      const nearbyIndex = prev.findIndex((b) => Math.abs(b - index) < 5);
+
+      if (nearbyIndex !== -1) {
+        // Remove existing nearby boundary
+        const updated = [...prev];
+        updated.splice(nearbyIndex, 1);
+
+        // Also remove the corresponding segment type
+        setSegmentTypes((prevTypes) => {
+          const updatedTypes = [...prevTypes];
+          // When removing boundary at index i, merge segments i and i+1
+          // by removing the type at index i+1
+          updatedTypes.splice(nearbyIndex + 1, 1);
+          return updatedTypes;
+        });
+
+        return updated.sort((a, b) => a - b);
+      } else {
+        // Add new boundary
+        const updated = [...prev, index].sort((a, b) => a - b);
+
+        // Find position of new boundary to insert default type
+        const newPos = updated.indexOf(index);
+        setSegmentTypes((prevTypes) => {
+          const updatedTypes = [...prevTypes];
+          // Insert the default activity type after the new boundary
+          updatedTypes.splice(newPos + 1, 0, activityType);
+          return updatedTypes;
+        });
+
+        return updated;
+      }
+    });
+  }, [isMultiSport, parsedPoints.length, activityType]);
+
+  // Toggle multi-sport mode
+  const handleMultiSportToggle = useCallback((enabled: boolean) => {
+    setIsMultiSport(enabled);
+    if (enabled) {
+      // Initialize with a single segment using the primary activity type
+      setBoundaryIndices([]);
+      setSegmentTypes([activityType]);
+    } else {
+      setBoundaryIndices([]);
+      setSegmentTypes([]);
+    }
+  }, [activityType]);
+
+  // Update segment type at a specific index
+  const handleSegmentTypeChange = useCallback((segmentIndex: number, typeId: string) => {
+    setSegmentTypes((prev) => {
+      const updated = [...prev];
+      updated[segmentIndex] = typeId;
+      return updated;
+    });
+  }, []);
+
+  // Remove a specific boundary
+  const handleRemoveBoundary = useCallback((boundaryIndex: number) => {
+    setBoundaryIndices((prev) => {
+      const updated = [...prev];
+      updated.splice(boundaryIndex, 1);
+      return updated;
+    });
+    setSegmentTypes((prev) => {
+      const updated = [...prev];
+      // Merge segment types by removing the one after the removed boundary
+      updated.splice(boundaryIndex + 1, 1);
+      return updated;
+    });
+  }, []);
+
+  // Auth check - must be after all hooks
   if (!authLoading && !user) {
     router.push("/login");
     return null;
   }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      if (!name) {
-        setName(selectedFile.name.replace(/\.(gpx|fit|tcx)$/i, ""));
-      }
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +260,32 @@ export default function UploadActivityPage() {
 
     try {
       const teamIds = visibility === "teams_only" ? selectedTeamIds : undefined;
-      await api.uploadActivity(file, name, activityType, visibility, { teamIds });
+
+      // Build multi-sport data if enabled
+      let typeBoundaries: string[] | undefined;
+      let segmentTypeIds: string[] | undefined;
+
+      if (isMultiSport && hasTimestamps && boundaryIndices.length > 0) {
+        // Convert boundary indices to timestamps
+        const { start, end } = getTrackTimeRange(parsedPoints);
+        if (start && end) {
+          // Build boundaries array: [start, ...interiorBoundaries, end]
+          typeBoundaries = [
+            start,
+            ...boundaryIndices.map((idx) => getTimestampAtIndex(parsedPoints, idx) || ""),
+            end,
+          ].filter(Boolean);
+
+          // Segment types (should have one fewer than boundaries)
+          segmentTypeIds = segmentTypes;
+        }
+      }
+
+      await api.uploadActivity(file, name, activityType, visibility, {
+        teamIds,
+        typeBoundaries,
+        segmentTypes: segmentTypeIds,
+      });
       router.push("/activities");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -115,7 +295,7 @@ export default function UploadActivityPage() {
   };
 
   return (
-    <div className="max-w-xl mx-auto">
+    <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
           <CardTitle>Upload Activity</CardTitle>
@@ -153,7 +333,33 @@ export default function UploadActivityPage() {
                   </p>
                 )}
               </div>
+              {parsing && (
+                <p className="text-sm text-muted-foreground">Parsing GPX file...</p>
+              )}
+              {parseError && (
+                <p className="text-sm text-destructive">{parseError}</p>
+              )}
             </div>
+
+            {/* Elevation Profile Preview */}
+            {parsedPoints.length > 0 && (
+              <div className="space-y-2">
+                <Label>Elevation Profile Preview</Label>
+                <div className="border rounded-lg p-4">
+                  <ElevationProfile
+                    points={parsedPoints}
+                    multiRangeMode={isMultiSport}
+                    segments={multiRangeSegments}
+                    onBoundaryClick={handleBoundaryClick}
+                  />
+                  {isMultiSport && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Click on the chart to add or remove segment boundaries
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="name">Activity Name</Label>
@@ -180,7 +386,103 @@ export default function UploadActivityPage() {
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                {isMultiSport ? "Primary activity type (used for display)" : "Type of activity"}
+              </p>
             </div>
+
+            {/* Multi-sport toggle - only show if GPX has timestamps */}
+            {parsedPoints.length > 0 && hasTimestamps && (
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="multi-sport"
+                    checked={isMultiSport}
+                    onChange={(e) => handleMultiSportToggle(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <div>
+                    <Label htmlFor="multi-sport" className="cursor-pointer">
+                      Multi-sport activity
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Define different activity types for different segments (e.g., bike + run)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Segment type editors */}
+                {isMultiSport && (
+                  <div className="space-y-3 mt-4">
+                    <Label>Segment Types</Label>
+                    <div className="space-y-2">
+                      {multiRangeSegments.map((segment, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-3 p-2 rounded-md border"
+                          style={{
+                            borderLeftWidth: 4,
+                            borderLeftColor: getActivityTypeColor(segment.activityTypeId),
+                          }}
+                        >
+                          <span className="text-sm text-muted-foreground min-w-[80px]">
+                            Segment {idx + 1}
+                          </span>
+                          <select
+                            value={segment.activityTypeId}
+                            onChange={(e) => handleSegmentTypeChange(idx, e.target.value)}
+                            className="flex-1 h-8 px-2 text-sm border rounded-md bg-background text-foreground"
+                          >
+                            {ACTIVITY_TYPE_OPTIONS.map((type) => (
+                              <option key={type.id} value={type.id}>
+                                {type.name}
+                              </option>
+                            ))}
+                          </select>
+                          {/* Show remove button for interior boundaries (not first or last segment) */}
+                          {idx > 0 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleRemoveBoundary(idx - 1)}
+                              title="Remove boundary before this segment"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className="w-4 h-4"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {multiRangeSegments.length === 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        Click on the elevation profile above to add segment boundaries
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Show notice when GPX doesn't have timestamps */}
+            {parsedPoints.length > 0 && !hasTimestamps && (
+              <div className="p-3 text-sm text-muted-foreground bg-muted/50 rounded-md">
+                This GPX file does not contain timestamps. Multi-sport mode requires timestamp data.
+              </div>
+            )}
 
             <div className="space-y-3">
               <Label>Visibility</Label>
@@ -251,7 +553,7 @@ export default function UploadActivityPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" className="flex-1" disabled={uploading}>
+              <Button type="submit" className="flex-1" disabled={uploading || parsing}>
                 {uploading ? "Uploading..." : "Upload"}
               </Button>
             </div>

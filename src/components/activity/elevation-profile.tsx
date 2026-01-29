@@ -11,15 +11,48 @@ import {
   ReferenceArea,
   ReferenceLine,
 } from "recharts";
-import { TrackPoint } from "@/lib/api";
+import { TrackPoint, ACTIVITY_TYPE_IDS, getActivityTypeName } from "@/lib/api";
+
+// Colors for activity type segments (distinct, accessible colors)
+const ACTIVITY_TYPE_COLORS: Record<string, string> = {
+  [ACTIVITY_TYPE_IDS.WALK]: "#22c55e",    // green
+  [ACTIVITY_TYPE_IDS.RUN]: "#ef4444",     // red
+  [ACTIVITY_TYPE_IDS.HIKE]: "#84cc16",    // lime
+  [ACTIVITY_TYPE_IDS.ROAD]: "#3b82f6",    // blue
+  [ACTIVITY_TYPE_IDS.MTB]: "#f97316",     // orange
+  [ACTIVITY_TYPE_IDS.EMTB]: "#eab308",    // yellow
+  [ACTIVITY_TYPE_IDS.GRAVEL]: "#a855f7",  // purple
+  [ACTIVITY_TYPE_IDS.UNKNOWN]: "#6b7280", // gray
+};
+
+// Default color for unknown activity types
+const DEFAULT_SEGMENT_COLOR = "#6b7280";
+
+export function getActivityTypeColor(typeId: string): string {
+  return ACTIVITY_TYPE_COLORS[typeId] || DEFAULT_SEGMENT_COLOR;
+}
+
+// Multi-range mode segment definition
+export interface MultiRangeSegment {
+  startIndex: number;      // Index into points array (first boundary = 0)
+  endIndex: number;        // Index into points array (last boundary = points.length - 1)
+  activityTypeId: string;  // Activity type UUID
+}
 
 interface ElevationProfileProps {
   points: TrackPoint[];
   onHover?: (index: number | null) => void;
+  // Segment selection mode (existing)
   selectionMode?: boolean;
   selectionStart?: number | null;
   selectionEnd?: number | null;
   onPointClick?: (index: number) => void;
+  // Multi-range mode (for multi-sport activities)
+  multiRangeMode?: boolean;
+  segments?: MultiRangeSegment[];
+  onBoundaryClick?: (index: number) => void;
+  // Index of boundary being dragged/selected (for visual feedback)
+  selectedBoundaryIndex?: number | null;
 }
 
 function calculateDistance(
@@ -48,6 +81,10 @@ export function ElevationProfile({
   selectionStart,
   selectionEnd,
   onPointClick,
+  multiRangeMode,
+  segments,
+  onBoundaryClick,
+  selectedBoundaryIndex,
 }: ElevationProfileProps) {
   const lastHoveredIndex = useRef<number | null>(null);
   const [currentHoverIndex, setCurrentHoverIndex] = useState<number | null>(null);
@@ -118,6 +155,74 @@ export function ElevationProfile({
     };
   }, [chartData, selectionStart, selectionEnd]);
 
+  // Convert segments (point indices) to distances for rendering
+  const segmentDistances = useMemo(() => {
+    if (!multiRangeMode || !segments || segments.length === 0) return null;
+
+    return segments.map((segment) => {
+      // Find the chart data points for start and end indices
+      const startData = chartData.find((d) => d.originalIndex >= segment.startIndex);
+      const endData = [...chartData].reverse().find((d) => d.originalIndex <= segment.endIndex);
+
+      return {
+        startDistance: startData?.distance ?? 0,
+        endDistance: endData?.distance ?? (chartData[chartData.length - 1]?.distance ?? 0),
+        activityTypeId: segment.activityTypeId,
+        color: getActivityTypeColor(segment.activityTypeId),
+      };
+    });
+  }, [chartData, multiRangeMode, segments]);
+
+  // Extract boundary indices from segments (for rendering boundary lines)
+  const boundaryIndices = useMemo(() => {
+    if (!multiRangeMode || !segments || segments.length === 0) return [];
+
+    // Collect all unique boundary indices (excluding start=0 and end=last)
+    const indices = new Set<number>();
+    for (const segment of segments) {
+      // Add interior boundaries only (not the very first or very last)
+      if (segment.startIndex > 0) {
+        indices.add(segment.startIndex);
+      }
+      if (segment.endIndex < points.length - 1) {
+        indices.add(segment.endIndex);
+      }
+    }
+    return Array.from(indices).sort((a, b) => a - b);
+  }, [multiRangeMode, segments, points.length]);
+
+  // Convert boundary indices to distances
+  const boundaryDistances = useMemo(() => {
+    return boundaryIndices.map((idx) => {
+      const data = chartData.find((d) => d.originalIndex >= idx);
+      return {
+        index: idx,
+        distance: data?.distance ?? 0,
+      };
+    });
+  }, [boundaryIndices, chartData]);
+
+  // Get unique activity types for legend
+  const legendItems = useMemo(() => {
+    if (!multiRangeMode || !segments || segments.length === 0) return [];
+
+    const seen = new Set<string>();
+    const items: { typeId: string; color: string; name: string }[] = [];
+
+    for (const seg of segments) {
+      if (!seen.has(seg.activityTypeId)) {
+        seen.add(seg.activityTypeId);
+        items.push({
+          typeId: seg.activityTypeId,
+          color: getActivityTypeColor(seg.activityTypeId),
+          name: getActivityTypeName(seg.activityTypeId),
+        });
+      }
+    }
+
+    return items;
+  }, [multiRangeMode, segments]);
+
   if (chartData.length === 0) {
     return (
       <div className="h-[200px] flex items-center justify-center text-muted-foreground">
@@ -135,6 +240,20 @@ export function ElevationProfile({
           Range: {minEle.toFixed(0)}m - {maxEle.toFixed(0)}m
         </span>
       </div>
+      {/* Multi-range legend */}
+      {legendItems.length > 0 && (
+        <div className="flex flex-wrap gap-3 text-xs">
+          {legendItems.map((item) => (
+            <div key={item.typeId} className="flex items-center gap-1.5">
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ backgroundColor: item.color, opacity: 0.6 }}
+              />
+              <span className="text-muted-foreground">{item.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart
           data={chartData}
@@ -143,8 +262,11 @@ export function ElevationProfile({
             if (selectionMode && lastHoveredIndex.current !== null) {
               onPointClick?.(lastHoveredIndex.current);
             }
+            if (multiRangeMode && lastHoveredIndex.current !== null) {
+              onBoundaryClick?.(lastHoveredIndex.current);
+            }
           }}
-          style={{ cursor: selectionMode ? "crosshair" : "default" }}
+          style={{ cursor: selectionMode || multiRangeMode ? "crosshair" : "default" }}
         >
           <defs>
             <linearGradient id="elevationGradient" x1="0" y1="0" x2="0" y2="1">
@@ -191,6 +313,11 @@ export function ElevationProfile({
                         Click to select
                       </p>
                     )}
+                    {multiRangeMode && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        Click to add boundary
+                      </p>
+                    )}
                   </div>
                 );
               }
@@ -233,6 +360,33 @@ export function ElevationProfile({
               label={{ value: "End", position: "top", fill: "#ef4444", fontSize: 12 }}
             />
           )}
+          {/* Multi-range segment backgrounds */}
+          {segmentDistances?.map((seg, idx) => (
+            <ReferenceArea
+              key={`segment-${idx}`}
+              x1={seg.startDistance}
+              x2={seg.endDistance}
+              fill={seg.color}
+              fillOpacity={0.2}
+              stroke={seg.color}
+              strokeOpacity={0.4}
+              strokeWidth={1}
+            />
+          ))}
+          {/* Multi-range boundary lines */}
+          {boundaryDistances.map((boundary, idx) => {
+            const isSelected = selectedBoundaryIndex !== null &&
+              boundaryIndices.indexOf(boundary.index) === selectedBoundaryIndex;
+            return (
+              <ReferenceLine
+                key={`boundary-${idx}`}
+                x={boundary.distance}
+                stroke={isSelected ? "#3b82f6" : "#888888"}
+                strokeWidth={isSelected ? 3 : 2}
+                strokeDasharray={isSelected ? "none" : "4 2"}
+              />
+            );
+          })}
           <Area
             type="monotone"
             dataKey="elevation"

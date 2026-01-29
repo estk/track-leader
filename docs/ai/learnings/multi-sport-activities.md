@@ -110,18 +110,68 @@ Query params:
   - segment_types: ["uuid1", "uuid2", ...] (optional)
 ```
 
-## Frontend Integration (Planned)
+## Frontend Integration
 
-The UI will allow users to:
-1. Upload a GPX file
-2. See the elevation profile
-3. Click to add boundary markers on the profile
-4. Select activity type for each segment
+### GPX Parser (`src/lib/gpx-parser.ts`)
 
-The elevation profile component will need:
-- Multi-range mode with colored segments
-- Click handlers for boundary placement
-- Type selector dropdowns per segment
+Client-side GPX parsing for preview and multi-sport editing:
+
+```typescript
+parseGpxFile(file: File): Promise<ParsedGpx>
+parseGpxString(xml: string): ParsedGpx
+findPointIndexByTimestamp(points: TrackPoint[], timestamp: string): number
+getTimestampAtIndex(points: TrackPoint[], index: number): string | null
+getTrackTimeRange(points: TrackPoint[]): { start: string | null, end: string | null }
+```
+
+### Elevation Profile Multi-Range Mode
+
+The `ElevationProfile` component (`src/components/activity/elevation-profile.tsx`) supports:
+
+```typescript
+interface MultiRangeSegment {
+  startIndex: number;
+  endIndex: number;
+  activityTypeId: string;
+}
+
+// Props
+multiRangeMode?: boolean;       // Enable boundary selection mode
+segments?: MultiRangeSegment[]; // Colored segments to display
+onBoundaryClick?: (index: number) => void;  // Click handler for adding boundaries
+selectedBoundaryIndex?: number; // Visual feedback for selected boundary
+```
+
+**Activity Type Colors:**
+| Type | Color |
+|------|-------|
+| Walk | Green (#22c55e) |
+| Run | Red (#ef4444) |
+| Hike | Lime (#84cc16) |
+| Road | Blue (#3b82f6) |
+| MTB | Orange (#f97316) |
+| E-MTB | Yellow (#eab308) |
+| Gravel | Purple (#a855f7) |
+| Unknown | Gray (#6b7280) |
+
+### Upload Page Multi-Sport Editor
+
+The upload page (`src/app/activities/upload/page.tsx`) provides:
+
+1. **GPX Preview** - Parses file client-side, shows elevation profile
+2. **Multi-sport Toggle** - Checkbox to enable (requires timestamps in GPX)
+3. **Boundary Selection** - Click on chart to add/remove segment boundaries
+4. **Type Selectors** - Dropdown for each segment with colored indicator
+5. **Boundary Management** - Trash button to remove boundaries
+
+**State Flow:**
+```
+User selects GPX → Parse & preview → Enable multi-sport → Click to add boundaries
+                                                       → Select types per segment
+                                                       → Submit with type_boundaries & segment_types
+```
+
+**Invariant Maintained:** `length(segmentTypes) = length(typeBoundaries) - 1`
 
 ## Design Decisions
 
