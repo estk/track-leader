@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     achievements_service,
-    activity_queue::ActivityQueue,
+    activity_queue::{ActivityQueue, ActivitySubmission},
     auth::{AuthUser, OptionalAuthUser},
     database::Database,
     errors::AppError,
@@ -191,15 +191,15 @@ pub async fn new_activity(
         segment_types: params.segment_types,
     };
 
-    aq.submit(
+    aq.submit(ActivitySubmission {
         user_id,
-        activity.id,
+        activity_id: activity.id,
         file_type,
-        file_bytes,
-        activity.activity_type_id,
-        activity.type_boundaries.clone(),
-        activity.segment_types.clone(),
-    )
+        bytes: file_bytes,
+        activity_type_id: activity.activity_type_id,
+        type_boundaries: activity.type_boundaries.clone(),
+        segment_types: activity.segment_types.clone(),
+    })
     .map_err(AppError::Queue)?;
 
     db.save_activity(&activity).await?;
@@ -242,7 +242,7 @@ pub async fn get_activity(
     // Check visibility-based access control
     let has_access = match activity.visibility.as_str() {
         "public" => true,
-        "private" => claims.as_ref().map_or(false, |c| c.sub == activity.user_id),
+        "private" => claims.as_ref().is_some_and(|c| c.sub == activity.user_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 // Owner always has access
@@ -374,7 +374,7 @@ pub async fn download_gpx_file(
     // Check visibility-based access control
     let has_access = match activity.visibility.as_str() {
         "public" => true,
-        "private" => claims.as_ref().map_or(false, |c| c.sub == activity.user_id),
+        "private" => claims.as_ref().is_some_and(|c| c.sub == activity.user_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 if c.sub == activity.user_id {
@@ -430,7 +430,7 @@ pub async fn get_activity_track(
     // Check visibility-based access control
     let has_access = match activity.visibility.as_str() {
         "public" => true,
-        "private" => claims.as_ref().map_or(false, |c| c.sub == activity.user_id),
+        "private" => claims.as_ref().is_some_and(|c| c.sub == activity.user_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 if c.sub == activity.user_id {
@@ -515,7 +515,7 @@ pub async fn get_activity_segments(
     // Check visibility-based access control
     let has_access = match activity.visibility.as_str() {
         "public" => true,
-        "private" => claims.as_ref().map_or(false, |c| c.sub == activity.user_id),
+        "private" => claims.as_ref().is_some_and(|c| c.sub == activity.user_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 if c.sub == activity.user_id {
@@ -967,10 +967,8 @@ pub async fn create_segment(
     }
 
     // Share with teams if team_ids provided
-    if let Some(team_ids) = &req.team_ids {
-        if !team_ids.is_empty() {
-            db.share_segment_with_teams(segment.id, team_ids).await?;
-        }
+    if let Some(team_ids) = req.team_ids.as_ref().filter(|ids| !ids.is_empty()) {
+        db.share_segment_with_teams(segment.id, team_ids).await?;
     }
 
     Ok(Json(segment))
@@ -1160,9 +1158,7 @@ pub async fn get_segment(
     // Check visibility-based access control
     let has_access = match segment.visibility.as_str() {
         "public" => true,
-        "private" => claims
-            .as_ref()
-            .map_or(false, |c| c.sub == segment.creator_id),
+        "private" => claims.as_ref().is_some_and(|c| c.sub == segment.creator_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 // Creator always has access
@@ -1364,9 +1360,7 @@ pub async fn get_segment_track(
     // Check visibility-based access control
     let has_access = match segment.visibility.as_str() {
         "public" => true,
-        "private" => claims
-            .as_ref()
-            .map_or(false, |c| c.sub == segment.creator_id),
+        "private" => claims.as_ref().is_some_and(|c| c.sub == segment.creator_id),
         "teams_only" => {
             if let Some(ref c) = claims {
                 if c.sub == segment.creator_id {
@@ -3115,13 +3109,11 @@ pub async fn change_member_role(
         return Err(AppError::Forbidden);
     }
 
-    // Only owners can change roles to/from owner
-    if req.role == TeamRole::Owner || my_membership.role != TeamRole::Owner {
-        if req.role == TeamRole::Owner {
-            return Err(AppError::InvalidInput(
-                "Use transfer ownership instead".to_string(),
-            ));
-        }
+    // Cannot promote to owner via role change
+    if req.role == TeamRole::Owner {
+        return Err(AppError::InvalidInput(
+            "Use transfer ownership instead".to_string(),
+        ));
     }
 
     // Can't demote another owner

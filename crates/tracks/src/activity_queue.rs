@@ -17,6 +17,17 @@ use crate::{
 };
 use time::OffsetDateTime;
 
+/// Submission data for processing an activity
+pub struct ActivitySubmission {
+    pub user_id: Uuid,
+    pub activity_id: Uuid,
+    pub file_type: FileType,
+    pub bytes: Bytes,
+    pub activity_type_id: Uuid,
+    pub type_boundaries: Option<Vec<OffsetDateTime>>,
+    pub segment_types: Option<Vec<Uuid>>,
+}
+
 #[derive(Clone)]
 pub struct ActivityQueue {
     db: Database,
@@ -49,17 +60,18 @@ impl ActivityQueue {
         }
     }
 
-    pub fn submit(
-        &self,
-        uid: Uuid,
-        id: Uuid,
-        ft: FileType,
-        bytes: Bytes,
-        activity_type_id: Uuid,
-        type_boundaries: Option<Vec<OffsetDateTime>>,
-        segment_types: Option<Vec<Uuid>>,
-    ) -> anyhow::Result<()> {
-        assert!(matches!(ft, FileType::Gpx));
+    pub fn submit(&self, submission: ActivitySubmission) -> anyhow::Result<()> {
+        assert!(matches!(submission.file_type, FileType::Gpx));
+
+        let ActivitySubmission {
+            user_id: uid,
+            activity_id: id,
+            file_type: _,
+            bytes,
+            activity_type_id,
+            type_boundaries,
+            segment_types,
+        } = submission;
 
         self.activities.lock().unwrap().insert(id);
         let tx = self.done_tx.clone();
