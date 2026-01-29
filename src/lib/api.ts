@@ -597,7 +597,6 @@ class ApiClient {
   }
 
   async uploadActivity(
-    userId: string,
     file: File,
     name: string,
     activityType: string,
@@ -609,7 +608,6 @@ class ApiClient {
     formData.append('file', file);
 
     const params = new URLSearchParams({
-      user_id: userId,
       activity_type: activityType,
       name: name,
       visibility: visibility,

@@ -113,7 +113,7 @@ export default function UploadActivityPage() {
 
     try {
       const teamIds = visibility === "teams_only" ? selectedTeamIds : undefined;
-      await api.uploadActivity(user.id, file, name, activityType, visibility, teamIds);
+      await api.uploadActivity(file, name, activityType, visibility, teamIds);
       router.push("/activities");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");

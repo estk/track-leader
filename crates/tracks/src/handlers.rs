@@ -71,7 +71,6 @@ pub async fn all_users(Extension(db): Extension<Database>) -> Result<Json<Vec<Us
 
 #[derive(Deserialize)]
 pub struct UploadQuery {
-    pub user_id: Uuid,
     pub activity_type: ActivityType,
     pub name: String,
     #[serde(default)]
@@ -85,9 +84,11 @@ pub async fn new_activity(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
     Extension(aq): Extension<ActivityQueue>,
+    AuthUser(claims): AuthUser,
     Query(params): Query<UploadQuery>,
     mut multipart: Multipart,
 ) -> Result<Json<Activity>, AppError> {
+    let user_id = claims.sub;
     let activity_id = Uuid::new_v4();
     let name = params.name;
     let activity_type = params.activity_type;
@@ -124,12 +125,12 @@ pub async fn new_activity(
 
     // Store the file in object store
     let object_store_path = store
-        .store_file(params.user_id, activity_id, file_type, file_bytes.clone())
+        .store_file(user_id, activity_id, file_type, file_bytes.clone())
         .await?;
 
     let activity = Activity {
         id: Uuid::new_v4(),
-        user_id: params.user_id,
+        user_id,
         name,
         activity_type,
         submitted_at: time::UtcDateTime::now().to_offset(time::UtcOffset::UTC),
@@ -138,7 +139,7 @@ pub async fn new_activity(
     };
 
     aq.submit(
-        params.user_id,
+        user_id,
         activity.id,
         file_type,
         file_bytes,
@@ -156,7 +157,7 @@ pub async fn new_activity(
             .collect();
 
         if !team_ids.is_empty() {
-            db.share_activity_with_teams(activity.id, &team_ids, params.user_id)
+            db.share_activity_with_teams(activity.id, &team_ids, user_id)
                 .await?;
         }
     }
