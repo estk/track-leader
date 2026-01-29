@@ -16,7 +16,7 @@ use crate::{
     database::Database,
     errors::AppError,
     models::{
-        AchievementType, AchievementWithSegment, Activity, ActivityType, ChangeMemberRoleRequest,
+        AchievementType, AchievementWithSegment, Activity, ChangeMemberRoleRequest,
         CreateTeamRequest, CrownCountEntry, DistanceLeaderEntry, InviteToTeamRequest,
         JoinTeamRequest, LeaderboardFilters, LeaderboardFiltersResponse, LeaderboardPosition,
         LeaderboardResponse, Segment, SegmentAchievements, SegmentEffort, ShareWithTeamsRequest,
@@ -71,13 +71,19 @@ pub async fn all_users(Extension(db): Extension<Database>) -> Result<Json<Vec<Us
 
 #[derive(Deserialize)]
 pub struct UploadQuery {
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
     pub name: String,
     #[serde(default)]
     pub visibility: Option<String>,
     /// Comma-separated list of team IDs to share with (for teams_only visibility)
     #[serde(default)]
     pub team_ids: Option<String>,
+    /// Multi-sport: JSON array of ISO-8601 timestamps marking segment boundaries
+    #[serde(default)]
+    pub type_boundaries: Option<Vec<time::OffsetDateTime>>,
+    /// Multi-sport: JSON array of activity type UUIDs for each segment
+    #[serde(default)]
+    pub segment_types: Option<Vec<Uuid>>,
 }
 
 pub async fn new_activity(
@@ -91,7 +97,7 @@ pub async fn new_activity(
     let user_id = claims.sub;
     let activity_id = Uuid::new_v4();
     let name = params.name;
-    let activity_type = params.activity_type;
+    let activity_type_id = params.activity_type_id;
 
     let (mime_hdr, file_bytes) =
         {
@@ -132,10 +138,12 @@ pub async fn new_activity(
         id: Uuid::new_v4(),
         user_id,
         name,
-        activity_type,
+        activity_type_id,
         submitted_at: time::UtcDateTime::now().to_offset(time::UtcOffset::UTC),
         object_store_path,
         visibility: params.visibility.unwrap_or_else(|| "public".to_string()),
+        type_boundaries: params.type_boundaries,
+        segment_types: params.segment_types,
     };
 
     aq.submit(
@@ -143,7 +151,9 @@ pub async fn new_activity(
         activity.id,
         file_type,
         file_bytes,
-        activity.activity_type,
+        activity.activity_type_id,
+        activity.type_boundaries.clone(),
+        activity.segment_types.clone(),
     )
     .map_err(AppError::Queue)?;
 
@@ -203,7 +213,7 @@ pub async fn get_activity(
 #[derive(Debug, Deserialize)]
 pub struct UpdateActivityRequest {
     pub name: Option<String>,
-    pub activity_type: Option<ActivityType>,
+    pub activity_type_id: Option<Uuid>,
     pub visibility: Option<String>,
 }
 
@@ -216,7 +226,7 @@ pub async fn update_activity(
         .update_activity(
             id,
             req.name.as_deref(),
-            req.activity_type.as_ref(),
+            req.activity_type_id,
             req.visibility.as_deref(),
         )
         .await?
@@ -403,7 +413,91 @@ pub async fn health_check() -> StatusCode {
     StatusCode::OK
 }
 
+// ============================================================================
+// Activity Type handlers
+// ============================================================================
+
+/// List all activity types (built-in and custom).
+pub async fn list_activity_types(
+    Extension(db): Extension<Database>,
+) -> Result<Json<Vec<crate::models::ActivityTypeRow>>, AppError> {
+    let types = db.list_activity_types().await?;
+    Ok(Json(types))
+}
+
+/// Get a single activity type by ID.
+pub async fn get_activity_type(
+    Extension(db): Extension<Database>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<crate::models::ActivityTypeRow>, AppError> {
+    let activity_type = db.get_activity_type(id).await?.ok_or(AppError::NotFound)?;
+    Ok(Json(activity_type))
+}
+
+/// Create a custom activity type.
+pub async fn create_activity_type(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Json(req): Json<crate::models::CreateActivityTypeRequest>,
+) -> Result<Json<crate::models::ActivityTypeRow>, AppError> {
+    // Validate name: must be non-empty, alphanumeric with underscores
+    let name = req.name.trim().to_lowercase();
+    if name.is_empty() {
+        return Err(AppError::InvalidInput("Name cannot be empty".to_string()));
+    }
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return Err(AppError::InvalidInput(
+            "Name must be alphanumeric with underscores only".to_string(),
+        ));
+    }
+
+    let activity_type = db.create_activity_type(&name, claims.sub).await?;
+    Ok(Json(activity_type))
+}
+
+/// Resolve an activity type by name or alias.
+#[derive(Debug, Deserialize)]
+pub struct ResolveTypeQuery {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ResolveTypeResponse {
+    pub result: String, // "exact", "ambiguous", "not_found"
+    pub type_id: Option<Uuid>,
+    pub type_ids: Option<Vec<Uuid>>,
+}
+
+pub async fn resolve_activity_type(
+    Extension(db): Extension<Database>,
+    Query(query): Query<ResolveTypeQuery>,
+) -> Result<Json<ResolveTypeResponse>, AppError> {
+    let resolved = db.resolve_activity_type(&query.name).await?;
+
+    let response = match resolved {
+        crate::models::ResolvedActivityType::Exact(id) => ResolveTypeResponse {
+            result: "exact".to_string(),
+            type_id: Some(id),
+            type_ids: None,
+        },
+        crate::models::ResolvedActivityType::Ambiguous(ids) => ResolveTypeResponse {
+            result: "ambiguous".to_string(),
+            type_id: None,
+            type_ids: Some(ids),
+        },
+        crate::models::ResolvedActivityType::NotFound => ResolveTypeResponse {
+            result: "not_found".to_string(),
+            type_id: None,
+            type_ids: None,
+        },
+    };
+
+    Ok(Json(response))
+}
+
+// ============================================================================
 // Segment handlers
+// ============================================================================
 
 #[derive(Debug, Deserialize)]
 pub struct CreateSegmentRequest {
@@ -411,12 +505,12 @@ pub struct CreateSegmentRequest {
     pub description: Option<String>,
     /// Optional if source_activity_id is provided (inherits from the activity).
     /// Required if source_activity_id is not provided.
-    pub activity_type: Option<ActivityType>,
+    pub activity_type_id: Option<Uuid>,
     pub points: Vec<SegmentPoint>,
     #[serde(default = "default_visibility")]
     pub visibility: String,
     /// Optional: the activity this segment was created from.
-    /// If provided, the segment inherits its activity_type and guarantees that activity gets the first effort.
+    /// If provided, the segment inherits its activity_type_id and guarantees that activity gets the first effort.
     pub source_activity_id: Option<Uuid>,
     /// Team IDs to share the segment with (for teams_only visibility)
     #[serde(default)]
@@ -508,26 +602,25 @@ pub async fn create_segment(
 
     let creator_id = claims.sub;
 
-    // Resolve activity_type: inherit from source activity if provided, otherwise require in request
+    // Resolve activity_type_id: inherit from source activity if provided, otherwise require in request
     // Also store the source activity for later use (to save track geometry if needed)
-    let (activity_type, source_activity) = if let Some(source_id) = req.source_activity_id {
+    let (activity_type_id, source_activity) = if let Some(source_id) = req.source_activity_id {
         let activity = db.get_activity(source_id).await?.ok_or_else(|| {
             AppError::InvalidInput(format!("Source activity {source_id} not found"))
         })?;
-        let activity_type = activity.activity_type;
-        (activity_type, Some(activity))
+        (activity.activity_type_id, Some(activity))
     } else {
-        let activity_type = req.activity_type.ok_or_else(|| {
+        let activity_type_id = req.activity_type_id.ok_or_else(|| {
             AppError::InvalidInput(
-                "activity_type is required when source_activity_id is not provided".to_string(),
+                "activity_type_id is required when source_activity_id is not provided".to_string(),
             )
         })?;
-        (activity_type, None)
+        (activity_type_id, None)
     };
 
     // Check for duplicate segments (same activity type, similar start/end points)
     let similar_segments = db
-        .find_similar_segments(&activity_type, &start_wkt, &end_wkt)
+        .find_similar_segments(activity_type_id, &start_wkt, &end_wkt)
         .await?;
     if !similar_segments.is_empty() {
         return Err(AppError::SimilarSegmentsExist(similar_segments));
@@ -539,7 +632,7 @@ pub async fn create_segment(
             creator_id,
             &req.name,
             req.description.as_deref(),
-            &activity_type,
+            activity_type_id,
             &geo_wkt,
             &start_wkt,
             &end_wkt,
@@ -941,7 +1034,7 @@ impl ClimbCategoryFilter {
 
 #[derive(Debug, Deserialize)]
 pub struct ListSegmentsQuery {
-    pub activity_type: Option<ActivityType>,
+    pub activity_type_id: Option<Uuid>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     /// Case-insensitive name search

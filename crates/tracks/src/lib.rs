@@ -26,24 +26,25 @@ use crate::{
     auth::{login, me, register},
     database::Database,
     handlers::{
-        accept_invitation, add_comment, all_users, change_member_role, create_segment, create_team,
-        delete_activity, delete_comment, delete_team, discover_teams, download_gpx_file,
-        follow_user, get_activity, get_activity_segments, get_activity_teams, get_activity_track,
-        get_comments, get_crown_leaderboard, get_distance_leaderboard, get_feed,
-        get_filtered_leaderboard, get_follow_status, get_followers, get_following, get_invitation,
-        get_join_requests, get_kudos_givers, get_kudos_status, get_leaderboard_position,
-        get_my_achievements, get_my_demographics, get_my_segment_efforts, get_nearby_segments,
-        get_notifications, get_segment, get_segment_achievements, get_segment_leaderboard,
-        get_segment_teams, get_segment_track, get_starred_segment_efforts, get_starred_segments,
-        get_stats, get_team, get_team_activities, get_team_invitations, get_team_segments,
-        get_user_achievements, get_user_activities, get_user_profile, give_kudos, health_check,
-        invite_to_team, is_segment_starred, join_team, leave_team, list_my_teams, list_segments,
-        list_team_members, mark_all_notifications_read, mark_notification_read, new_activity,
-        new_user, preview_segment, remove_kudos, remove_team_member, reprocess_segment,
-        review_join_request, revoke_invitation, share_activity_with_teams,
-        share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team,
-        unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics,
-        update_team,
+        accept_invitation, add_comment, all_users, change_member_role, create_activity_type,
+        create_segment, create_team, delete_activity, delete_comment, delete_team, discover_teams,
+        download_gpx_file, follow_user, get_activity, get_activity_segments, get_activity_teams,
+        get_activity_track, get_activity_type, get_comments, get_crown_leaderboard,
+        get_distance_leaderboard, get_feed, get_filtered_leaderboard, get_follow_status,
+        get_followers, get_following, get_invitation, get_join_requests, get_kudos_givers,
+        get_kudos_status, get_leaderboard_position, get_my_achievements, get_my_demographics,
+        get_my_segment_efforts, get_nearby_segments, get_notifications, get_segment,
+        get_segment_achievements, get_segment_leaderboard, get_segment_teams, get_segment_track,
+        get_starred_segment_efforts, get_starred_segments, get_stats, get_team,
+        get_team_activities, get_team_invitations, get_team_segments, get_user_achievements,
+        get_user_activities, get_user_profile, give_kudos, health_check, invite_to_team,
+        is_segment_starred, join_team, leave_team, list_activity_types, list_my_teams,
+        list_segments, list_team_members, mark_all_notifications_read, mark_notification_read,
+        new_activity, new_user, preview_segment, remove_kudos, remove_team_member,
+        reprocess_segment, resolve_activity_type, review_join_request, revoke_invitation,
+        share_activity_with_teams, share_segment_with_teams, star_segment, unfollow_user,
+        unshare_activity_from_team, unshare_segment_from_team, unstar_segment, update_activity,
+        update_my_demographics, update_team,
     },
     object_store_service::ObjectStoreService,
 };
@@ -88,6 +89,13 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         // User achievements routes
         .route("/users/me/achievements", get(get_my_achievements))
         .route("/users/{id}/achievements", get(get_user_achievements))
+        // Activity type routes
+        .route(
+            "/activity-types",
+            get(list_activity_types).post(create_activity_type),
+        )
+        .route("/activity-types/resolve", get(resolve_activity_type))
+        .route("/activity-types/{id}", get(get_activity_type))
         // Segment routes
         .route("/segments", get(list_segments).post(create_segment))
         .route("/segments/preview", post(preview_segment))

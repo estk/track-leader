@@ -58,29 +58,88 @@ impl std::str::FromStr for Visibility {
 pub struct Activity {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
     pub name: String,
     pub object_store_path: String,
     #[serde(with = "rfc3339")]
     pub submitted_at: OffsetDateTime,
     pub visibility: String,
+    // Multi-sport support: boundaries mark segment transitions, types are parallel to segments
+    pub type_boundaries: Option<Vec<OffsetDateTime>>,
+    pub segment_types: Option<Vec<Uuid>>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "activity_type", rename_all = "snake_case")]
-pub enum ActivityType {
-    Walking,
-    Running,
-    Hiking,
-    RoadCycling,
-    MountainBiking,
-    Unknown,
+// ============================================================================
+// Activity Type Models (table-based, replaces enum)
+// ============================================================================
+
+/// Built-in activity type UUIDs for compile-time constants
+pub mod builtin_types {
+    use uuid::Uuid;
+
+    pub const WALK: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
+    pub const RUN: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
+    pub const HIKE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
+    pub const ROAD: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000004);
+    pub const MTB: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000005);
+    pub const EMTB: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000006);
+    pub const GRAVEL: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000007);
+    pub const UNKNOWN: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000008);
+}
+
+/// Row from the activity_types table
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ActivityTypeRow {
+    pub id: Uuid,
+    pub name: String,
+    pub is_builtin: bool,
+    pub created_by: Option<Uuid>,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Row from the activity_aliases table
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ActivityAliasRow {
+    pub id: Uuid,
+    pub alias: String,
+    pub activity_type_id: Uuid,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Result of resolving an activity type by name or alias
+#[derive(Debug, Clone)]
+pub enum ResolvedActivityType {
+    /// Direct name match or single alias match
+    Exact(Uuid),
+    /// Multiple alias matches - user must pick
+    Ambiguous(Vec<Uuid>),
+    /// No matching type found
+    NotFound,
+}
+
+/// Request to create a custom activity type
+#[derive(Debug, Deserialize)]
+pub struct CreateActivityTypeRequest {
+    pub name: String,
+}
+
+/// Request to create an activity alias
+#[derive(Debug, Deserialize)]
+pub struct CreateActivityAliasRequest {
+    pub alias: String,
+    pub activity_type_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateActivityRequest {
     pub user_id: Uuid,
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
+    /// Multi-sport: timestamps marking segment boundaries
+    pub type_boundaries: Option<Vec<OffsetDateTime>>,
+    /// Multi-sport: activity type IDs for each segment
+    pub segment_types: Option<Vec<Uuid>>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -104,7 +163,7 @@ pub struct Segment {
     pub creator_id: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
     pub distance_meters: f64,
     pub elevation_gain_meters: Option<f64>,
     pub elevation_loss_meters: Option<f64>,
@@ -155,7 +214,7 @@ pub struct ActivitySegmentEffort {
     pub started_at: OffsetDateTime,
     pub segment_name: String,
     pub segment_distance: f64,
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
     pub rank: i64,
     pub start_fraction: Option<f64>,
     pub end_fraction: Option<f64>,
@@ -167,7 +226,7 @@ pub struct StarredSegmentEffort {
     // Segment basic info
     pub segment_id: Uuid,
     pub segment_name: String,
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
     pub distance_meters: f64,
     pub elevation_gain_meters: Option<f64>,
     // User's best effort
@@ -438,7 +497,7 @@ pub struct AchievementWithSegment {
     // Segment details
     pub segment_name: String,
     pub segment_distance_meters: f64,
-    pub segment_activity_type: ActivityType,
+    pub segment_activity_type_id: Uuid,
 }
 
 /// Current achievement holders for a segment
@@ -651,7 +710,7 @@ pub struct FeedActivity {
     pub id: Uuid,
     pub user_id: Uuid,
     pub name: String,
-    pub activity_type: String,
+    pub activity_type_id: Uuid,
     #[serde(with = "rfc3339")]
     pub submitted_at: OffsetDateTime,
     pub visibility: String,

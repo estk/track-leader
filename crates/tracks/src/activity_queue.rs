@@ -10,11 +10,12 @@ use uuid::Uuid;
 use crate::{
     achievements_service,
     database::Database,
-    models::{ActivityType, TrackPointData},
+    models::TrackPointData,
     object_store_service::FileType,
     scoring,
     segment_matching::{self, SegmentMatch},
 };
+use time::OffsetDateTime;
 
 #[derive(Clone)]
 pub struct ActivityQueue {
@@ -54,7 +55,9 @@ impl ActivityQueue {
         id: Uuid,
         ft: FileType,
         bytes: Bytes,
-        activity_type: ActivityType,
+        activity_type_id: Uuid,
+        type_boundaries: Option<Vec<OffsetDateTime>>,
+        segment_types: Option<Vec<Uuid>>,
     ) -> anyhow::Result<()> {
         assert!(matches!(ft, FileType::Gpx));
 
@@ -93,16 +96,35 @@ impl ActivityQueue {
 
                 // Find and create segment efforts
                 if track_saved {
-                    match db.find_matching_segments(id, &activity_type).await {
-                        Ok(matches) => {
-                            for segment_match in matches {
-                                process_segment_match(&db, &parsed_track, uid, id, segment_match)
-                                    .await;
+                    let matches = if let (Some(boundaries), Some(types)) =
+                        (&type_boundaries, &segment_types)
+                    {
+                        // Multi-sport activity: find all geometric matches, then filter by type
+                        match db.find_matching_segments_any_type(id).await {
+                            Ok(all_matches) => filter_multi_sport_matches(
+                                all_matches,
+                                &track_points,
+                                boundaries,
+                                types,
+                            ),
+                            Err(e) => {
+                                tracing::error!("Failed to find matching segments: {e}");
+                                vec![]
                             }
                         }
-                        Err(e) => {
-                            tracing::error!("Failed to find matching segments: {e}");
+                    } else {
+                        // Single-sport activity: filter by activity_type_id directly
+                        match db.find_matching_segments(id, activity_type_id).await {
+                            Ok(m) => m,
+                            Err(e) => {
+                                tracing::error!("Failed to find matching segments: {e}");
+                                vec![]
+                            }
                         }
+                    };
+
+                    for segment_match in matches {
+                        process_segment_match(&db, &parsed_track, uid, id, segment_match).await;
                     }
                 }
             });
@@ -254,4 +276,83 @@ async fn process_segment_match(
             tracing::error!("Failed to create segment effort: {e}");
         }
     }
+}
+
+/// For multi-sport activities, filter segment matches to only include those where
+/// the segment's activity type matches the activity type at that position on the track.
+fn filter_multi_sport_matches(
+    all_matches: Vec<(SegmentMatch, Uuid)>,
+    track_points: &[TrackPointData],
+    type_boundaries: &[OffsetDateTime],
+    segment_types: &[Uuid],
+) -> Vec<SegmentMatch> {
+    if track_points.is_empty() || type_boundaries.len() < 2 {
+        return vec![];
+    }
+
+    all_matches
+        .into_iter()
+        .filter_map(|(segment_match, segment_type_id)| {
+            // Get the midpoint fraction of the segment on the track
+            let mid_fraction = (segment_match.start_fraction + segment_match.end_fraction) / 2.0;
+
+            // Convert fraction to timestamp
+            let timestamp = fraction_to_timestamp(track_points, mid_fraction)?;
+
+            // Find which activity type applies at that timestamp
+            let activity_type_at_pos =
+                get_activity_type_at_timestamp(type_boundaries, segment_types, timestamp)?;
+
+            // Only include if types match
+            if activity_type_at_pos == segment_type_id {
+                Some(segment_match)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Convert a fractional position (0.0 to 1.0) on the track to a timestamp.
+fn fraction_to_timestamp(track_points: &[TrackPointData], fraction: f64) -> Option<OffsetDateTime> {
+    if track_points.is_empty() {
+        return None;
+    }
+
+    // Find the first and last timestamps in the track
+    let first_ts = track_points.iter().find_map(|p| p.timestamp)?;
+    let last_ts = track_points.iter().rev().find_map(|p| p.timestamp)?;
+
+    // Interpolate the timestamp based on the fraction
+    let duration_secs = (last_ts - first_ts).whole_seconds() as f64;
+    let offset_secs = (duration_secs * fraction) as i64;
+
+    Some(first_ts + time::Duration::seconds(offset_secs))
+}
+
+/// Get the activity type ID at a given timestamp based on type boundaries.
+fn get_activity_type_at_timestamp(
+    type_boundaries: &[OffsetDateTime],
+    segment_types: &[Uuid],
+    timestamp: OffsetDateTime,
+) -> Option<Uuid> {
+    // type_boundaries: [start, boundary1, boundary2, end]
+    // segment_types: [type0, type1, type2] (one less than boundaries)
+    if segment_types.len() != type_boundaries.len() - 1 {
+        return None;
+    }
+
+    // Find which segment the timestamp falls into
+    for (i, window) in type_boundaries.windows(2).enumerate() {
+        if timestamp >= window[0] && timestamp < window[1] {
+            return segment_types.get(i).copied();
+        }
+    }
+
+    // If timestamp is exactly at or after the last boundary, use the last segment type
+    if timestamp >= *type_boundaries.last()? {
+        return segment_types.last().copied();
+    }
+
+    None
 }

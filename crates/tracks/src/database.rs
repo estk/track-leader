@@ -1,11 +1,11 @@
 use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
-    ActivitySegmentEffort, ActivityType, CrownCountEntry, DistanceLeaderEntry, GenderFilter,
-    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, Scores, Segment, SegmentEffort, Team,
-    TeamInvitation, TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser,
-    TeamMember, TeamMembership, TeamRole, TeamSummary, TeamVisibility, TeamWithMembership,
-    UpdateDemographicsRequest, User, UserWithDemographics,
+    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, CrownCountEntry, DistanceLeaderEntry,
+    GenderFilter, LeaderboardEntry, LeaderboardFilters, LeaderboardScope, ResolvedActivityType,
+    Scores, Segment, SegmentEffort, Team, TeamInvitation, TeamInvitationWithDetails,
+    TeamJoinRequest, TeamJoinRequestWithUser, TeamMember, TeamMembership, TeamRole, TeamSummary,
+    TeamVisibility, TeamWithMembership, UpdateDemographicsRequest, User, UserWithDemographics,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use serde::Serialize;
@@ -34,28 +34,165 @@ impl Database {
     pub async fn save_activity(&self, activity: &Activity) -> Result<(), AppError> {
         sqlx::query(
             r#"
-            INSERT INTO activities (id, user_id, activity_type, name, object_store_path,
-                                    submitted_at, visibility)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO activities (id, user_id, activity_type_id, name,
+                                    object_store_path, submitted_at, visibility,
+                                    type_boundaries, segment_types)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
         )
         .bind(activity.id)
         .bind(activity.user_id)
-        .bind(activity.activity_type)
+        .bind(activity.activity_type_id)
         .bind(&activity.name)
         .bind(&activity.object_store_path)
         .bind(activity.submitted_at)
         .bind(&activity.visibility)
+        .bind(&activity.type_boundaries)
+        .bind(&activity.segment_types)
         .execute(&self.pool)
         .await?;
 
         Ok(())
     }
 
+    // ========================================================================
+    // Activity Type Methods
+    // ========================================================================
+
+    /// List all activity types (built-in and custom).
+    pub async fn list_activity_types(&self) -> Result<Vec<ActivityTypeRow>, AppError> {
+        let types: Vec<ActivityTypeRow> = sqlx::query_as(
+            r#"
+            SELECT id, name, is_builtin, created_by, created_at
+            FROM activity_types
+            ORDER BY is_builtin DESC, name ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(types)
+    }
+
+    /// Get a single activity type by ID.
+    pub async fn get_activity_type(&self, id: Uuid) -> Result<Option<ActivityTypeRow>, AppError> {
+        let activity_type: Option<ActivityTypeRow> = sqlx::query_as(
+            r#"
+            SELECT id, name, is_builtin, created_by, created_at
+            FROM activity_types
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(activity_type)
+    }
+
+    /// Resolve an activity type by name or alias.
+    /// Returns Exact(id) if a direct match or single alias match,
+    /// Ambiguous(ids) if multiple alias matches, or NotFound if no match.
+    pub async fn resolve_activity_type(
+        &self,
+        name_or_alias: &str,
+    ) -> Result<ResolvedActivityType, AppError> {
+        // First try direct name match (always exact)
+        let direct_match: Option<(Uuid,)> =
+            sqlx::query_as(r#"SELECT id FROM activity_types WHERE name = $1"#)
+                .bind(name_or_alias)
+                .fetch_optional(&self.pool)
+                .await?;
+
+        if let Some((id,)) = direct_match {
+            return Ok(ResolvedActivityType::Exact(id));
+        }
+
+        // Then try aliases (may return multiple)
+        let alias_matches: Vec<(Uuid,)> =
+            sqlx::query_as(r#"SELECT activity_type_id FROM activity_aliases WHERE alias = $1"#)
+                .bind(name_or_alias)
+                .fetch_all(&self.pool)
+                .await?;
+
+        match alias_matches.len() {
+            0 => Ok(ResolvedActivityType::NotFound),
+            1 => Ok(ResolvedActivityType::Exact(alias_matches[0].0)),
+            _ => Ok(ResolvedActivityType::Ambiguous(
+                alias_matches.into_iter().map(|(id,)| id).collect(),
+            )),
+        }
+    }
+
+    /// Get all activity types for a given alias (for disambiguation UI).
+    pub async fn get_types_for_alias(&self, alias: &str) -> Result<Vec<ActivityTypeRow>, AppError> {
+        let types: Vec<ActivityTypeRow> = sqlx::query_as(
+            r#"
+            SELECT t.id, t.name, t.is_builtin, t.created_by, t.created_at
+            FROM activity_types t
+            JOIN activity_aliases a ON a.activity_type_id = t.id
+            WHERE a.alias = $1
+            ORDER BY t.name ASC
+            "#,
+        )
+        .bind(alias)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(types)
+    }
+
+    /// Create a custom activity type.
+    pub async fn create_activity_type(
+        &self,
+        name: &str,
+        created_by: Uuid,
+    ) -> Result<ActivityTypeRow, AppError> {
+        let activity_type: ActivityTypeRow = sqlx::query_as(
+            r#"
+            INSERT INTO activity_types (name, is_builtin, created_by, created_at)
+            VALUES ($1, false, $2, NOW())
+            RETURNING id, name, is_builtin, created_by, created_at
+            "#,
+        )
+        .bind(name)
+        .bind(created_by)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(activity_type)
+    }
+
+    /// Create an alias for an activity type.
+    pub async fn create_activity_alias(
+        &self,
+        alias: &str,
+        activity_type_id: Uuid,
+    ) -> Result<ActivityAliasRow, AppError> {
+        let alias_row: ActivityAliasRow = sqlx::query_as(
+            r#"
+            INSERT INTO activity_aliases (alias, activity_type_id, created_at)
+            VALUES ($1, $2, NOW())
+            RETURNING id, alias, activity_type_id, created_at
+            "#,
+        )
+        .bind(alias)
+        .bind(activity_type_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(alias_row)
+    }
+
+    // ========================================================================
+    // Activity Methods
+    // ========================================================================
+
     pub async fn get_activity(&self, id: Uuid) -> Result<Option<Activity>, AppError> {
         let activity = sqlx::query_as(
             r#"
-            SELECT id, user_id, activity_type, name, object_store_path, submitted_at, visibility
+            SELECT id, user_id, activity_type_id, name, object_store_path,
+                   submitted_at, visibility, type_boundaries, segment_types
             FROM activities
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -70,7 +207,8 @@ impl Database {
     pub async fn get_user_activities(&self, user_id: Uuid) -> Result<Vec<Activity>, AppError> {
         let activities: Vec<Activity> = sqlx::query_as(
             r#"
-            SELECT id, user_id, activity_type, name, object_store_path, submitted_at, visibility
+            SELECT id, user_id, activity_type_id, name, object_store_path,
+                   submitted_at, visibility, type_boundaries, segment_types
             FROM activities
             WHERE user_id = $1 AND deleted_at IS NULL
             ORDER BY submitted_at DESC
@@ -87,22 +225,23 @@ impl Database {
         &self,
         id: Uuid,
         name: Option<&str>,
-        activity_type: Option<&crate::models::ActivityType>,
+        activity_type_id: Option<Uuid>,
         visibility: Option<&str>,
     ) -> Result<Option<Activity>, AppError> {
         let activity = sqlx::query_as(
             r#"
             UPDATE activities
             SET name = COALESCE($2, name),
-                activity_type = COALESCE($3, activity_type),
+                activity_type_id = COALESCE($3, activity_type_id),
                 visibility = COALESCE($4, visibility)
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, user_id, activity_type, name, object_store_path, submitted_at, visibility
+            RETURNING id, user_id, activity_type_id, name, object_store_path,
+                      submitted_at, visibility, type_boundaries, segment_types
             "#,
         )
         .bind(id)
         .bind(name)
-        .bind(activity_type.map(|at| at as &crate::models::ActivityType))
+        .bind(activity_type_id)
         .bind(visibility)
         .fetch_optional(&self.pool)
         .await?;
@@ -259,7 +398,7 @@ impl Database {
         creator_id: Uuid,
         name: &str,
         description: Option<&str>,
-        activity_type: &ActivityType,
+        activity_type_id: Uuid,
         geo_wkt: &str,
         start_wkt: &str,
         end_wkt: &str,
@@ -274,7 +413,7 @@ impl Database {
         let segment = sqlx::query_as(
             r#"
             INSERT INTO segments (
-                id, creator_id, name, description, activity_type,
+                id, creator_id, name, description, activity_type_id,
                 geo, start_point, end_point,
                 distance_meters, elevation_gain_meters, elevation_loss_meters,
                 average_grade, max_grade, climb_category,
@@ -287,7 +426,7 @@ impl Database {
                 $12, $13, $14,
                 $15, NOW()
             )
-            RETURNING id, creator_id, name, description, activity_type,
+            RETURNING id, creator_id, name, description, activity_type_id,
                       distance_meters, elevation_gain_meters, elevation_loss_meters,
                       average_grade, max_grade, climb_category,
                       visibility, created_at
@@ -297,7 +436,7 @@ impl Database {
         .bind(creator_id)
         .bind(name)
         .bind(description)
-        .bind(activity_type)
+        .bind(activity_type_id)
         .bind(geo_wkt)
         .bind(start_wkt)
         .bind(end_wkt)
@@ -317,7 +456,7 @@ impl Database {
     pub async fn get_segment(&self, id: Uuid) -> Result<Option<Segment>, AppError> {
         let segment = sqlx::query_as(
             r#"
-            SELECT id, creator_id, name, description, activity_type,
+            SELECT id, creator_id, name, description, activity_type_id,
                    distance_meters, elevation_gain_meters, elevation_loss_meters,
                    average_grade, max_grade, climb_category,
                    visibility, created_at
@@ -334,30 +473,30 @@ impl Database {
 
     pub async fn list_segments(
         &self,
-        activity_type: Option<&ActivityType>,
+        activity_type_id: Option<Uuid>,
         limit: i64,
     ) -> Result<Vec<Segment>, AppError> {
-        let segments: Vec<Segment> = if let Some(at) = activity_type {
+        let segments: Vec<Segment> = if let Some(type_id) = activity_type_id {
             sqlx::query_as(
                 r#"
-                SELECT id, creator_id, name, description, activity_type,
+                SELECT id, creator_id, name, description, activity_type_id,
                        distance_meters, elevation_gain_meters, elevation_loss_meters,
                        average_grade, max_grade, climb_category,
                        visibility, created_at
                 FROM segments
-                WHERE deleted_at IS NULL AND visibility = 'public' AND activity_type = $1
+                WHERE deleted_at IS NULL AND visibility = 'public' AND activity_type_id = $1
                 ORDER BY created_at DESC
                 LIMIT $2
                 "#,
             )
-            .bind(at)
+            .bind(type_id)
             .bind(limit)
             .fetch_all(&self.pool)
             .await?
         } else {
             sqlx::query_as(
                 r#"
-                SELECT id, creator_id, name, description, activity_type,
+                SELECT id, creator_id, name, description, activity_type_id,
                        distance_meters, elevation_gain_meters, elevation_loss_meters,
                        average_grade, max_grade, climb_category,
                        visibility, created_at
@@ -389,8 +528,8 @@ impl Database {
         let mut param_idx = 1;
 
         // Activity type filter
-        if params.activity_type.is_some() {
-            conditions.push(format!("activity_type = ${param_idx}"));
+        if params.activity_type_id.is_some() {
+            conditions.push(format!("activity_type_id = ${param_idx}"));
             param_idx += 1;
         }
 
@@ -443,7 +582,7 @@ impl Database {
         let where_clause = conditions.join(" AND ");
         let query = format!(
             r#"
-            SELECT id, creator_id, name, description, activity_type,
+            SELECT id, creator_id, name, description, activity_type_id,
                    distance_meters, elevation_gain_meters, elevation_loss_meters,
                    average_grade, max_grade, climb_category,
                    visibility, created_at
@@ -458,8 +597,8 @@ impl Database {
         let mut q = sqlx::query_as::<_, Segment>(&query);
 
         // Bind parameters in the same order we added conditions
-        if let Some(ref at) = params.activity_type {
-            q = q.bind(at);
+        if let Some(type_id) = params.activity_type_id {
+            q = q.bind(type_id);
         }
         if let Some(ref pattern) = search_pattern {
             q = q.bind(pattern);
@@ -484,7 +623,7 @@ impl Database {
     pub async fn get_user_segments(&self, user_id: Uuid) -> Result<Vec<Segment>, AppError> {
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT id, creator_id, name, description, activity_type,
+            SELECT id, creator_id, name, description, activity_type_id,
                    distance_meters, elevation_gain_meters, elevation_loss_meters,
                    average_grade, max_grade, climb_category,
                    visibility, created_at
@@ -634,7 +773,7 @@ impl Database {
                 e.started_at,
                 s.name as segment_name,
                 s.distance_meters as segment_distance,
-                s.activity_type,
+                s.activity_type_id,
                 (SELECT COUNT(*) + 1 FROM segment_efforts e2
                  WHERE e2.segment_id = e.segment_id
                  AND e2.elapsed_time_seconds < e.elapsed_time_seconds) as rank,
@@ -804,10 +943,14 @@ impl Database {
     /// Find segments that the activity track passes through.
     /// Uses PostGIS to check if track passes within 50m of both segment endpoints
     /// and verifies direction (start before end along the track).
+    ///
+    /// For single-sport activities: filters by activity_type_id directly.
+    /// For multi-sport activities: finds all geometric matches, then filters by
+    /// the activity type at each segment's position on the track.
     pub async fn find_matching_segments(
         &self,
         activity_id: Uuid,
-        activity_type: &ActivityType,
+        activity_type_id: Uuid,
     ) -> Result<Vec<SegmentMatch>, AppError> {
         #[derive(sqlx::FromRow)]
         struct MatchRow {
@@ -826,7 +969,7 @@ impl Database {
             FROM segments s
             JOIN tracks t ON t.activity_id = $1
             WHERE s.deleted_at IS NULL
-              AND s.activity_type = $2
+              AND s.activity_type_id = $2
               AND ST_DWithin(t.geo, s.start_point, 50)
               AND ST_DWithin(t.geo, s.end_point, 50)
               AND ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry)
@@ -834,7 +977,7 @@ impl Database {
             "#,
         )
         .bind(activity_id)
-        .bind(activity_type)
+        .bind(activity_type_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -845,6 +988,58 @@ impl Database {
                 distance_meters: r.distance_meters,
                 start_fraction: r.start_pos,
                 end_fraction: r.end_pos,
+            })
+            .collect())
+    }
+
+    /// Find segments that the activity track passes through for multi-sport activities.
+    /// This version finds all geometric matches first, then the caller filters by
+    /// the activity type at each segment's position on the track.
+    pub async fn find_matching_segments_any_type(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Vec<(SegmentMatch, Uuid)>, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct MatchRow {
+            id: Uuid,
+            activity_type_id: Uuid,
+            distance_meters: f64,
+            start_pos: f64,
+            end_pos: f64,
+        }
+
+        let rows: Vec<MatchRow> = sqlx::query_as(
+            r#"
+            SELECT s.id,
+                   s.activity_type_id,
+                   s.distance_meters,
+                   ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry) as start_pos,
+                   ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry) as end_pos
+            FROM segments s
+            JOIN tracks t ON t.activity_id = $1
+            WHERE s.deleted_at IS NULL
+              AND ST_DWithin(t.geo, s.start_point, 50)
+              AND ST_DWithin(t.geo, s.end_point, 50)
+              AND ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry)
+                  < ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry)
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                (
+                    SegmentMatch {
+                        segment_id: r.id,
+                        distance_meters: r.distance_meters,
+                        start_fraction: r.start_pos,
+                        end_fraction: r.end_pos,
+                    },
+                    r.activity_type_id,
+                )
             })
             .collect())
     }
@@ -930,7 +1125,7 @@ impl Database {
     /// Get all activities with their track geometry for reprocessing.
     pub async fn get_activities_with_tracks(
         &self,
-        activity_type: &ActivityType,
+        activity_type_id: Uuid,
     ) -> Result<Vec<(Uuid, Uuid)>, AppError> {
         let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
             r#"
@@ -938,10 +1133,10 @@ impl Database {
             FROM activities a
             JOIN tracks t ON t.activity_id = a.id
             WHERE a.deleted_at IS NULL
-              AND a.activity_type = $1
+              AND a.activity_type_id = $1
             "#,
         )
-        .bind(activity_type)
+        .bind(activity_type_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -975,7 +1170,7 @@ impl Database {
             WHERE s.id = $1
               AND s.deleted_at IS NULL
               AND a.deleted_at IS NULL
-              AND a.activity_type = s.activity_type
+              AND a.activity_type_id = s.activity_type_id
               AND ST_LineLocatePoint(t.geo::geometry, s.start_point::geometry)
                   < ST_LineLocatePoint(t.geo::geometry, s.end_point::geometry)
             "#,
@@ -1055,7 +1250,7 @@ impl Database {
     pub async fn get_user_starred_segments(&self, user_id: Uuid) -> Result<Vec<Segment>, AppError> {
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type,
+            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type_id,
                    s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
                    s.average_grade, s.max_grade, s.climb_category,
                    s.visibility, s.created_at
@@ -1083,7 +1278,7 @@ impl Database {
             SELECT
                 s.id as segment_id,
                 s.name as segment_name,
-                s.activity_type,
+                s.activity_type_id,
                 s.distance_meters,
                 s.elevation_gain_meters,
                 -- User's best effort (PR)
@@ -1140,7 +1335,7 @@ impl Database {
     /// Returns segments where both start and end points are within 30m of the given points.
     pub async fn find_similar_segments(
         &self,
-        activity_type: &ActivityType,
+        activity_type_id: Uuid,
         start_wkt: &str,
         end_wkt: &str,
     ) -> Result<Vec<SimilarSegment>, AppError> {
@@ -1148,14 +1343,14 @@ impl Database {
             r#"
             SELECT id, name, distance_meters
             FROM segments
-            WHERE activity_type = $1
+            WHERE activity_type_id = $1
               AND ST_DWithin(start_point, ST_GeogFromText($2), 30)
               AND ST_DWithin(end_point, ST_GeogFromText($3), 30)
               AND deleted_at IS NULL
             LIMIT 5
             "#,
         )
-        .bind(activity_type)
+        .bind(activity_type_id)
         .bind(start_wkt)
         .bind(end_wkt)
         .fetch_all(&self.pool)
@@ -1175,7 +1370,7 @@ impl Database {
         let point_wkt = format!("POINT({lon} {lat})");
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT id, creator_id, name, description, activity_type,
+            SELECT id, creator_id, name, description, activity_type_id,
                    distance_meters, elevation_gain_meters, elevation_loss_meters,
                    average_grade, max_grade, climb_category,
                    visibility, created_at
@@ -1633,7 +1828,7 @@ impl Database {
                 a.effort_count,
                 s.name as segment_name,
                 s.distance_meters as segment_distance_meters,
-                s.activity_type as segment_activity_type
+                s.activity_type_id as segment_activity_type_id
             FROM achievements a
             JOIN segments s ON s.id = a.segment_id
             WHERE a.user_id = $1 {lost_filter}
@@ -2036,7 +2231,7 @@ impl Database {
                 a.id,
                 a.user_id,
                 a.name,
-                a.activity_type,
+                a.activity_type_id,
                 a.submitted_at,
                 a.visibility,
                 u.name as user_name,
@@ -3276,7 +3471,7 @@ impl Database {
                 a.id,
                 a.user_id,
                 a.name,
-                a.activity_type,
+                a.activity_type_id,
                 a.submitted_at,
                 a.visibility,
                 u.name as user_name,
@@ -3312,7 +3507,7 @@ impl Database {
     ) -> Result<Vec<Segment>, AppError> {
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type,
+            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type_id,
                    s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
                    s.average_grade, s.max_grade, s.climb_category,
                    s.visibility, s.created_at
