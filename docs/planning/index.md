@@ -77,9 +77,6 @@ Phase documentation has been archived.
 
 These items were planned but deferred for post-launch:
 
-### Refactor tasks
-- Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one, maybe use utopia
-
 ### General
 - Strava import
 - Mobile app (PWA or native)
