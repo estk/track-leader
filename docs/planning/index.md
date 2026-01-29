@@ -77,13 +77,7 @@ Phase documentation has been archived.
 
 These items were planned but deferred for post-launch:
 
-### Leaderboard features
-- Much richer leaderboard filters
-  - Equipment type (e-bike vs acoustic)
-  - Weight class 
-
 ### Refactor tasks
-- Refactor any api endpoints in the node application's api.ts into the rust api
 - Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one, maybe use utopia
 
 ### General
