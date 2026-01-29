@@ -4,7 +4,6 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- Enums
-CREATE TYPE activity_type AS ENUM ('walking', 'running', 'hiking', 'road_cycling', 'mountain_biking', 'unknown');
 CREATE TYPE gender AS ENUM ('male', 'female', 'other', 'prefer_not_to_say');
 
 -- Users table
@@ -33,11 +32,18 @@ COMMENT ON COLUMN users.weight_kg IS 'Weight in kg for power calculations';
 COMMENT ON COLUMN users.country IS 'Country for regional leaderboards';
 COMMENT ON COLUMN users.region IS 'State/province/region for local leaderboards';
 
+-- User demographic indexes
+CREATE INDEX idx_users_gender ON users(gender) WHERE gender IS NOT NULL;
+CREATE INDEX idx_users_birth_year ON users(birth_year) WHERE birth_year IS NOT NULL;
+CREATE INDEX idx_users_weight_kg ON users(weight_kg) WHERE weight_kg IS NOT NULL;
+CREATE INDEX idx_users_country ON users(country) WHERE country IS NOT NULL;
+
 -- Activities table
+-- Note: activity_type_id FK added after activity_types table is created in 005_activity_types.sql
 CREATE TABLE activities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    activity_type activity_type NOT NULL,
+    activity_type_id UUID NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
     visibility TEXT DEFAULT 'public',
@@ -46,11 +52,22 @@ CREATE TABLE activities (
     started_at TIMESTAMP WITH TIME ZONE,
     deleted_at TIMESTAMP WITH TIME ZONE,
     kudos_count INTEGER NOT NULL DEFAULT 0,
-    comment_count INTEGER NOT NULL DEFAULT 0
+    comment_count INTEGER NOT NULL DEFAULT 0,
+    -- Multi-sport support
+    type_boundaries TIMESTAMPTZ[],
+    segment_types UUID[]
 );
+
+COMMENT ON COLUMN activities.visibility IS 'Visibility: public, private, or teams_only';
+COMMENT ON COLUMN activities.type_boundaries IS 'Multi-sport: timestamps marking segment boundaries. First = start, last = end.';
+COMMENT ON COLUMN activities.segment_types IS 'Multi-sport: activity type IDs for each segment. Length = type_boundaries.length - 1.';
 
 CREATE INDEX idx_activities_user_id ON activities(user_id);
 CREATE INDEX idx_activities_submitted_at ON activities(submitted_at);
+CREATE INDEX idx_activities_visibility ON activities(visibility) WHERE deleted_at IS NULL;
+CREATE INDEX idx_activities_user_date ON activities(user_id, submitted_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_activities_user_type_date ON activities(user_id, activity_type_id, submitted_at DESC);
+CREATE INDEX idx_activities_feed ON activities(submitted_at DESC) WHERE visibility = 'public';
 
 -- Tracks table with LineStringZM geometry
 -- X = longitude, Y = latitude, Z = elevation (meters), M = timestamp (unix epoch seconds)

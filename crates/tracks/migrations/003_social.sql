@@ -11,6 +11,8 @@ CREATE TABLE follows (
 
 CREATE INDEX idx_follows_following ON follows(following_id);
 CREATE INDEX idx_follows_follower ON follows(follower_id);
+CREATE INDEX idx_follows_follower_time ON follows(follower_id, created_at DESC);
+CREATE INDEX idx_follows_following_time ON follows(following_id, created_at DESC);
 
 -- Kudos table
 CREATE TABLE kudos (
@@ -21,6 +23,7 @@ CREATE TABLE kudos (
 );
 
 CREATE INDEX idx_kudos_activity ON kudos(activity_id);
+CREATE INDEX idx_kudos_activity_time ON kudos(activity_id, created_at DESC);
 
 -- Comments table (threaded)
 CREATE TABLE comments (
@@ -35,6 +38,7 @@ CREATE TABLE comments (
 );
 
 CREATE INDEX idx_comments_activity ON comments(activity_id, created_at);
+CREATE INDEX idx_comments_activity_time ON comments(activity_id, created_at ASC);
 
 -- Notifications table
 CREATE TABLE notifications (
@@ -51,3 +55,5 @@ CREATE TABLE notifications (
 
 CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
 CREATE INDEX idx_notifications_unread ON notifications(user_id) WHERE read_at IS NULL;
+CREATE INDEX idx_notifications_user_unread ON notifications(user_id, read_at) WHERE read_at IS NULL;
+CREATE INDEX idx_notifications_user_time ON notifications(user_id, created_at DESC);

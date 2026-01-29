@@ -1,12 +1,13 @@
 -- Segment definitions and efforts
 
 -- Segments table with LineStringZ geometry
+-- Note: activity_type_id FK added after activity_types table is created in 005_activity_types.sql
 CREATE TABLE segments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
-    activity_type activity_type NOT NULL,
+    activity_type_id UUID NOT NULL,
 
     -- Geographic data (LineStringZ for elevation)
     geo GEOGRAPHY(LineStringZ, 4326) NOT NULL,
@@ -39,11 +40,14 @@ CREATE TABLE segments (
 -- 0 = HC / Hors Categorie (320+ points)
 -- Points = elevation_gain_meters * (distance_meters / 1000) * average_grade_factor
 
+COMMENT ON COLUMN segments.visibility IS 'Visibility: public, private, or teams_only';
+
 CREATE INDEX idx_segments_creator ON segments(creator_id);
-CREATE INDEX idx_segments_activity_type ON segments(activity_type);
+CREATE INDEX idx_segments_activity_type_id ON segments(activity_type_id);
 CREATE INDEX idx_segments_visibility ON segments(visibility) WHERE deleted_at IS NULL;
 CREATE INDEX idx_segments_geo_gist ON segments USING GIST (geo);
 CREATE INDEX idx_segments_start_gist ON segments USING GIST (start_point);
+CREATE INDEX idx_segments_type ON segments(activity_type_id, created_at DESC);
 
 -- Segment efforts - each time someone completes a segment
 CREATE TABLE segment_efforts (
@@ -79,6 +83,8 @@ CREATE INDEX idx_segment_efforts_activity ON segment_efforts(activity_id);
 CREATE INDEX idx_segment_efforts_user ON segment_efforts(user_id);
 CREATE INDEX idx_segment_efforts_time ON segment_efforts(segment_id, elapsed_time_seconds);
 CREATE INDEX idx_segment_efforts_pr ON segment_efforts(segment_id, user_id) WHERE is_personal_record = TRUE;
+CREATE INDEX idx_efforts_segment_time ON segment_efforts(segment_id, elapsed_time_seconds ASC);
+CREATE INDEX idx_efforts_user_segment ON segment_efforts(user_id, segment_id, elapsed_time_seconds ASC);
 
 -- Segment stars (favorites)
 CREATE TABLE segment_stars (

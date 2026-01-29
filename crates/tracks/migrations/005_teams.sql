@@ -31,6 +31,7 @@ CREATE TABLE teams (
 
 CREATE INDEX idx_teams_owner ON teams(owner_id);
 CREATE INDEX idx_teams_visibility ON teams(visibility) WHERE deleted_at IS NULL;
+CREATE INDEX idx_teams_owner_created ON teams(owner_id, created_at DESC) WHERE deleted_at IS NULL;
 
 -- Team memberships (many-to-many users <-> teams)
 CREATE TABLE team_memberships (
@@ -44,6 +45,8 @@ CREATE TABLE team_memberships (
 
 CREATE INDEX idx_team_memberships_user ON team_memberships(user_id);
 CREATE INDEX idx_team_memberships_team ON team_memberships(team_id);
+CREATE INDEX idx_team_memberships_user_joined ON team_memberships(user_id, joined_at DESC);
+CREATE INDEX idx_team_memberships_team_role ON team_memberships(team_id, role);
 
 -- Team join requests (for request-based joining)
 CREATE TABLE team_join_requests (
@@ -60,6 +63,7 @@ CREATE TABLE team_join_requests (
 
 CREATE INDEX idx_team_join_requests_team ON team_join_requests(team_id) WHERE status = 'pending';
 CREATE INDEX idx_team_join_requests_user ON team_join_requests(user_id);
+CREATE INDEX idx_team_join_requests_pending ON team_join_requests(team_id, created_at DESC) WHERE status = 'pending';
 
 -- Team invitations (for email-based invites)
 CREATE TABLE team_invitations (
@@ -78,6 +82,7 @@ CREATE TABLE team_invitations (
 CREATE INDEX idx_team_invitations_token ON team_invitations(token) WHERE accepted_at IS NULL;
 CREATE INDEX idx_team_invitations_team ON team_invitations(team_id) WHERE accepted_at IS NULL;
 CREATE INDEX idx_team_invitations_email ON team_invitations(email) WHERE accepted_at IS NULL;
+CREATE INDEX idx_team_invitations_expires ON team_invitations(expires_at) WHERE accepted_at IS NULL;
 
 -- Activity-team junction table (many-to-many)
 CREATE TABLE activity_teams (
@@ -90,6 +95,7 @@ CREATE TABLE activity_teams (
 
 CREATE INDEX idx_activity_teams_team ON activity_teams(team_id);
 CREATE INDEX idx_activity_teams_activity ON activity_teams(activity_id);
+CREATE INDEX idx_activity_teams_team_shared ON activity_teams(team_id, shared_at DESC);
 
 -- Segment-team junction table (many-to-many)
 CREATE TABLE segment_teams (
@@ -101,3 +107,4 @@ CREATE TABLE segment_teams (
 
 CREATE INDEX idx_segment_teams_team ON segment_teams(team_id);
 CREATE INDEX idx_segment_teams_segment ON segment_teams(segment_id);
+CREATE INDEX idx_segment_teams_team_shared ON segment_teams(team_id, shared_at DESC);
