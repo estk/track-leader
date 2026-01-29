@@ -246,7 +246,9 @@ pub struct StarredSegmentEffort {
 // ============================================================================
 
 /// User gender for demographic filtering
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema,
+)]
 #[sqlx(type_name = "gender", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum Gender {
@@ -428,7 +430,7 @@ impl std::str::FromStr for WeightClass {
 }
 
 /// Query parameters for filtered leaderboard requests
-#[derive(Debug, Clone, Deserialize, Default, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Default, ToSchema, utoipa::IntoParams)]
 pub struct LeaderboardFilters {
     #[serde(default)]
     pub scope: LeaderboardScope,
@@ -866,7 +868,9 @@ pub struct TrackPointData {
 // ============================================================================
 
 /// Team role enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema,
+)]
 #[sqlx(type_name = "team_role", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum TeamRole {
@@ -915,7 +919,9 @@ impl std::str::FromStr for TeamRole {
 }
 
 /// Team visibility (whether team is discoverable)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema,
+)]
 #[sqlx(type_name = "team_visibility", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum TeamVisibility {
@@ -948,7 +954,9 @@ impl std::str::FromStr for TeamVisibility {
 }
 
 /// Team join policy
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema,
+)]
 #[sqlx(type_name = "team_join_policy", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum TeamJoinPolicy {

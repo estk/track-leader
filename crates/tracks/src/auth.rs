@@ -241,7 +241,18 @@ where
     }
 }
 
-// Handler for user registration
+/// Handler for user registration
+#[utoipa::path(
+    post,
+    path = "/auth/register",
+    tag = "auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 200, description = "Registration successful", body = AuthResponse),
+        (status = 400, description = "Invalid input"),
+        (status = 409, description = "Email already registered"),
+    )
+)]
 pub async fn register(
     Extension(db): Extension<Database>,
     Json(req): Json<RegisterRequest>,
@@ -281,7 +292,18 @@ pub async fn register(
     }))
 }
 
-// Handler for user login
+/// Handler for user login
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = AuthResponse),
+        (status = 400, description = "Invalid input"),
+        (status = 401, description = "Invalid credentials"),
+    )
+)]
 pub async fn login(
     Extension(db): Extension<Database>,
     Json(req): Json<LoginRequest>,
@@ -321,7 +343,19 @@ pub async fn login(
     }))
 }
 
-// Handler to get current user
+/// Handler to get current user
+#[utoipa::path(
+    get,
+    path = "/auth/me",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Current user info", body = UserResponse),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn me(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,

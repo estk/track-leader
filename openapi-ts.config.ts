@@ -6,5 +6,6 @@ export default defineConfig({
   output: './src/lib/api-generated',
   plugins: [
     '@hey-api/typescript',
+    '@hey-api/sdk',
   ],
 });

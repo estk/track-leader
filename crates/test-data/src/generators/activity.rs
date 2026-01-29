@@ -4,7 +4,7 @@ use rand::Rng;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use tracks::models::{builtin_types, TrackPointData, Visibility};
+use tracks::models::{TrackPointData, Visibility, builtin_types};
 
 /// Generated activity data ready for database insertion.
 #[derive(Debug, Clone)]
@@ -147,8 +147,7 @@ impl ActivityGenerator {
             || activity_type_id == builtin_types::GRAVEL
         {
             &self.name_config.cycling_prefixes
-        } else if activity_type_id == builtin_types::HIKE
-            || activity_type_id == builtin_types::WALK
+        } else if activity_type_id == builtin_types::HIKE || activity_type_id == builtin_types::WALK
         {
             &self.name_config.hiking_prefixes
         } else {

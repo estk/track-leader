@@ -17,10 +17,11 @@ use crate::{
     database::Database,
     errors::AppError,
     models::{
-        AchievementType, AchievementWithSegment, Activity, ChangeMemberRoleRequest,
-        CountryStats, CreateTeamRequest, CrownCountEntry, DistanceLeaderEntry, InviteToTeamRequest,
-        JoinTeamRequest, LeaderboardFilters, LeaderboardFiltersResponse, LeaderboardPosition,
-        LeaderboardResponse, Segment, SegmentAchievements, SegmentEffort, ShareWithTeamsRequest,
+        AchievementType, AchievementWithSegment, Activity, ActivityTypeRow,
+        ChangeMemberRoleRequest, CountryStats, CreateActivityTypeRequest, CreateTeamRequest,
+        CrownCountEntry, DistanceLeaderEntry, InviteToTeamRequest, JoinTeamRequest,
+        LeaderboardFilters, LeaderboardFiltersResponse, LeaderboardPosition, LeaderboardResponse,
+        Segment, SegmentAchievements, SegmentEffort, ShareWithTeamsRequest, StarredSegmentEffort,
         Stats, Team, TeamInvitationWithDetails, TeamMember, TeamRole, TeamSummary,
         TeamWithMembership, UpdateDemographicsRequest, UpdateTeamRequest, User,
         UserWithDemographics,
@@ -56,6 +57,19 @@ pub struct NewUserQuery {
     pub email: String,
 }
 
+#[utoipa::path(
+    get,
+    path = "/users/new",
+    tag = "users",
+    params(
+        ("name" = String, Query, description = "User's name"),
+        ("email" = String, Query, description = "User's email address")
+    ),
+    responses(
+        (status = 200, description = "User created successfully", body = User),
+        (status = 400, description = "Invalid input")
+    )
+)]
 pub async fn new_user(
     Extension(db): Extension<Database>,
     Query(params): Query<NewUserQuery>,
@@ -65,6 +79,14 @@ pub async fn new_user(
     Ok(Json(user))
 }
 
+#[utoipa::path(
+    get,
+    path = "/users",
+    tag = "users",
+    responses(
+        (status = 200, description = "List of all users", body = Vec<User>)
+    )
+)]
 pub async fn all_users(Extension(db): Extension<Database>) -> Result<Json<Vec<User>>, AppError> {
     let users = db.all_users().await?;
     Ok(Json(users))
@@ -87,6 +109,28 @@ pub struct UploadQuery {
     pub segment_types: Option<Vec<Uuid>>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/activities/new",
+    tag = "activities",
+    params(
+        ("activity_type_id" = Uuid, Query, description = "Activity type ID"),
+        ("name" = String, Query, description = "Activity name"),
+        ("visibility" = Option<String>, Query, description = "Visibility: public, private, or teams_only"),
+        ("team_ids" = Option<String>, Query, description = "Comma-separated team IDs for teams_only visibility"),
+        ("type_boundaries" = Option<Vec<time::OffsetDateTime>>, Query, description = "Multi-sport segment boundary timestamps"),
+        ("segment_types" = Option<Vec<Uuid>>, Query, description = "Multi-sport activity type IDs per segment")
+    ),
+    request_body(content_type = "multipart/form-data", description = "GPX file upload"),
+    responses(
+        (status = 200, description = "Activity created successfully", body = Activity),
+        (status = 400, description = "Invalid input"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn new_activity(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
@@ -176,6 +220,18 @@ pub async fn new_activity(
     Ok(Json(activity))
 }
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Activity details", body = Activity),
+        (status = 404, description = "Activity not found")
+    )
+)]
 pub async fn get_activity(
     Extension(db): Extension<Database>,
     OptionalAuthUser(claims): OptionalAuthUser,
@@ -218,6 +274,19 @@ pub struct UpdateActivityRequest {
     pub visibility: Option<String>,
 }
 
+#[utoipa::path(
+    patch,
+    path = "/activities/{id}",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    request_body = UpdateActivityRequest,
+    responses(
+        (status = 200, description = "Activity updated successfully", body = Activity),
+        (status = 404, description = "Activity not found")
+    )
+)]
 pub async fn update_activity(
     Extension(db): Extension<Database>,
     Path(id): Path<Uuid>,
@@ -236,6 +305,18 @@ pub async fn update_activity(
     Ok(Json(activity))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/activities/{id}",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 204, description = "Activity deleted successfully"),
+        (status = 404, description = "Activity not found")
+    )
+)]
 pub async fn delete_activity(
     Extension(db): Extension<Database>,
     Path(id): Path<Uuid>,
@@ -250,6 +331,17 @@ pub async fn delete_activity(
 #[derive(Deserialize, ToSchema)]
 pub struct UserActivitiesQuery {}
 
+#[utoipa::path(
+    get,
+    path = "/users/{id}/activities",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "List of user's activities", body = Vec<Activity>)
+    )
+)]
 pub async fn get_user_activities(
     Extension(db): Extension<Database>,
     Query(_params): Query<UserActivitiesQuery>,
@@ -259,6 +351,18 @@ pub async fn get_user_activities(
     Ok(Json(activities))
 }
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/download",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "GPX file download", content_type = "application/gpx+xml"),
+        (status = 404, description = "Activity not found")
+    )
+)]
 pub async fn download_gpx_file(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
@@ -303,6 +407,18 @@ pub async fn download_gpx_file(
     Ok((headers, file_bytes).into_response())
 }
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/track",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Track data with GPS points and bounds", body = TrackData),
+        (status = 404, description = "Activity not found")
+    )
+)]
 pub async fn get_activity_track(
     Extension(db): Extension<Database>,
     OptionalAuthUser(claims): OptionalAuthUser,
@@ -376,6 +492,18 @@ pub async fn get_activity_track(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/segments",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Segment efforts matched in this activity", body = Vec<crate::models::ActivitySegmentEffort>),
+        (status = 404, description = "Activity not found")
+    )
+)]
 pub async fn get_activity_segments(
     Extension(db): Extension<Database>,
     OptionalAuthUser(claims): OptionalAuthUser,
@@ -410,6 +538,14 @@ pub async fn get_activity_segments(
     Ok(Json(efforts))
 }
 
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "stats",
+    responses(
+        (status = 200, description = "Health check passed")
+    )
+)]
 pub async fn health_check() -> StatusCode {
     StatusCode::OK
 }
@@ -419,6 +555,14 @@ pub async fn health_check() -> StatusCode {
 // ============================================================================
 
 /// List all activity types (built-in and custom).
+#[utoipa::path(
+    get,
+    path = "/activity-types",
+    tag = "activity-types",
+    responses(
+        (status = 200, description = "List of all activity types", body = Vec<ActivityTypeRow>)
+    )
+)]
 pub async fn list_activity_types(
     Extension(db): Extension<Database>,
 ) -> Result<Json<Vec<crate::models::ActivityTypeRow>>, AppError> {
@@ -427,6 +571,18 @@ pub async fn list_activity_types(
 }
 
 /// Get a single activity type by ID.
+#[utoipa::path(
+    get,
+    path = "/activity-types/{id}",
+    tag = "activity-types",
+    params(
+        ("id" = Uuid, Path, description = "Activity type ID")
+    ),
+    responses(
+        (status = 200, description = "Activity type details", body = ActivityTypeRow),
+        (status = 404, description = "Activity type not found")
+    )
+)]
 pub async fn get_activity_type(
     Extension(db): Extension<Database>,
     Path(id): Path<Uuid>,
@@ -436,6 +592,19 @@ pub async fn get_activity_type(
 }
 
 /// Create a custom activity type.
+#[utoipa::path(
+    post,
+    path = "/activity-types",
+    tag = "activity-types",
+    request_body = CreateActivityTypeRequest,
+    responses(
+        (status = 200, description = "Activity type created successfully", body = ActivityTypeRow),
+        (status = 400, description = "Invalid input")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_activity_type(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -469,6 +638,17 @@ pub struct ResolveTypeResponse {
     pub type_ids: Option<Vec<Uuid>>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/activity-types/resolve",
+    tag = "activity-types",
+    params(
+        ("name" = String, Query, description = "Activity type name or alias to resolve")
+    ),
+    responses(
+        (status = 200, description = "Resolution result", body = ResolveTypeResponse)
+    )
+)]
 pub async fn resolve_activity_type(
     Extension(db): Extension<Database>,
     Query(query): Query<ResolveTypeQuery>,
@@ -529,6 +709,17 @@ pub struct SegmentPoint {
     pub ele: Option<f64>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/segments",
+    tag = "segments",
+    request_body = CreateSegmentRequest,
+    responses(
+        (status = 200, description = "Segment created successfully", body = Segment),
+        (status = 400, description = "Invalid input"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 pub async fn create_segment(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
@@ -947,6 +1138,18 @@ fn calculate_climb_category(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/segments/{id}",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "Segment details", body = Segment),
+        (status = 404, description = "Segment not found")
+    )
+)]
 pub async fn get_segment(
     Extension(db): Extension<Database>,
     OptionalAuthUser(claims): OptionalAuthUser,
@@ -1033,7 +1236,7 @@ impl ClimbCategoryFilter {
     }
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct ListSegmentsQuery {
     pub activity_type_id: Option<Uuid>,
     #[serde(default = "default_limit")]
@@ -1058,6 +1261,16 @@ fn default_limit() -> i64 {
     50
 }
 
+#[utoipa::path(
+    get,
+    path = "/segments",
+    tag = "segments",
+    params(ListSegmentsQuery),
+    responses(
+        (status = 200, description = "List of segments", body = Vec<Segment>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn list_segments(
     Extension(db): Extension<Database>,
     Query(params): Query<ListSegmentsQuery>,
@@ -1066,6 +1279,19 @@ pub async fn list_segments(
     Ok(Json(segments))
 }
 
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/leaderboard",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "Segment leaderboard", body = Vec<SegmentEffort>),
+        (status = 404, description = "Segment not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_segment_leaderboard(
     Extension(db): Extension<Database>,
     Path(id): Path<Uuid>,
@@ -1074,6 +1300,23 @@ pub async fn get_segment_leaderboard(
     Ok(Json(efforts))
 }
 
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/efforts/me",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "User's efforts on segment", body = Vec<SegmentEffort>),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Segment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_my_segment_efforts(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1096,6 +1339,20 @@ pub struct SegmentTrackPoint {
     pub ele: Option<f64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/track",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "Segment track data with points and bounds", body = SegmentTrackData),
+        (status = 401, description = "Unauthorized - private segment requires authentication"),
+        (status = 404, description = "Segment not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_segment_track(
     Extension(db): Extension<Database>,
     OptionalAuthUser(claims): OptionalAuthUser,
@@ -1204,6 +1461,17 @@ pub struct SegmentValidation {
 
 /// Calculate segment metrics from a list of points without creating the segment.
 /// Useful for previewing what a segment would look like before creation.
+#[utoipa::path(
+    post,
+    path = "/segments/preview",
+    tag = "segments",
+    request_body = PreviewSegmentRequest,
+    responses(
+        (status = 200, description = "Preview of segment metrics and validation", body = PreviewSegmentResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn preview_segment(
     Json(req): Json<PreviewSegmentRequest>,
 ) -> Result<Json<PreviewSegmentResponse>, AppError> {
@@ -1274,6 +1542,19 @@ pub struct ReprocessResult {
 /// Reprocess all activities to find matches for a specific segment.
 /// This is useful when a new segment is created and we want to find
 /// all existing activities that pass through it.
+#[utoipa::path(
+    post,
+    path = "/segments/{id}/reprocess",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "Reprocessing results", body = ReprocessResult),
+        (status = 404, description = "Segment not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn reprocess_segment(
     Extension(db): Extension<Database>,
     Extension(store): Extension<ObjectStoreService>,
@@ -1432,6 +1713,23 @@ pub struct StarResponse {
 }
 
 /// Star a segment for the authenticated user.
+#[utoipa::path(
+    post,
+    path = "/segments/{id}/star",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "Segment starred successfully", body = StarResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Segment not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn star_segment(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1447,6 +1745,22 @@ pub async fn star_segment(
 }
 
 /// Unstar a segment for the authenticated user.
+#[utoipa::path(
+    delete,
+    path = "/segments/{id}/star",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "Segment unstarred successfully", body = StarResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn unstar_segment(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1457,6 +1771,22 @@ pub async fn unstar_segment(
 }
 
 /// Check if a segment is starred by the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/starred",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID")
+    ),
+    responses(
+        (status = 200, description = "Starred status", body = StarResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn is_segment_starred(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1467,6 +1797,19 @@ pub async fn is_segment_starred(
 }
 
 /// Get all segments starred by the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/segments/starred",
+    tag = "segments",
+    responses(
+        (status = 200, description = "List of starred segments", body = Vec<Segment>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_starred_segments(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1477,6 +1820,19 @@ pub async fn get_starred_segments(
 
 /// Get all starred segments with effort stats for the authenticated user.
 /// Returns each starred segment with the user's best effort, effort count, and leader time.
+#[utoipa::path(
+    get,
+    path = "/segments/starred/efforts",
+    tag = "segments",
+    responses(
+        (status = 200, description = "List of starred segments with effort stats", body = Vec<StarredSegmentEffort>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_starred_segment_efforts(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1485,7 +1841,7 @@ pub async fn get_starred_segment_efforts(
     Ok(Json(efforts))
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct NearbySegmentsQuery {
     lat: f64,
     lon: f64,
@@ -1493,6 +1849,16 @@ pub struct NearbySegmentsQuery {
     limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/segments/nearby",
+    tag = "segments",
+    params(NearbySegmentsQuery),
+    responses(
+        (status = 200, description = "List of nearby segments", body = Vec<Segment>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_nearby_segments(
     Extension(db): Extension<Database>,
     Query(query): Query<NearbySegmentsQuery>,
@@ -1511,6 +1877,20 @@ pub async fn get_nearby_segments(
 
 /// Get filtered leaderboard for a segment.
 /// Supports time scope, gender, and age group filtering.
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/leaderboard/filtered",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID"),
+        LeaderboardFilters
+    ),
+    responses(
+        (status = 200, description = "Filtered leaderboard", body = LeaderboardResponse),
+        (status = 404, description = "Segment not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_filtered_leaderboard(
     Extension(db): Extension<Database>,
     Path(id): Path<Uuid>,
@@ -1537,6 +1917,24 @@ pub async fn get_filtered_leaderboard(
 }
 
 /// Get the authenticated user's position in a segment leaderboard.
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/leaderboard/position",
+    tag = "segments",
+    params(
+        ("id" = Uuid, Path, description = "Segment ID"),
+        LeaderboardFilters
+    ),
+    responses(
+        (status = 200, description = "User's leaderboard position with surrounding entries", body = LeaderboardPosition),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Segment not found or user has no efforts"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_leaderboard_position(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1570,6 +1968,19 @@ pub async fn get_leaderboard_position(
 // ============================================================================
 
 /// Get the authenticated user's profile with demographics.
+#[utoipa::path(
+    get,
+    path = "/users/me/demographics",
+    tag = "users",
+    responses(
+        (status = 200, description = "User demographics", body = UserWithDemographics),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_my_demographics(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1583,6 +1994,19 @@ pub async fn get_my_demographics(
 }
 
 /// Update the authenticated user's demographics.
+#[utoipa::path(
+    patch,
+    path = "/users/me/demographics",
+    tag = "users",
+    request_body = UpdateDemographicsRequest,
+    responses(
+        (status = 200, description = "Demographics updated successfully", body = UserWithDemographics),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn update_my_demographics(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1597,12 +2021,25 @@ pub async fn update_my_demographics(
 // ============================================================================
 
 /// Get achievements for a specific user.
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct GetAchievementsQuery {
     #[serde(default)]
     pub include_lost: bool,
 }
 
+#[utoipa::path(
+    get,
+    path = "/users/{id}/achievements",
+    tag = "achievements",
+    params(
+        ("id" = Uuid, Path, description = "User ID"),
+        GetAchievementsQuery
+    ),
+    responses(
+        (status = 200, description = "User achievements", body = Vec<AchievementWithSegment>),
+        (status = 404, description = "User not found")
+    )
+)]
 pub async fn get_user_achievements(
     Extension(db): Extension<Database>,
     Path(user_id): Path<Uuid>,
@@ -1615,6 +2052,17 @@ pub async fn get_user_achievements(
 }
 
 /// Get the authenticated user's achievements.
+#[utoipa::path(
+    get,
+    path = "/me/achievements",
+    tag = "achievements",
+    params(GetAchievementsQuery),
+    responses(
+        (status = 200, description = "User achievements", body = Vec<AchievementWithSegment>),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_my_achievements(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
@@ -1627,6 +2075,16 @@ pub async fn get_my_achievements(
 }
 
 /// Get current achievement holders for a segment.
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/achievements",
+    tag = "achievements",
+    params(("id" = Uuid, Path, description = "Segment ID")),
+    responses(
+        (status = 200, description = "Segment achievement holders", body = SegmentAchievements),
+        (status = 404, description = "Segment not found")
+    )
+)]
 pub async fn get_segment_achievements(
     Extension(db): Extension<Database>,
     Path(id): Path<Uuid>,
@@ -1664,6 +2122,18 @@ pub struct GlobalLeaderboardQuery {
     pub offset: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/leaderboard/crowns",
+    tag = "leaderboard",
+    params(
+        ("limit" = i64, Query, description = "Maximum number of entries to return"),
+        ("offset" = i64, Query, description = "Number of entries to skip")
+    ),
+    responses(
+        (status = 200, description = "Crown count leaderboard", body = Vec<CrownCountEntry>)
+    )
+)]
 /// Get global crown count leaderboard.
 pub async fn get_crown_leaderboard(
     Extension(db): Extension<Database>,
@@ -1675,6 +2145,18 @@ pub async fn get_crown_leaderboard(
     Ok(Json(entries))
 }
 
+#[utoipa::path(
+    get,
+    path = "/leaderboard/distance",
+    tag = "leaderboard",
+    params(
+        ("limit" = i64, Query, description = "Maximum number of entries to return"),
+        ("offset" = i64, Query, description = "Number of entries to skip")
+    ),
+    responses(
+        (status = 200, description = "Distance leaderboard", body = Vec<DistanceLeaderEntry>)
+    )
+)]
 /// Get global distance leaderboard.
 pub async fn get_distance_leaderboard(
     Extension(db): Extension<Database>,
@@ -1686,6 +2168,14 @@ pub async fn get_distance_leaderboard(
     Ok(Json(entries))
 }
 
+#[utoipa::path(
+    get,
+    path = "/countries",
+    tag = "reference",
+    responses(
+        (status = 200, description = "List of countries with user counts", body = Vec<CountryStats>)
+    )
+)]
 /// Get list of countries with user counts for the filter dropdown.
 pub async fn get_countries(
     Extension(db): Extension<Database>,
@@ -1698,6 +2188,19 @@ pub async fn get_countries(
 // Social Handlers (Follows)
 // ============================================================================
 
+#[utoipa::path(
+    post,
+    path = "/users/{id}/follow",
+    tag = "social",
+    params(("id" = Uuid, Path, description = "User ID to follow")),
+    responses(
+        (status = 201, description = "Successfully followed user"),
+        (status = 200, description = "Already following (idempotent)"),
+        (status = 400, description = "Cannot follow yourself"),
+        (status = 404, description = "User not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Follow a user.
 pub async fn follow_user(
     Extension(db): Extension<Database>,
@@ -1733,6 +2236,17 @@ pub async fn follow_user(
     Ok(StatusCode::CREATED)
 }
 
+#[utoipa::path(
+    delete,
+    path = "/users/{id}/follow",
+    tag = "social",
+    params(("id" = Uuid, Path, description = "User ID to unfollow")),
+    responses(
+        (status = 204, description = "Successfully unfollowed user"),
+        (status = 404, description = "Was not following this user"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Unfollow a user.
 pub async fn unfollow_user(
     Extension(db): Extension<Database>,
@@ -1753,6 +2267,16 @@ pub struct FollowStatusResponse {
     pub is_following: bool,
 }
 
+#[utoipa::path(
+    get,
+    path = "/users/{id}/follow/status",
+    tag = "social",
+    params(("id" = Uuid, Path, description = "User ID to check follow status for")),
+    responses(
+        (status = 200, description = "Follow status retrieved", body = FollowStatusResponse),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Check if the authenticated user is following a specific user.
 pub async fn get_follow_status(
     Extension(db): Extension<Database>,
@@ -1777,6 +2301,19 @@ pub struct FollowListResponse {
     pub total_count: i32,
 }
 
+#[utoipa::path(
+    get,
+    path = "/users/{id}/followers",
+    tag = "social",
+    params(
+        ("id" = Uuid, Path, description = "User ID to get followers for"),
+        ("limit" = Option<i64>, Query, description = "Maximum number of results"),
+        ("offset" = Option<i64>, Query, description = "Offset for pagination")
+    ),
+    responses(
+        (status = 200, description = "Followers retrieved", body = FollowListResponse)
+    )
+)]
 /// Get a user's followers.
 pub async fn get_followers(
     Extension(db): Extension<Database>,
@@ -1794,6 +2331,19 @@ pub async fn get_followers(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/users/{id}/following",
+    tag = "social",
+    params(
+        ("id" = Uuid, Path, description = "User ID to get following list for"),
+        ("limit" = Option<i64>, Query, description = "Maximum number of results"),
+        ("offset" = Option<i64>, Query, description = "Offset for pagination")
+    ),
+    responses(
+        (status = 200, description = "Following list retrieved", body = FollowListResponse)
+    )
+)]
 /// Get users that a user is following.
 pub async fn get_following(
     Extension(db): Extension<Database>,
@@ -1811,6 +2361,16 @@ pub async fn get_following(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/users/{id}/profile",
+    tag = "social",
+    params(("id" = Uuid, Path, description = "User ID to get profile for")),
+    responses(
+        (status = 200, description = "User profile retrieved", body = crate::models::UserProfile),
+        (status = 404, description = "User not found")
+    )
+)]
 /// Get a user's profile with follow counts.
 pub async fn get_user_profile(
     Extension(db): Extension<Database>,
@@ -1836,6 +2396,19 @@ pub struct NotificationsQuery {
     pub offset: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/notifications",
+    tag = "notifications",
+    params(
+        ("limit" = Option<i64>, Query, description = "Maximum number of notifications to return"),
+        ("offset" = Option<i64>, Query, description = "Number of notifications to skip")
+    ),
+    responses(
+        (status = 200, description = "List of notifications", body = crate::models::NotificationsResponse),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Get notifications for the authenticated user.
 pub async fn get_notifications(
     Extension(db): Extension<Database>,
@@ -1855,6 +2428,19 @@ pub async fn get_notifications(
     }))
 }
 
+#[utoipa::path(
+    put,
+    path = "/notifications/{id}/read",
+    tag = "notifications",
+    params(
+        ("id" = Uuid, Path, description = "Notification ID")
+    ),
+    responses(
+        (status = 200, description = "Notification marked as read"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Notification not found")
+    )
+)]
 /// Mark a notification as read.
 pub async fn mark_notification_read(
     Extension(db): Extension<Database>,
@@ -1872,6 +2458,15 @@ pub async fn mark_notification_read(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/notifications/read-all",
+    tag = "notifications",
+    responses(
+        (status = 200, description = "All notifications marked as read", body = Value),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Mark all notifications as read.
 pub async fn mark_all_notifications_read(
     Extension(db): Extension<Database>,
@@ -1893,6 +2488,19 @@ pub struct FeedQuery {
     pub offset: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/feed",
+    tag = "feed",
+    params(
+        ("limit" = Option<i64>, Query, description = "Maximum number of feed items to return"),
+        ("offset" = Option<i64>, Query, description = "Number of feed items to skip")
+    ),
+    responses(
+        (status = 200, description = "Activity feed", body = Vec<crate::models::FeedActivity>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Get the activity feed for the authenticated user.
 /// Returns activities from users they follow.
 pub async fn get_feed(
@@ -1916,6 +2524,18 @@ pub struct KudosResponse {
     pub kudos_count: i32,
 }
 
+#[utoipa::path(
+    post,
+    path = "/activities/{id}/kudos",
+    tag = "kudos",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    responses(
+        (status = 200, description = "Kudos given successfully", body = KudosResponse),
+        (status = 400, description = "Cannot give kudos to own activity"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Activity not found")
+    )
+)]
 /// Give kudos to an activity.
 pub async fn give_kudos(
     Extension(db): Extension<Database>,
@@ -1962,6 +2582,16 @@ pub async fn give_kudos(
     }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/activities/{id}/kudos",
+    tag = "kudos",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    responses(
+        (status = 204, description = "Kudos removed successfully"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Remove kudos from an activity.
 pub async fn remove_kudos(
     Extension(db): Extension<Database>,
@@ -1977,6 +2607,16 @@ pub struct KudosStatusResponse {
     pub has_given: bool,
 }
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/kudos/status",
+    tag = "kudos",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    responses(
+        (status = 200, description = "Kudos status retrieved", body = KudosStatusResponse),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Check if user has given kudos to an activity.
 pub async fn get_kudos_status(
     Extension(db): Extension<Database>,
@@ -1987,6 +2627,15 @@ pub async fn get_kudos_status(
     Ok(Json(KudosStatusResponse { has_given }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/kudos",
+    tag = "kudos",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    responses(
+        (status = 200, description = "List of users who gave kudos", body = Vec<crate::models::KudosGiver>)
+    )
+)]
 /// Get users who gave kudos to an activity.
 pub async fn get_kudos_givers(
     Extension(db): Extension<Database>,
@@ -2006,6 +2655,18 @@ pub struct AddCommentRequest {
     pub parent_id: Option<Uuid>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/activities/{id}/comments",
+    tag = "comments",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    request_body = AddCommentRequest,
+    responses(
+        (status = 200, description = "Comment added successfully", body = crate::models::CommentWithUser),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Activity not found")
+    )
+)]
 /// Add a comment to an activity.
 pub async fn add_comment(
     Extension(db): Extension<Database>,
@@ -2051,6 +2712,15 @@ pub async fn add_comment(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/comments",
+    tag = "comments",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    responses(
+        (status = 200, description = "List of comments for the activity", body = Vec<crate::models::CommentWithUser>)
+    )
+)]
 /// Get comments for an activity.
 pub async fn get_comments(
     Extension(db): Extension<Database>,
@@ -2060,6 +2730,17 @@ pub async fn get_comments(
     Ok(Json(comments))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/comments/{id}",
+    tag = "comments",
+    params(("id" = Uuid, Path, description = "Comment ID")),
+    responses(
+        (status = 204, description = "Comment deleted successfully"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Comment not found or not owned by user")
+    )
+)]
 /// Delete a comment.
 pub async fn delete_comment(
     Extension(db): Extension<Database>,
@@ -2079,6 +2760,14 @@ pub async fn delete_comment(
 // ============================================================================
 
 /// Get platform-wide statistics (active users, segments created, activities uploaded).
+#[utoipa::path(
+    get,
+    path = "/stats",
+    tag = "stats",
+    responses(
+        (status = 200, description = "Platform statistics", body = Stats)
+    )
+)]
 pub async fn get_stats(Extension(db): Extension<Database>) -> Result<Json<Stats>, AppError> {
     let stats = db.get_stats().await?;
     Ok(Json(stats))
@@ -2088,6 +2777,16 @@ pub async fn get_stats(Extension(db): Extension<Database>) -> Result<Json<Stats>
 // Team Handlers
 // ============================================================================
 
+#[utoipa::path(
+    post,
+    path = "/teams",
+    tag = "teams",
+    request_body = CreateTeamRequest,
+    responses(
+        (status = 201, description = "Team created", body = Team),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Create a new team.
 pub async fn create_team(
     Extension(db): Extension<Database>,
@@ -2114,6 +2813,19 @@ pub async fn create_team(
     Ok((StatusCode::CREATED, Json(team)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/teams/{id}",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 200, description = "Team details with membership context", body = TeamWithMembership),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// Get a team by ID (with membership context for the current user).
 pub async fn get_team(
     Extension(db): Extension<Database>,
@@ -2133,6 +2845,15 @@ pub async fn get_team(
     Ok(Json(team))
 }
 
+#[utoipa::path(
+    get,
+    path = "/teams",
+    tag = "teams",
+    responses(
+        (status = 200, description = "List of teams user is a member of", body = Vec<TeamWithMembership>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// List teams the authenticated user is a member of.
 pub async fn list_my_teams(
     Extension(db): Extension<Database>,
@@ -2150,6 +2871,18 @@ pub struct DiscoverTeamsQuery {
     pub offset: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/teams/discover",
+    tag = "teams",
+    params(
+        ("limit" = Option<i64>, Query, description = "Maximum number of teams to return"),
+        ("offset" = Option<i64>, Query, description = "Number of teams to skip")
+    ),
+    responses(
+        (status = 200, description = "List of discoverable teams", body = Vec<TeamSummary>)
+    )
+)]
 /// List discoverable teams.
 pub async fn discover_teams(
     Extension(db): Extension<Database>,
@@ -2161,6 +2894,21 @@ pub async fn discover_teams(
     Ok(Json(teams))
 }
 
+#[utoipa::path(
+    put,
+    path = "/teams/{id}",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    request_body = UpdateTeamRequest,
+    responses(
+        (status = 200, description = "Team updated", body = Team),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - insufficient permissions"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// Update a team's settings.
 pub async fn update_team(
     Extension(db): Extension<Database>,
@@ -2193,6 +2941,20 @@ pub async fn update_team(
     Ok(Json(team))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/teams/{id}",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 204, description = "Team deleted"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - insufficient permissions"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// Delete a team.
 pub async fn delete_team(
     Extension(db): Extension<Database>,
@@ -2220,6 +2982,19 @@ pub async fn delete_team(
 // Team Membership Handlers
 // ============================================================================
 
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/members",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 200, description = "List of team members", body = Vec<TeamMember>),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// List members of a team.
 pub async fn list_team_members(
     Extension(db): Extension<Database>,
@@ -2240,6 +3015,21 @@ pub async fn list_team_members(
     Ok(Json(members))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/teams/{team_id}/members/{user_id}",
+    tag = "teams",
+    params(
+        ("team_id" = Uuid, Path, description = "Team ID"),
+        ("user_id" = Uuid, Path, description = "User ID")
+    ),
+    responses(
+        (status = 204, description = "Member removed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Team or member not found")
+    )
+)]
 /// Remove a member from a team (admin/owner) or leave team (self).
 pub async fn remove_team_member(
     Extension(db): Extension<Database>,
@@ -2293,6 +3083,22 @@ pub async fn remove_team_member(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/teams/{team_id}/members/{user_id}/role",
+    tag = "teams",
+    params(
+        ("team_id" = Uuid, Path, description = "Team ID"),
+        ("user_id" = Uuid, Path, description = "User ID")
+    ),
+    request_body = ChangeMemberRoleRequest,
+    responses(
+        (status = 200, description = "Role changed", body = crate::models::TeamMembership),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Team or member not found")
+    )
+)]
 /// Change a member's role.
 pub async fn change_member_role(
     Extension(db): Extension<Database>,
@@ -2342,6 +3148,22 @@ pub async fn change_member_role(
 // Team Join Handlers
 // ============================================================================
 
+#[utoipa::path(
+    post,
+    path = "/teams/{id}/join",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    request_body = JoinTeamRequest,
+    responses(
+        (status = 201, description = "Joined team directly (open policy)"),
+        (status = 202, description = "Join request submitted (request policy)"),
+        (status = 400, description = "Already a member or invitation-only team"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// Request to join a team (for request-based teams) or join directly (for open teams).
 pub async fn join_team(
     Extension(db): Extension<Database>,
@@ -2377,6 +3199,20 @@ pub async fn join_team(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/teams/{id}/leave",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 204, description = "Left team"),
+        (status = 400, description = "Owner cannot leave team"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Team not found or not a member")
+    )
+)]
 /// Leave a team.
 pub async fn leave_team(
     Extension(db): Extension<Database>,
@@ -2401,6 +3237,20 @@ pub async fn leave_team(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/join-requests",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 200, description = "List of pending join requests", body = Vec<crate::models::TeamJoinRequestWithUser>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// Get pending join requests for a team (admin only).
 pub async fn get_join_requests(
     Extension(db): Extension<Database>,
@@ -2425,6 +3275,22 @@ pub struct ReviewJoinRequestRequest {
     pub approved: bool,
 }
 
+#[utoipa::path(
+    put,
+    path = "/teams/{team_id}/join-requests/{request_id}",
+    tag = "teams",
+    params(
+        ("team_id" = Uuid, Path, description = "Team ID"),
+        ("request_id" = Uuid, Path, description = "Join request ID")
+    ),
+    request_body = ReviewJoinRequestRequest,
+    responses(
+        (status = 204, description = "Request reviewed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Team or request not found")
+    )
+)]
 /// Approve or reject a join request.
 pub async fn review_join_request(
     Extension(db): Extension<Database>,
@@ -2498,6 +3364,21 @@ pub async fn review_join_request(
 // Team Invitation Handlers
 // ============================================================================
 
+#[utoipa::path(
+    post,
+    path = "/teams/{id}/invitations",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    request_body = InviteToTeamRequest,
+    responses(
+        (status = 201, description = "Invitation created", body = crate::models::TeamInvitation),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - insufficient permissions"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// Create an invitation to join a team.
 pub async fn invite_to_team(
     Extension(db): Extension<Database>,
@@ -2541,6 +3422,20 @@ pub async fn invite_to_team(
     Ok((StatusCode::CREATED, Json(invitation)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/invitations",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 200, description = "List of pending invitations", body = Vec<crate::models::TeamInvitation>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - insufficient permissions"),
+        (status = 404, description = "Team not found")
+    )
+)]
 /// Get pending invitations for a team (admin only).
 pub async fn get_team_invitations(
     Extension(db): Extension<Database>,
@@ -2560,6 +3455,21 @@ pub async fn get_team_invitations(
     Ok(Json(invitations))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/teams/{team_id}/invitations/{invitation_id}",
+    tag = "teams",
+    params(
+        ("team_id" = Uuid, Path, description = "Team ID"),
+        ("invitation_id" = Uuid, Path, description = "Invitation ID")
+    ),
+    responses(
+        (status = 204, description = "Invitation revoked"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - insufficient permissions"),
+        (status = 404, description = "Invitation not found")
+    )
+)]
 /// Revoke an invitation.
 pub async fn revoke_invitation(
     Extension(db): Extension<Database>,
@@ -2582,6 +3492,19 @@ pub async fn revoke_invitation(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/invitations/{id}",
+    tag = "teams",
+    params(
+        ("id" = String, Path, description = "Invitation token")
+    ),
+    responses(
+        (status = 200, description = "Invitation details", body = crate::models::TeamInvitationWithDetails),
+        (status = 400, description = "Invitation has expired"),
+        (status = 404, description = "Invitation not found")
+    )
+)]
 /// Get invitation details by token.
 pub async fn get_invitation(
     Extension(db): Extension<Database>,
@@ -2600,6 +3523,20 @@ pub async fn get_invitation(
     Ok(Json(invitation))
 }
 
+#[utoipa::path(
+    post,
+    path = "/invitations/{id}/accept",
+    tag = "teams",
+    params(
+        ("id" = String, Path, description = "Invitation token")
+    ),
+    responses(
+        (status = 200, description = "Invitation accepted"),
+        (status = 400, description = "Invalid invitation or already a member"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Invitation not found")
+    )
+)]
 /// Accept an invitation.
 pub async fn accept_invitation(
     Extension(db): Extension<Database>,
@@ -2658,6 +3595,17 @@ pub async fn accept_invitation(
 // Activity-Team Sharing Handlers
 // ============================================================================
 
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/teams",
+    tag = "teams",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    responses(
+        (status = 200, description = "Teams the activity is shared with", body = Vec<TeamSummary>),
+        (status = 404, description = "Activity not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Get teams an activity is shared with.
 pub async fn get_activity_teams(
     Extension(db): Extension<Database>,
@@ -2684,6 +3632,19 @@ pub async fn get_activity_teams(
     Ok(Json(teams))
 }
 
+#[utoipa::path(
+    post,
+    path = "/activities/{id}/teams",
+    tag = "teams",
+    params(("id" = Uuid, Path, description = "Activity ID")),
+    request_body = crate::models::ShareWithTeamsRequest,
+    responses(
+        (status = 200, description = "Activity shared with teams"),
+        (status = 404, description = "Activity not found"),
+        (status = 403, description = "Forbidden - not the owner"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Share an activity with teams.
 pub async fn share_activity_with_teams(
     Extension(db): Extension<Database>,
@@ -2720,6 +3681,21 @@ pub async fn share_activity_with_teams(
     Ok(StatusCode::OK)
 }
 
+#[utoipa::path(
+    delete,
+    path = "/activities/{activity_id}/teams/{team_id}",
+    tag = "teams",
+    params(
+        ("activity_id" = Uuid, Path, description = "Activity ID"),
+        ("team_id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 204, description = "Activity unshared from team"),
+        (status = 404, description = "Activity or sharing not found"),
+        (status = 403, description = "Forbidden - not the owner"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Unshare an activity from a team.
 pub async fn unshare_activity_from_team(
     Extension(db): Extension<Database>,
@@ -2747,6 +3723,17 @@ pub async fn unshare_activity_from_team(
 // Segment-Team Sharing Handlers
 // ============================================================================
 
+#[utoipa::path(
+    get,
+    path = "/segments/{id}/teams",
+    tag = "teams",
+    params(("id" = Uuid, Path, description = "Segment ID")),
+    responses(
+        (status = 200, description = "Teams the segment is shared with", body = Vec<crate::models::TeamSummary>),
+        (status = 404, description = "Segment not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Get teams a segment is shared with.
 pub async fn get_segment_teams(
     Extension(db): Extension<Database>,
@@ -2773,6 +3760,19 @@ pub async fn get_segment_teams(
     Ok(Json(teams))
 }
 
+#[utoipa::path(
+    post,
+    path = "/segments/{id}/teams",
+    tag = "teams",
+    params(("id" = Uuid, Path, description = "Segment ID")),
+    request_body = crate::models::ShareWithTeamsRequest,
+    responses(
+        (status = 200, description = "Segment shared with teams"),
+        (status = 404, description = "Segment not found"),
+        (status = 403, description = "Forbidden - not the creator"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Share a segment with teams.
 pub async fn share_segment_with_teams(
     Extension(db): Extension<Database>,
@@ -2809,6 +3809,21 @@ pub async fn share_segment_with_teams(
     Ok(StatusCode::OK)
 }
 
+#[utoipa::path(
+    delete,
+    path = "/segments/{segment_id}/teams/{team_id}",
+    tag = "teams",
+    params(
+        ("segment_id" = Uuid, Path, description = "Segment ID"),
+        ("team_id" = Uuid, Path, description = "Team ID")
+    ),
+    responses(
+        (status = 204, description = "Segment unshared from team"),
+        (status = 404, description = "Segment or sharing not found"),
+        (status = 403, description = "Forbidden - not the creator"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Unshare a segment from a team.
 pub async fn unshare_segment_from_team(
     Extension(db): Extension<Database>,
@@ -2844,6 +3859,21 @@ pub struct TeamContentQuery {
     pub offset: i64,
 }
 
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/activities",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID"),
+        ("limit" = Option<i64>, Query, description = "Maximum number of results"),
+        ("offset" = Option<i64>, Query, description = "Number of results to skip")
+    ),
+    responses(
+        (status = 200, description = "Activities shared with the team", body = Vec<crate::models::FeedActivity>),
+        (status = 404, description = "Team not found or not a member"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Get activities shared with a team.
 pub async fn get_team_activities(
     Extension(db): Extension<Database>,
@@ -2862,6 +3892,21 @@ pub async fn get_team_activities(
     Ok(Json(activities))
 }
 
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/segments",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID"),
+        ("limit" = Option<i64>, Query, description = "Maximum number of results"),
+        ("offset" = Option<i64>, Query, description = "Number of results to skip")
+    ),
+    responses(
+        (status = 200, description = "Segments shared with the team", body = Vec<crate::models::Segment>),
+        (status = 404, description = "Team not found or not a member"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
 /// Get segments shared with a team.
 pub async fn get_team_segments(
     Extension(db): Extension<Database>,

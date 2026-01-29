@@ -894,3 +894,1144 @@ export type Visibility = 'public' | 'private';
  * Weight class for leaderboard filtering
  */
 export type WeightClass = 'all' | 'featherweight' | 'lightweight' | 'welterweight' | 'middleweight' | 'cruiserweight' | 'heavyweight';
+
+export type NewActivityData = {
+    query: {
+        /**
+         * Activity type ID
+         */
+        activity_type_id: string;
+        /**
+         * Activity name
+         */
+        name: string;
+        /**
+         * Multi-sport activity type IDs per segment
+         */
+        segment_types?: Array<(string)>;
+        /**
+         * Comma-separated team IDs for teams_only visibility
+         */
+        team_ids?: string;
+        /**
+         * Multi-sport segment boundary timestamps
+         */
+        type_boundaries?: Array<(string)>;
+        /**
+         * Visibility: public, private, or teams_only
+         */
+        visibility?: string;
+    };
+};
+
+export type NewActivityResponse = (Activity);
+
+export type NewActivityError = (unknown);
+
+export type UnshareActivityFromTeamData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        activity_id: string;
+        /**
+         * Team ID
+         */
+        team_id: string;
+    };
+};
+
+export type UnshareActivityFromTeamResponse = (void);
+
+export type UnshareActivityFromTeamError = (unknown);
+
+export type GetActivityData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GetActivityResponse = (Activity);
+
+export type GetActivityError = (unknown);
+
+export type DeleteActivityData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type DeleteActivityResponse = (void);
+
+export type DeleteActivityError = (unknown);
+
+export type UpdateActivityData = {
+    body: UpdateActivityRequest;
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type UpdateActivityResponse = (Activity);
+
+export type UpdateActivityError = (unknown);
+
+export type GetCommentsData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GetCommentsResponse = (Array<CommentWithUser>);
+
+export type GetCommentsError = unknown;
+
+export type AddCommentData = {
+    body: AddCommentRequest;
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type AddCommentResponse = (CommentWithUser);
+
+export type AddCommentError = (unknown);
+
+export type DownloadGpxFileData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type DownloadGpxFileResponse = (unknown);
+
+export type DownloadGpxFileError = (unknown);
+
+export type GetKudosGiversData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GetKudosGiversResponse = (Array<KudosGiver>);
+
+export type GetKudosGiversError = unknown;
+
+export type GiveKudosData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GiveKudosResponse = (KudosResponse);
+
+export type GiveKudosError = (unknown);
+
+export type RemoveKudosData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type RemoveKudosResponse = (void);
+
+export type RemoveKudosError = (unknown);
+
+export type GetKudosStatusData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GetKudosStatusResponse = (KudosStatusResponse);
+
+export type GetKudosStatusError = (unknown);
+
+export type GetActivitySegmentsData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GetActivitySegmentsResponse = (Array<ActivitySegmentEffort>);
+
+export type GetActivitySegmentsError = (unknown);
+
+export type GetActivityTeamsData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GetActivityTeamsResponse = (Array<TeamSummary>);
+
+export type GetActivityTeamsError = (unknown);
+
+export type ShareActivityWithTeamsData = {
+    body: ShareWithTeamsRequest;
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type ShareActivityWithTeamsResponse = (unknown);
+
+export type ShareActivityWithTeamsError = (unknown);
+
+export type GetActivityTrackData = {
+    path: {
+        /**
+         * Activity ID
+         */
+        id: string;
+    };
+};
+
+export type GetActivityTrackResponse = (TrackData);
+
+export type GetActivityTrackError = (unknown);
+
+export type ListActivityTypesResponse = (Array<ActivityTypeRow>);
+
+export type ListActivityTypesError = unknown;
+
+export type CreateActivityTypeData = {
+    body: CreateActivityTypeRequest;
+};
+
+export type CreateActivityTypeResponse = (ActivityTypeRow);
+
+export type CreateActivityTypeError = (unknown);
+
+export type ResolveActivityTypeData = {
+    query: {
+        /**
+         * Activity type name or alias to resolve
+         */
+        name: string;
+    };
+};
+
+export type ResolveActivityTypeResponse = (ResolveTypeResponse);
+
+export type ResolveActivityTypeError = unknown;
+
+export type GetActivityTypeData = {
+    path: {
+        /**
+         * Activity type ID
+         */
+        id: string;
+    };
+};
+
+export type GetActivityTypeResponse = (ActivityTypeRow);
+
+export type GetActivityTypeError = (unknown);
+
+export type LoginData = {
+    body: LoginRequest;
+};
+
+export type LoginResponse = (AuthResponse);
+
+export type LoginError = (unknown);
+
+export type MeResponse = (UserResponse);
+
+export type MeError = (unknown);
+
+export type RegisterData = {
+    body: RegisterRequest;
+};
+
+export type RegisterResponse = (AuthResponse);
+
+export type RegisterError = (unknown);
+
+export type DeleteCommentData = {
+    path: {
+        /**
+         * Comment ID
+         */
+        id: string;
+    };
+};
+
+export type DeleteCommentResponse = (void);
+
+export type DeleteCommentError = (unknown);
+
+export type GetCountriesResponse = (Array<CountryStats>);
+
+export type GetCountriesError = unknown;
+
+export type GetFeedData = {
+    query?: {
+        /**
+         * Maximum number of feed items to return
+         */
+        limit?: number;
+        /**
+         * Number of feed items to skip
+         */
+        offset?: number;
+    };
+};
+
+export type GetFeedResponse = (Array<FeedActivity>);
+
+export type GetFeedError = (unknown);
+
+export type HealthCheckResponse = (unknown);
+
+export type HealthCheckError = unknown;
+
+export type GetInvitationData = {
+    path: {
+        /**
+         * Invitation token
+         */
+        id: string;
+    };
+};
+
+export type GetInvitationResponse = (TeamInvitationWithDetails);
+
+export type GetInvitationError = (unknown);
+
+export type AcceptInvitationData = {
+    path: {
+        /**
+         * Invitation token
+         */
+        id: string;
+    };
+};
+
+export type AcceptInvitationResponse = (unknown);
+
+export type AcceptInvitationError = (unknown);
+
+export type GetCrownLeaderboardData = {
+    query: {
+        /**
+         * Maximum number of entries to return
+         */
+        limit: number;
+        /**
+         * Number of entries to skip
+         */
+        offset: number;
+    };
+};
+
+export type GetCrownLeaderboardResponse = (Array<CrownCountEntry>);
+
+export type GetCrownLeaderboardError = unknown;
+
+export type GetDistanceLeaderboardData = {
+    query: {
+        /**
+         * Maximum number of entries to return
+         */
+        limit: number;
+        /**
+         * Number of entries to skip
+         */
+        offset: number;
+    };
+};
+
+export type GetDistanceLeaderboardResponse = (Array<DistanceLeaderEntry>);
+
+export type GetDistanceLeaderboardError = unknown;
+
+export type GetMyAchievementsData = {
+    query?: {
+        include_lost?: boolean;
+    };
+};
+
+export type GetMyAchievementsResponse = (Array<AchievementWithSegment>);
+
+export type GetMyAchievementsError = (unknown);
+
+export type GetNotificationsData = {
+    query?: {
+        /**
+         * Maximum number of notifications to return
+         */
+        limit?: number;
+        /**
+         * Number of notifications to skip
+         */
+        offset?: number;
+    };
+};
+
+export type GetNotificationsResponse = (NotificationsResponse);
+
+export type GetNotificationsError = (unknown);
+
+export type MarkAllNotificationsReadResponse = (unknown);
+
+export type MarkAllNotificationsReadError = (unknown);
+
+export type MarkNotificationReadData = {
+    path: {
+        /**
+         * Notification ID
+         */
+        id: string;
+    };
+};
+
+export type MarkNotificationReadResponse = (unknown);
+
+export type MarkNotificationReadError = (unknown);
+
+export type ListSegmentsData = {
+    query?: {
+        activity_type_id?: (string) | null;
+        /**
+         * Filter by climb category
+         */
+        climb_category?: (null | ClimbCategoryFilter);
+        limit?: number;
+        /**
+         * Maximum distance in meters
+         */
+        max_distance_meters?: (number) | null;
+        /**
+         * Minimum distance in meters
+         */
+        min_distance_meters?: (number) | null;
+        /**
+         * Case-insensitive name search
+         */
+        search?: (string) | null;
+        /**
+         * Sort field
+         */
+        sort_by?: SegmentSortBy;
+        /**
+         * Sort order
+         */
+        sort_order?: SortOrder;
+    };
+};
+
+export type ListSegmentsResponse = (Array<Segment>);
+
+export type ListSegmentsError = (unknown);
+
+export type CreateSegmentData = {
+    body: CreateSegmentRequest;
+};
+
+export type CreateSegmentResponse = (Segment);
+
+export type CreateSegmentError = (unknown);
+
+export type GetNearbySegmentsData = {
+    query: {
+        lat: number;
+        limit?: (number) | null;
+        lon: number;
+        radius_meters?: (number) | null;
+    };
+};
+
+export type GetNearbySegmentsResponse = (Array<Segment>);
+
+export type GetNearbySegmentsError = (unknown);
+
+export type PreviewSegmentData = {
+    body: PreviewSegmentRequest;
+};
+
+export type PreviewSegmentResponse2 = (PreviewSegmentResponse);
+
+export type PreviewSegmentError = (unknown);
+
+export type GetStarredSegmentsResponse = (Array<Segment>);
+
+export type GetStarredSegmentsError = (unknown);
+
+export type GetStarredSegmentEffortsResponse = (Array<StarredSegmentEffort>);
+
+export type GetStarredSegmentEffortsError = (unknown);
+
+export type GetSegmentData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type GetSegmentResponse = (Segment);
+
+export type GetSegmentError = (unknown);
+
+export type GetSegmentAchievementsData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type GetSegmentAchievementsResponse = (SegmentAchievements);
+
+export type GetSegmentAchievementsError = (unknown);
+
+export type GetMySegmentEffortsData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type GetMySegmentEffortsResponse = (Array<SegmentEffort>);
+
+export type GetMySegmentEffortsError = (unknown);
+
+export type GetSegmentLeaderboardData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type GetSegmentLeaderboardResponse = (Array<SegmentEffort>);
+
+export type GetSegmentLeaderboardError = (unknown);
+
+export type GetFilteredLeaderboardData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+    query?: {
+        age_group?: AgeGroup;
+        country?: (string) | null;
+        gender?: GenderFilter;
+        limit?: number;
+        offset?: number;
+        scope?: LeaderboardScope;
+        weight_class?: WeightClass;
+    };
+};
+
+export type GetFilteredLeaderboardResponse = (LeaderboardResponse);
+
+export type GetFilteredLeaderboardError = (unknown);
+
+export type GetLeaderboardPositionData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+    query?: {
+        age_group?: AgeGroup;
+        country?: (string) | null;
+        gender?: GenderFilter;
+        limit?: number;
+        offset?: number;
+        scope?: LeaderboardScope;
+        weight_class?: WeightClass;
+    };
+};
+
+export type GetLeaderboardPositionResponse = (LeaderboardPosition);
+
+export type GetLeaderboardPositionError = (unknown);
+
+export type ReprocessSegmentData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type ReprocessSegmentResponse = (ReprocessResult);
+
+export type ReprocessSegmentError = (unknown);
+
+export type StarSegmentData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type StarSegmentResponse = (StarResponse);
+
+export type StarSegmentError = (unknown);
+
+export type UnstarSegmentData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type UnstarSegmentResponse = (StarResponse);
+
+export type UnstarSegmentError = (unknown);
+
+export type IsSegmentStarredData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type IsSegmentStarredResponse = (StarResponse);
+
+export type IsSegmentStarredError = (unknown);
+
+export type GetSegmentTeamsData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type GetSegmentTeamsResponse = (Array<TeamSummary>);
+
+export type GetSegmentTeamsError = (unknown);
+
+export type ShareSegmentWithTeamsData = {
+    body: ShareWithTeamsRequest;
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type ShareSegmentWithTeamsResponse = (unknown);
+
+export type ShareSegmentWithTeamsError = (unknown);
+
+export type GetSegmentTrackData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        id: string;
+    };
+};
+
+export type GetSegmentTrackResponse = (SegmentTrackData);
+
+export type GetSegmentTrackError = (unknown);
+
+export type UnshareSegmentFromTeamData = {
+    path: {
+        /**
+         * Segment ID
+         */
+        segment_id: string;
+        /**
+         * Team ID
+         */
+        team_id: string;
+    };
+};
+
+export type UnshareSegmentFromTeamResponse = (void);
+
+export type UnshareSegmentFromTeamError = (unknown);
+
+export type GetStatsResponse = (Stats);
+
+export type GetStatsError = unknown;
+
+export type ListMyTeamsResponse = (Array<TeamWithMembership>);
+
+export type ListMyTeamsError = (unknown);
+
+export type CreateTeamData = {
+    body: CreateTeamRequest;
+};
+
+export type CreateTeamResponse = (Team);
+
+export type CreateTeamError = (unknown);
+
+export type DiscoverTeamsData = {
+    query?: {
+        /**
+         * Maximum number of teams to return
+         */
+        limit?: number;
+        /**
+         * Number of teams to skip
+         */
+        offset?: number;
+    };
+};
+
+export type DiscoverTeamsResponse = (Array<TeamSummary>);
+
+export type DiscoverTeamsError = unknown;
+
+export type GetTeamData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type GetTeamResponse = (TeamWithMembership);
+
+export type GetTeamError = (unknown);
+
+export type UpdateTeamData = {
+    body: UpdateTeamRequest;
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type UpdateTeamResponse = (Team);
+
+export type UpdateTeamError = (unknown);
+
+export type DeleteTeamData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type DeleteTeamResponse = (void);
+
+export type DeleteTeamError = (unknown);
+
+export type GetTeamActivitiesData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Maximum number of results
+         */
+        limit?: number;
+        /**
+         * Number of results to skip
+         */
+        offset?: number;
+    };
+};
+
+export type GetTeamActivitiesResponse = (Array<FeedActivity>);
+
+export type GetTeamActivitiesError = (unknown);
+
+export type GetTeamInvitationsData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type GetTeamInvitationsResponse = (Array<TeamInvitation>);
+
+export type GetTeamInvitationsError = (unknown);
+
+export type InviteToTeamData = {
+    body: InviteToTeamRequest;
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type InviteToTeamResponse = (TeamInvitation);
+
+export type InviteToTeamError = (unknown);
+
+export type JoinTeamData = {
+    body: JoinTeamRequest;
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type JoinTeamResponse = (unknown);
+
+export type JoinTeamError = (unknown);
+
+export type GetJoinRequestsData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type GetJoinRequestsResponse = (Array<TeamJoinRequestWithUser>);
+
+export type GetJoinRequestsError = (unknown);
+
+export type LeaveTeamData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type LeaveTeamResponse = (void);
+
+export type LeaveTeamError = (unknown);
+
+export type ListTeamMembersData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+};
+
+export type ListTeamMembersResponse = (Array<TeamMember>);
+
+export type ListTeamMembersError = (unknown);
+
+export type GetTeamSegmentsData = {
+    path: {
+        /**
+         * Team ID
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Maximum number of results
+         */
+        limit?: number;
+        /**
+         * Number of results to skip
+         */
+        offset?: number;
+    };
+};
+
+export type GetTeamSegmentsResponse = (Array<Segment>);
+
+export type GetTeamSegmentsError = (unknown);
+
+export type RevokeInvitationData = {
+    path: {
+        /**
+         * Invitation ID
+         */
+        invitation_id: string;
+        /**
+         * Team ID
+         */
+        team_id: string;
+    };
+};
+
+export type RevokeInvitationResponse = (void);
+
+export type RevokeInvitationError = (unknown);
+
+export type ReviewJoinRequestData = {
+    body: ReviewJoinRequestRequest;
+    path: {
+        /**
+         * Join request ID
+         */
+        request_id: string;
+        /**
+         * Team ID
+         */
+        team_id: string;
+    };
+};
+
+export type ReviewJoinRequestResponse = (void);
+
+export type ReviewJoinRequestError = (unknown);
+
+export type RemoveTeamMemberData = {
+    path: {
+        /**
+         * Team ID
+         */
+        team_id: string;
+        /**
+         * User ID
+         */
+        user_id: string;
+    };
+};
+
+export type RemoveTeamMemberResponse = (void);
+
+export type RemoveTeamMemberError = (unknown);
+
+export type ChangeMemberRoleData = {
+    body: ChangeMemberRoleRequest;
+    path: {
+        /**
+         * Team ID
+         */
+        team_id: string;
+        /**
+         * User ID
+         */
+        user_id: string;
+    };
+};
+
+export type ChangeMemberRoleResponse = (TeamMembership);
+
+export type ChangeMemberRoleError = (unknown);
+
+export type AllUsersResponse = (Array<User>);
+
+export type AllUsersError = unknown;
+
+export type GetMyDemographicsResponse = (UserWithDemographics);
+
+export type GetMyDemographicsError = (unknown);
+
+export type UpdateMyDemographicsData = {
+    body: UpdateDemographicsRequest;
+};
+
+export type UpdateMyDemographicsResponse = (UserWithDemographics);
+
+export type UpdateMyDemographicsError = (unknown);
+
+export type NewUserData = {
+    query: {
+        /**
+         * User's email address
+         */
+        email: string;
+        /**
+         * User's name
+         */
+        name: string;
+    };
+};
+
+export type NewUserResponse = (User);
+
+export type NewUserError = (unknown);
+
+export type GetUserAchievementsData = {
+    path: {
+        /**
+         * User ID
+         */
+        id: string;
+    };
+    query?: {
+        include_lost?: boolean;
+    };
+};
+
+export type GetUserAchievementsResponse = (Array<AchievementWithSegment>);
+
+export type GetUserAchievementsError = (unknown);
+
+export type GetUserActivitiesData = {
+    path: {
+        /**
+         * User ID
+         */
+        id: string;
+    };
+};
+
+export type GetUserActivitiesResponse = (Array<Activity>);
+
+export type GetUserActivitiesError = unknown;
+
+export type FollowUserData = {
+    path: {
+        /**
+         * User ID to follow
+         */
+        id: string;
+    };
+};
+
+export type FollowUserResponse = (unknown);
+
+export type FollowUserError = (unknown);
+
+export type UnfollowUserData = {
+    path: {
+        /**
+         * User ID to unfollow
+         */
+        id: string;
+    };
+};
+
+export type UnfollowUserResponse = (void);
+
+export type UnfollowUserError = (unknown);
+
+export type GetFollowStatusData = {
+    path: {
+        /**
+         * User ID to check follow status for
+         */
+        id: string;
+    };
+};
+
+export type GetFollowStatusResponse = (FollowStatusResponse);
+
+export type GetFollowStatusError = (unknown);
+
+export type GetFollowersData = {
+    path: {
+        /**
+         * User ID to get followers for
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Maximum number of results
+         */
+        limit?: number;
+        /**
+         * Offset for pagination
+         */
+        offset?: number;
+    };
+};
+
+export type GetFollowersResponse = (FollowListResponse);
+
+export type GetFollowersError = unknown;
+
+export type GetFollowingData = {
+    path: {
+        /**
+         * User ID to get following list for
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Maximum number of results
+         */
+        limit?: number;
+        /**
+         * Offset for pagination
+         */
+        offset?: number;
+    };
+};
+
+export type GetFollowingResponse = (FollowListResponse);
+
+export type GetFollowingError = unknown;
+
+export type GetUserProfileData = {
+    path: {
+        /**
+         * User ID to get profile for
+         */
+        id: string;
+    };
+};
+
+export type GetUserProfileResponse = (UserProfile);
+
+export type GetUserProfileError = (unknown);

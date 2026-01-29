@@ -73,6 +73,110 @@ use crate::{
         (name = "teams", description = "Team management endpoints"),
         (name = "stats", description = "Platform statistics"),
     ),
+    paths(
+        // Auth
+        auth::register,
+        auth::login,
+        auth::me,
+        // Users
+        handlers::new_user,
+        handlers::all_users,
+        // Activities
+        handlers::new_activity,
+        handlers::get_activity,
+        handlers::update_activity,
+        handlers::delete_activity,
+        handlers::get_user_activities,
+        handlers::download_gpx_file,
+        handlers::get_activity_track,
+        handlers::get_activity_segments,
+        // Activity types
+        handlers::health_check,
+        handlers::list_activity_types,
+        handlers::get_activity_type,
+        handlers::create_activity_type,
+        handlers::resolve_activity_type,
+        // Segments
+        handlers::create_segment,
+        handlers::get_segment,
+        handlers::list_segments,
+        handlers::get_segment_leaderboard,
+        handlers::get_my_segment_efforts,
+        handlers::get_segment_track,
+        handlers::preview_segment,
+        handlers::reprocess_segment,
+        handlers::star_segment,
+        handlers::unstar_segment,
+        handlers::is_segment_starred,
+        handlers::get_starred_segments,
+        handlers::get_starred_segment_efforts,
+        handlers::get_nearby_segments,
+        handlers::get_filtered_leaderboard,
+        handlers::get_leaderboard_position,
+        // Demographics
+        handlers::get_my_demographics,
+        handlers::update_my_demographics,
+        // Achievements
+        handlers::get_user_achievements,
+        handlers::get_my_achievements,
+        handlers::get_segment_achievements,
+        // Global leaderboards
+        handlers::get_crown_leaderboard,
+        handlers::get_distance_leaderboard,
+        handlers::get_countries,
+        // Social
+        handlers::follow_user,
+        handlers::unfollow_user,
+        handlers::get_follow_status,
+        handlers::get_followers,
+        handlers::get_following,
+        handlers::get_user_profile,
+        // Notifications
+        handlers::get_notifications,
+        handlers::mark_notification_read,
+        handlers::mark_all_notifications_read,
+        // Feed
+        handlers::get_feed,
+        // Kudos
+        handlers::give_kudos,
+        handlers::remove_kudos,
+        handlers::get_kudos_status,
+        handlers::get_kudos_givers,
+        // Comments
+        handlers::add_comment,
+        handlers::get_comments,
+        handlers::delete_comment,
+        // Stats
+        handlers::get_stats,
+        // Teams
+        handlers::create_team,
+        handlers::get_team,
+        handlers::list_my_teams,
+        handlers::discover_teams,
+        handlers::update_team,
+        handlers::delete_team,
+        handlers::list_team_members,
+        handlers::remove_team_member,
+        handlers::change_member_role,
+        handlers::join_team,
+        handlers::leave_team,
+        handlers::get_join_requests,
+        handlers::review_join_request,
+        handlers::invite_to_team,
+        handlers::get_team_invitations,
+        handlers::revoke_invitation,
+        handlers::get_invitation,
+        handlers::accept_invitation,
+        // Team sharing
+        handlers::get_activity_teams,
+        handlers::share_activity_with_teams,
+        handlers::unshare_activity_from_team,
+        handlers::get_segment_teams,
+        handlers::share_segment_with_teams,
+        handlers::unshare_segment_from_team,
+        handlers::get_team_activities,
+        handlers::get_team_segments,
+    ),
     components(
         schemas(
             // Auth types
@@ -407,7 +511,10 @@ pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> a
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
 
     println!("Server running on http://0.0.0.0:{}", port);
-    println!("Swagger UI available at http://0.0.0.0:{}/swagger-ui/", port);
+    println!(
+        "Swagger UI available at http://0.0.0.0:{}/swagger-ui/",
+        port
+    );
 
     axum::serve(listener, app).await?;
 

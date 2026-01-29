@@ -1,13 +1,12 @@
 use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
-    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, CrownCountEntry, DistanceLeaderEntry, GenderFilter, LeaderboardEntry, LeaderboardFilters, LeaderboardScope, ResolvedActivityType, CountryStats,
-    Scores, Segment,
-    SegmentEffort, Team, TeamInvitation, TeamInvitationWithDetails,
-    TeamJoinRequest,
-    TeamJoinRequestWithUser, TeamMember, TeamMembership, TeamRole, TeamSummary,
-    TeamVisibility,
-    TeamWithMembership, UpdateDemographicsRequest, User, UserWithDemographics,
+    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, CountryStats, CrownCountEntry,
+    DistanceLeaderEntry, GenderFilter, LeaderboardEntry, LeaderboardFilters, LeaderboardScope,
+    ResolvedActivityType, Scores, Segment, SegmentEffort, Team, TeamInvitation,
+    TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser, TeamMember,
+    TeamMembership, TeamRole, TeamSummary, TeamVisibility, TeamWithMembership,
+    UpdateDemographicsRequest, User, UserWithDemographics,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use serde::Serialize;
