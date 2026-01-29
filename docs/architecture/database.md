@@ -7,36 +7,38 @@ PostgreSQL 15 with PostGIS extension.
 ### Entity Relationship Diagram (Current)
 
 ```
-┌──────────────────┐
-│      users       │
-├──────────────────┤
-│ id (UUID) PK     │
-│ email (UNIQUE)   │
-│ name             │
-│ created_at       │
-└────────┬─────────┘
-         │
-         │ 1:N
-         ▼
+┌──────────────────┐       ┌──────────────────┐
+│      users       │       │  activity_types  │
+├──────────────────┤       ├──────────────────┤
+│ id (UUID) PK     │       │ id (UUID) PK     │
+│ email (UNIQUE)   │       │ name (UNIQUE)    │
+│ name             │       │ is_builtin       │
+│ created_at       │       │ created_by FK    │
+└────────┬─────────┘       └────────┬─────────┘
+         │                          │
+         │ 1:N                      │ 1:N
+         ▼                          ▼
 ┌──────────────────┐       ┌──────────────────┐
 │   activities     │       │     scores       │
 ├──────────────────┤       ├──────────────────┤
 │ id (UUID) PK     │──────►│ id (UUID) PK     │
-│ user_id          │  1:1  │ user_id          │
-│ activity_type    │       │ activity_id      │
+│ user_id FK       │  1:1  │ user_id          │
+│ activity_type_id │◄──────│ activity_id      │
 │ name             │       │ distance         │
 │ object_store_path│       │ duration         │
-│ submitted_at     │       │ elevation_gain   │
-└────────┬─────────┘       │ created_at       │
-         │                 └──────────────────┘
-         │ 1:1 (UNUSED)
+│ type_boundaries[]│       │ elevation_gain   │
+│ segment_types[]  │       │ created_at       │
+│ submitted_at     │       └──────────────────┘
+└────────┬─────────┘
+         │
+         │ 1:1
          ▼
 ┌──────────────────┐
 │     tracks       │
 ├──────────────────┤
 │ id (UUID) PK     │
 │ user_id          │
-│ activity_id      │
+│ activity_id FK   │
 │ geo (GEOGRAPHY)  │
 │ created_at       │
 └──────────────────┘
@@ -59,30 +61,79 @@ CREATE TABLE users (
 - No profile fields (bio, avatar, location)
 - No settings/preferences
 
-#### `activities`
+#### `activity_types` (Phase 8: Multi-Sport Support)
+
 ```sql
-CREATE TYPE activity_type AS ENUM (
-    'walking', 'running', 'hiking',
-    'road_cycling', 'mountain_biking', 'unknown'
+CREATE TABLE activity_types (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,           -- Canonical: "run", "mtb", "road"
+    is_builtin BOOLEAN NOT NULL DEFAULT FALSE,
+    created_by UUID REFERENCES users(id), -- NULL for built-in types
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Built-in types with fixed UUIDs
+INSERT INTO activity_types (id, name, is_builtin) VALUES
+    ('00000000-0000-0000-0000-000000000001', 'walk', true),
+    ('00000000-0000-0000-0000-000000000002', 'run', true),
+    ('00000000-0000-0000-0000-000000000003', 'hike', true),
+    ('00000000-0000-0000-0000-000000000004', 'road', true),
+    ('00000000-0000-0000-0000-000000000005', 'mtb', true),
+    ('00000000-0000-0000-0000-000000000006', 'emtb', true),
+    ('00000000-0000-0000-0000-000000000007', 'gravel', true),
+    ('00000000-0000-0000-0000-000000000008', 'unknown', true);
+```
+
+#### `activity_aliases`
+
+Maps alternative names to canonical types. Supports 1:many mapping for disambiguation:
+
+```sql
+CREATE TABLE activity_aliases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    alias TEXT NOT NULL,
+    activity_type_id UUID NOT NULL REFERENCES activity_types(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(alias, activity_type_id)
+);
+
+-- Example: "biking" maps to multiple types (user picks)
+INSERT INTO activity_aliases (alias, activity_type_id) VALUES
+    ('biking', '00000000-0000-0000-0000-000000000004'),  -- road
+    ('biking', '00000000-0000-0000-0000-000000000005'),  -- mtb
+    ('biking', '00000000-0000-0000-0000-000000000006'),  -- emtb
+    ('biking', '00000000-0000-0000-0000-000000000007');  -- gravel
+```
+
+#### `activities`
+```sql
 CREATE TABLE activities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
-    activity_type activity_type NOT NULL,
+    activity_type_id UUID NOT NULL REFERENCES activity_types(id),
     name TEXT NOT NULL,
     object_store_path TEXT NOT NULL,
-    submitted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    visibility TEXT NOT NULL DEFAULT 'public',
+    submitted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    -- Multi-sport support
+    type_boundaries TIMESTAMPTZ[],  -- Boundary timestamps for multi-sport
+    segment_types UUID[],           -- Activity type per segment (len = boundaries - 1)
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_activities_user_id ON activities(user_id);
 CREATE INDEX idx_activities_submitted_at ON activities(submitted_at);
+CREATE INDEX idx_activities_type_id ON activities(activity_type_id);
 ```
 
+**Multi-Sport Invariant:** `length(segment_types) = length(type_boundaries) - 1`
+
+For single-sport activities, both arrays are NULL and `activity_type_id` is used.
+
 **Notes:**
-- No foreign key constraint to users (should have)
+- Visibility: 'public', 'private', or 'teams_only'
+- Multi-sport boundaries are timestamps from the GPX file
 - No description/notes field
-- No visibility (public/private/followers)
 - No gear tracking
 
 #### `tracks`

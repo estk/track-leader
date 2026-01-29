@@ -105,6 +105,82 @@ GET /stats
 
 ---
 
+## Activity Types
+
+Activity types are now UUID-based with support for custom types and multi-sport activities.
+
+### List Activity Types
+
+```http
+GET /activity-types
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "00000000-0000-0000-0000-000000000002",
+    "name": "run",
+    "is_builtin": true,
+    "created_by": null
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000005",
+    "name": "mtb",
+    "is_builtin": true,
+    "created_by": null
+  }
+]
+```
+
+### Resolve Activity Type
+
+Resolve a name or alias to activity type(s). Useful when alias maps to multiple types.
+
+```http
+GET /activity-types/resolve?name=biking
+```
+
+**Response (ambiguous):**
+```json
+{
+  "status": "ambiguous",
+  "type_ids": [
+    "00000000-0000-0000-0000-000000000004",
+    "00000000-0000-0000-0000-000000000005",
+    "00000000-0000-0000-0000-000000000006"
+  ]
+}
+```
+
+**Response (exact):**
+```json
+{
+  "status": "exact",
+  "type_id": "00000000-0000-0000-0000-000000000002"
+}
+```
+
+### Create Activity Type
+
+```http
+POST /activity-types
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "name": "ski"
+}
+```
+
+### Get Activity Type
+
+```http
+GET /activity-types/{id}
+```
+
+---
+
 ## Activities
 
 ### Upload Activity
@@ -114,28 +190,56 @@ POST /activities/new
 Authorization: Bearer {token}
 Content-Type: multipart/form-data
 
-user_id: {uuid}
-activity_type: Running
+activity_type_id: {uuid}
 name: Morning Run
+visibility: public
 file: [GPX file]
 ```
 
-**Activity Types:**
-- `Walking`
-- `Running`
-- `Hiking`
-- `RoadCycling`
-- `MountainBiking`
-- `Unknown`
+**Query Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| activity_type_id | UUID | Yes | Primary activity type |
+| name | string | Yes | Activity name |
+| visibility | string | No | `public`, `private`, or `teams_only` |
+| team_ids | UUID[] | No | Teams to share with (if teams_only) |
+| type_boundaries | ISO8601[] | No | Timestamps for multi-sport boundaries |
+| segment_types | UUID[] | No | Activity type IDs for each segment |
+
+**Built-in Activity Type IDs:**
+| ID | Name |
+|----|------|
+| `00000000-0000-0000-0000-000000000001` | walk |
+| `00000000-0000-0000-0000-000000000002` | run |
+| `00000000-0000-0000-0000-000000000003` | hike |
+| `00000000-0000-0000-0000-000000000004` | road |
+| `00000000-0000-0000-0000-000000000005` | mtb |
+| `00000000-0000-0000-0000-000000000006` | emtb |
+| `00000000-0000-0000-0000-000000000007` | gravel |
+| `00000000-0000-0000-0000-000000000008` | unknown |
+
+**Multi-Sport Upload:**
+
+For activities with multiple types, provide boundary timestamps and types:
+
+```http
+POST /activities/new?activity_type_id=...&type_boundaries=2024-01-15T10:00:00Z,2024-01-15T10:30:00Z,2024-01-15T11:00:00Z&segment_types=00000000-0000-0000-0000-000000000005,00000000-0000-0000-0000-000000000003
+```
+
+This represents: mtb (10:00-10:30) → hike (10:30-11:00)
+
+**Invariant:** `length(segment_types) = length(type_boundaries) - 1`
 
 **Response:**
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440001",
   "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "activity_type": "Running",
+  "activity_type_id": "00000000-0000-0000-0000-000000000002",
   "name": "Morning Run",
-  "submitted_at": "2026-01-26T12:00:00Z"
+  "submitted_at": "2026-01-26T12:00:00Z",
+  "type_boundaries": null,
+  "segment_types": null
 }
 ```
 
@@ -225,9 +329,14 @@ GET /segments
 **Query Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| activity_type | string | Filter by activity type |
+| activity_type_id | UUID | Filter by activity type ID |
 | limit | number | Results per page (default 50) |
-| offset | number | Pagination offset |
+| search | string | Case-insensitive name search |
+| sort_by | string | `created_at`, `name`, `distance`, `elevation_gain` |
+| sort_order | string | `asc` or `desc` |
+| min_distance_meters | number | Minimum distance filter |
+| max_distance_meters | number | Maximum distance filter |
+| climb_category | string | `hc`, `cat1`, `cat2`, `cat3`, `cat4`, `flat` |
 
 ### Get Nearby Segments
 
@@ -245,10 +354,11 @@ Content-Type: application/json
 {
   "name": "Summit Push",
   "description": "Final climb to the peak",
-  "activity_type": "Hiking",
+  "activity_type_id": "00000000-0000-0000-0000-000000000003",
   "activity_id": "550e8400-e29b-41d4-a716-446655440001",
   "start_index": 100,
-  "end_index": 250
+  "end_index": 250,
+  "visibility": "public"
 }
 ```
 
@@ -264,10 +374,10 @@ GET /segments/{id}
   "id": "550e8400-e29b-41d4-a716-446655440002",
   "name": "Summit Push",
   "description": "Final climb to the peak",
-  "activity_type": "Hiking",
-  "distance": 1234.5,
-  "elevation_gain": 150.0,
-  "created_by": "550e8400-e29b-41d4-a716-446655440000",
+  "activity_type_id": "00000000-0000-0000-0000-000000000003",
+  "distance_meters": 1234.5,
+  "elevation_gain_meters": 150.0,
+  "creator_id": "550e8400-e29b-41d4-a716-446655440000",
   "created_at": "2026-01-26T12:00:00Z"
 }
 ```
