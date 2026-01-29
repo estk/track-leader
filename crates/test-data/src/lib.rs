@@ -35,7 +35,7 @@ pub mod terrain;
 
 // Re-export core types from tracks crate
 pub use tracks::models::{
-    ActivityType, AgeGroup, Gender, GenderFilter, LeaderboardScope, TrackPointData, Visibility,
+    builtin_types, AgeGroup, Gender, GenderFilter, LeaderboardScope, TrackPointData, Visibility,
 };
 
 pub mod prelude {
@@ -53,5 +53,5 @@ pub mod prelude {
     };
     pub use crate::sources::{GpxLoader, OsmClient, ProceduralGenerator, RoutePattern};
     pub use crate::terrain::ElevationGenerator;
-    pub use crate::{ActivityType, AgeGroup, Gender, TrackPointData, Visibility};
+    pub use crate::{builtin_types, AgeGroup, Gender, TrackPointData, Visibility};
 }

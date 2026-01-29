@@ -8,7 +8,7 @@ use crate::generators::{
     GeneratedActivity, GeneratedComment, GeneratedEffort, GeneratedFollow, GeneratedKudos,
     GeneratedSegment, GeneratedUser,
 };
-use tracks::models::{ActivityType, Gender};
+use tracks::models::Gender;
 
 /// Convert Gender enum to its database string representation.
 fn gender_to_db_str(gender: &Gender) -> &'static str {
@@ -132,25 +132,16 @@ impl Seeder {
         }
 
         // Insert activity record
-        let activity_type_str = match activity.activity_type {
-            ActivityType::Walking => "walking",
-            ActivityType::Running => "running",
-            ActivityType::Hiking => "hiking",
-            ActivityType::RoadCycling => "road_cycling",
-            ActivityType::MountainBiking => "mountain_biking",
-            ActivityType::Unknown => "unknown",
-        };
-
         sqlx::query(
             r#"
-            INSERT INTO activities (id, user_id, activity_type, name, object_store_path, submitted_at, visibility)
-            VALUES ($1, $2, $3::activity_type, $4, $5, $6, $7)
+            INSERT INTO activities (id, user_id, activity_type_id, name, object_store_path, submitted_at, visibility)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (id) DO NOTHING
             "#,
         )
         .bind(activity.id)
         .bind(activity.user_id)
-        .bind(activity_type_str)
+        .bind(activity.activity_type_id)
         .bind(&activity.name)
         .bind(format!("generated/{}.gpx", activity.id))
         .bind(activity.submitted_at)
@@ -219,26 +210,17 @@ impl Seeder {
 
     /// Inserts a single segment.
     async fn insert_segment(&self, segment: &GeneratedSegment) -> Result<(), SeedError> {
-        let activity_type_str = match segment.activity_type {
-            ActivityType::Walking => "walking",
-            ActivityType::Running => "running",
-            ActivityType::Hiking => "hiking",
-            ActivityType::RoadCycling => "road_cycling",
-            ActivityType::MountainBiking => "mountain_biking",
-            ActivityType::Unknown => "unknown",
-        };
-
         sqlx::query(
             r#"
             INSERT INTO segments (
-                id, creator_id, name, description, activity_type,
+                id, creator_id, name, description, activity_type_id,
                 geo, start_point, end_point,
                 distance_meters, elevation_gain_meters, elevation_loss_meters,
                 average_grade, max_grade, climb_category,
                 visibility, created_at
             )
             VALUES (
-                $1, $2, $3, $4, $5::activity_type,
+                $1, $2, $3, $4, $5,
                 ST_GeogFromText($6), ST_GeogFromText($7), ST_GeogFromText($8),
                 $9, $10, $11,
                 $12, $13, $14,
@@ -251,7 +233,7 @@ impl Seeder {
         .bind(segment.creator_id)
         .bind(&segment.name)
         .bind(&segment.description)
-        .bind(activity_type_str)
+        .bind(segment.activity_type_id)
         .bind(&segment.geo_wkt)
         .bind(&segment.start_wkt)
         .bind(&segment.end_wkt)

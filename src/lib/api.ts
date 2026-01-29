@@ -13,14 +13,74 @@ export interface AuthResponse {
 
 export type ActivityVisibility = 'public' | 'private' | 'teams_only';
 
+// Activity Types (UUID-based)
+export interface ActivityType {
+  id: string;
+  name: string;
+  is_builtin: boolean;
+  created_by: string | null;
+}
+
+export type ResolvedActivityTypeStatus = 'exact' | 'ambiguous' | 'not_found';
+
+export interface ResolveActivityTypeResponse {
+  status: ResolvedActivityTypeStatus;
+  type_id?: string;         // Present when status is 'exact'
+  type_ids?: string[];      // Present when status is 'ambiguous'
+}
+
+// Built-in activity type IDs (fixed UUIDs)
+export const ACTIVITY_TYPE_IDS = {
+  WALK: '00000000-0000-0000-0000-000000000001',
+  RUN: '00000000-0000-0000-0000-000000000002',
+  HIKE: '00000000-0000-0000-0000-000000000003',
+  ROAD: '00000000-0000-0000-0000-000000000004',
+  MTB: '00000000-0000-0000-0000-000000000005',
+  EMTB: '00000000-0000-0000-0000-000000000006',
+  GRAVEL: '00000000-0000-0000-0000-000000000007',
+  UNKNOWN: '00000000-0000-0000-0000-000000000008',
+} as const;
+
+// Display names for built-in activity types
+export const ACTIVITY_TYPE_NAMES: Record<string, string> = {
+  [ACTIVITY_TYPE_IDS.WALK]: 'Walk',
+  [ACTIVITY_TYPE_IDS.RUN]: 'Run',
+  [ACTIVITY_TYPE_IDS.HIKE]: 'Hike',
+  [ACTIVITY_TYPE_IDS.ROAD]: 'Road Cycling',
+  [ACTIVITY_TYPE_IDS.MTB]: 'Mountain Biking',
+  [ACTIVITY_TYPE_IDS.EMTB]: 'E-Mountain Biking',
+  [ACTIVITY_TYPE_IDS.GRAVEL]: 'Gravel',
+  [ACTIVITY_TYPE_IDS.UNKNOWN]: 'Unknown',
+};
+
+// Activity type options for dropdowns
+export const ACTIVITY_TYPE_OPTIONS = [
+  { id: ACTIVITY_TYPE_IDS.RUN, name: 'Run' },
+  { id: ACTIVITY_TYPE_IDS.ROAD, name: 'Road Cycling' },
+  { id: ACTIVITY_TYPE_IDS.MTB, name: 'Mountain Biking' },
+  { id: ACTIVITY_TYPE_IDS.HIKE, name: 'Hike' },
+  { id: ACTIVITY_TYPE_IDS.WALK, name: 'Walk' },
+  { id: ACTIVITY_TYPE_IDS.EMTB, name: 'E-Mountain Biking' },
+  { id: ACTIVITY_TYPE_IDS.GRAVEL, name: 'Gravel' },
+  { id: ACTIVITY_TYPE_IDS.UNKNOWN, name: 'Other' },
+];
+
+// Get display name for an activity type ID
+export function getActivityTypeName(id: string): string {
+  return ACTIVITY_TYPE_NAMES[id] || 'Unknown';
+}
+
 export interface Activity {
   id: string;
   user_id: string;
-  activity_type: string;
+  activity_type_id: string;
   name: string;
   object_store_path: string;
   submitted_at: string;
   visibility: ActivityVisibility;
+  // Multi-sport support
+  type_boundaries: string[] | null;  // ISO8601 timestamps
+  segment_types: string[] | null;     // Activity type UUIDs
 }
 
 export interface TrackPoint {
@@ -49,7 +109,7 @@ export interface Segment {
   creator_id: string;
   name: string;
   description: string | null;
-  activity_type: string;
+  activity_type_id: string;
   distance_meters: number;
   elevation_gain_meters: number | null;
   elevation_loss_meters: number | null;
@@ -79,11 +139,11 @@ export interface SegmentEffort {
 export interface CreateSegmentRequest {
   name: string;
   description?: string;
-  /** Optional if source_activity_id is provided (inherits from the activity). Required otherwise. */
-  activity_type?: string;
+  /** Activity type UUID. Optional if source_activity_id is provided (inherits from the activity). */
+  activity_type_id?: string;
   points: { lat: number; lon: number; ele?: number }[];
   visibility?: SegmentVisibility;
-  /** If provided, the segment inherits its activity_type from this activity. */
+  /** If provided, the segment inherits its activity_type_id from this activity. */
   source_activity_id?: string;
   /** Team IDs to share segment with when visibility is 'teams_only'. */
   team_ids?: string[];
@@ -94,7 +154,7 @@ export type SortOrder = 'asc' | 'desc';
 export type ClimbCategoryFilter = 'hc' | 'cat1' | 'cat2' | 'cat3' | 'cat4' | 'flat';
 
 export interface ListSegmentsOptions {
-  activityType?: string;
+  activityTypeId?: string;
   search?: string;
   sortBy?: SegmentSortBy;
   sortOrder?: SortOrder;
@@ -128,7 +188,7 @@ export interface ActivitySegmentEffort {
   started_at: string;
   segment_name: string;
   segment_distance: number;
-  activity_type: string;
+  activity_type_id: string;
   rank: number;
   start_fraction: number | null;
   end_fraction: number | null;
@@ -153,7 +213,7 @@ export interface SegmentTrackData {
 export interface StarredSegmentEffort {
   segment_id: string;
   segment_name: string;
-  activity_type: string;
+  activity_type_id: string;
   distance_meters: number;
   elevation_gain_meters: number | null;
   best_time_seconds: number | null;
@@ -220,7 +280,7 @@ export interface Achievement {
 export interface AchievementWithSegment extends Achievement {
   segment_name: string;
   segment_distance_meters: number;
-  segment_activity_type: string;
+  segment_activity_type_id: string;
 }
 
 export interface AchievementHolder {
@@ -333,7 +393,7 @@ export interface FeedActivity {
   id: string;
   user_id: string;
   name: string;
-  activity_type: string;
+  activity_type_id: string;
   submitted_at: string;
   visibility: string;
   user_name: string;
@@ -563,6 +623,27 @@ class ApiClient {
     this.setToken(null);
   }
 
+  // Activity Type endpoints
+  async listActivityTypes(): Promise<ActivityType[]> {
+    return this.request<ActivityType[]>('/activity-types');
+  }
+
+  async getActivityType(id: string): Promise<ActivityType> {
+    return this.request<ActivityType>(`/activity-types/${id}`);
+  }
+
+  async createActivityType(name: string): Promise<ActivityType> {
+    return this.request<ActivityType>('/activity-types', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async resolveActivityType(nameOrAlias: string): Promise<ResolveActivityTypeResponse> {
+    const params = new URLSearchParams({ name: nameOrAlias });
+    return this.request<ResolveActivityTypeResponse>(`/activity-types/resolve?${params.toString()}`);
+  }
+
   // Activity endpoints
   async getUserActivities(userId: string): Promise<Activity[]> {
     return this.request<Activity[]>(`/users/${userId}/activities`);
@@ -582,7 +663,7 @@ class ApiClient {
 
   async updateActivity(
     id: string,
-    data: { name?: string; activity_type?: string; visibility?: ActivityVisibility }
+    data: { name?: string; activity_type_id?: string; visibility?: ActivityVisibility }
   ): Promise<Activity> {
     return this.request<Activity>(`/activities/${id}`, {
       method: 'PATCH',
@@ -596,26 +677,47 @@ class ApiClient {
     });
   }
 
+  /**
+   * Upload an activity.
+   * @param file - The GPX file to upload
+   * @param name - Activity name
+   * @param activityTypeId - Activity type UUID
+   * @param visibility - Visibility setting
+   * @param options - Optional multi-sport settings and team sharing
+   */
   async uploadActivity(
     file: File,
     name: string,
-    activityType: string,
+    activityTypeId: string,
     visibility: ActivityVisibility = 'public',
-    teamIds?: string[]
+    options?: {
+      teamIds?: string[];
+      // Multi-sport support
+      typeBoundaries?: string[];  // ISO8601 timestamps
+      segmentTypes?: string[];    // Activity type UUIDs
+    }
   ): Promise<Activity> {
     const token = this.getToken();
     const formData = new FormData();
     formData.append('file', file);
 
     const params = new URLSearchParams({
-      activity_type: activityType,
+      activity_type_id: activityTypeId,
       name: name,
       visibility: visibility,
     });
 
     // Add team_ids as comma-separated list if provided
-    if (teamIds && teamIds.length > 0) {
-      params.set('team_ids', teamIds.join(','));
+    if (options?.teamIds && options.teamIds.length > 0) {
+      params.set('team_ids', options.teamIds.join(','));
+    }
+
+    // Multi-sport support
+    if (options?.typeBoundaries && options.typeBoundaries.length > 0) {
+      params.set('type_boundaries', options.typeBoundaries.join(','));
+    }
+    if (options?.segmentTypes && options.segmentTypes.length > 0) {
+      params.set('segment_types', options.segmentTypes.join(','));
     }
 
     const response = await fetch(
@@ -638,8 +740,8 @@ class ApiClient {
   // Segment endpoints
   async listSegments(options?: ListSegmentsOptions): Promise<Segment[]> {
     const params = new URLSearchParams();
-    if (options?.activityType) {
-      params.set('activity_type', options.activityType);
+    if (options?.activityTypeId) {
+      params.set('activity_type_id', options.activityTypeId);
     }
     if (options?.search) {
       params.set('search', options.search);

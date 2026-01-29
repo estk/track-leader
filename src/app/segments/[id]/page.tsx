@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, Segment, SegmentEffort, SegmentTrackData, TrackData } from "@/lib/api";
+import { api, Segment, SegmentEffort, SegmentTrackData, TrackData, getActivityTypeName } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,15 +18,6 @@ const LazyPRHistoryChart = dynamic(
     ssr: false,
   }
 );
-
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  Running: "Run",
-  RoadCycling: "Road Cycling",
-  MountainBiking: "Mountain Biking",
-  Hiking: "Hike",
-  Walking: "Walk",
-  Unknown: "Other",
-};
 
 function formatDistance(meters: number): string {
   if (meters >= 1000) {
@@ -173,7 +164,7 @@ export default function SegmentDetailPage() {
           <h1 className="text-2xl md:text-3xl font-bold">{segment.name}</h1>
           <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2">
             <Badge variant="secondary">
-              {ACTIVITY_TYPE_LABELS[segment.activity_type] || segment.activity_type}
+              {getActivityTypeName(segment.activity_type_id)}
             </Badge>
             <span className="text-sm md:text-base text-muted-foreground">
               Created by {currentUserId === segment.creator_id ? "you" : `${segment.creator_id.slice(0, 8)}...`}

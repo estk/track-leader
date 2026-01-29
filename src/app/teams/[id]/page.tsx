@@ -9,6 +9,7 @@ import {
   TeamMember,
   FeedActivity,
   Segment,
+  getActivityTypeName,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -399,7 +400,7 @@ function SegmentsTab({
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">{segment.name}</CardTitle>
-              <Badge variant="secondary">{segment.activity_type}</Badge>
+              <Badge variant="secondary">{getActivityTypeName(segment.activity_type_id)}</Badge>
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mt-2">
               <span>Distance: {formatDistance(segment.distance_meters)}</span>

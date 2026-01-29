@@ -77,17 +77,13 @@ Phase documentation has been archived.
 
 These items were planned but deferred for post-launch:
 
-### High priority
-
--. **Multi-Sport Activity** - Can we start to introduce a concept of multi-sport activities? Ride+Dig Ride+Ski etc. This should be general so any activities can be done together, and we should also allow users to create new activity types. Since we dont have an app yet, we need to allow for on upload a pre-publish dialog that allows the user to select (via the elevation plot timeline) what times include which activities. We could add a checkbox that indicates its a multisport activity.
-
 ### Leaderboard features
 - Much richer leaderboard filters
   - Equipment type (e-bike vs acoustic)
   - Weight class 
-- User defined activity metrics that allow them to create and share a custom leaderboard
 
 ### Refactor tasks
+- Refactor any api endpoints in the node application's api.ts into the rust api
 - Openapi spec generation from tracks crate and then generate a client for node rather than have a custom built one, maybe use utopia
 
 ### General
@@ -108,6 +104,7 @@ These items were planned but deferred for post-launch:
 - Rate limiting integration (tower_governor in Cargo.toml)
 
 ### Low priority
+- User defined activity metrics that allow them to create and share a custom leaderboard
 - Screen reader testing
 - Sentry error tracking integration
 - Internationalization

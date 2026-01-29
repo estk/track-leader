@@ -19,7 +19,7 @@ use crate::generators::{
 };
 use crate::profiles::{AthleteProfile, CyclistProfile, HikerProfile, RunnerProfile};
 use crate::sources::ProceduralGenerator;
-use tracks::models::ActivityType;
+use tracks::models::builtin_types;
 
 /// Result of building and seeding a scenario.
 #[derive(Debug)]
@@ -62,7 +62,7 @@ pub struct ScenarioMetrics {
 /// let result = ScenarioBuilder::new()
 ///     .with_users(50)
 ///     .with_region(Region::BOULDER)
-///     .with_activity_type(ActivityType::Running)
+///     .with_activity_type_id(builtin_types::RUN)
 ///     .with_track_distance(5000.0)
 ///     .with_segment(0.2..0.6, "Hill Climb")
 ///     .with_efforts_per_user(1..=3)
@@ -77,7 +77,7 @@ pub struct ScenarioBuilder {
 
     // Track configuration
     region: BoundingBox,
-    activity_type: ActivityType,
+    activity_type_id: Uuid,
     track_distance: f64,
     activities_per_user: RangeInclusive<usize>,
 
@@ -136,7 +136,7 @@ impl ScenarioBuilder {
             user_count: 50,
             user_config: UserGenConfig::default(),
             region: Region::BOULDER,
-            activity_type: ActivityType::Running,
+            activity_type_id: builtin_types::RUN,
             track_distance: 5000.0,
             activities_per_user: 1..=3,
             segments: Vec::new(),
@@ -169,9 +169,9 @@ impl ScenarioBuilder {
         self
     }
 
-    /// Sets the activity type.
-    pub fn with_activity_type(mut self, activity_type: ActivityType) -> Self {
-        self.activity_type = activity_type;
+    /// Sets the activity type UUID.
+    pub fn with_activity_type_id(mut self, activity_type_id: Uuid) -> Self {
+        self.activity_type_id = activity_type_id;
         self
     }
 
@@ -311,7 +311,7 @@ impl ScenarioBuilder {
                 }
 
                 let activity =
-                    activity_gen.from_track(user.id, self.activity_type, track_points, rng);
+                    activity_gen.from_track(user.id, self.activity_type_id, track_points, rng);
                 activities.push(activity);
             }
         }
@@ -335,7 +335,7 @@ impl ScenarioBuilder {
                             track,
                             *start_fraction,
                             *end_fraction,
-                            self.activity_type,
+                            self.activity_type_id,
                             &spec.name,
                             rng,
                         )
@@ -351,7 +351,7 @@ impl ScenarioBuilder {
                     segment_gen.from_points(
                         creator.id,
                         &track_points,
-                        self.activity_type,
+                        self.activity_type_id,
                         &spec.name,
                         rng,
                     )
@@ -369,7 +369,7 @@ impl ScenarioBuilder {
         {
             let creator = &users[rng.gen_range(0..users.len())];
             let auto_climbs =
-                segment_gen.extract_climbs(creator.id, track, self.activity_type, rng);
+                segment_gen.extract_climbs(creator.id, track, self.activity_type_id, rng);
             segments.extend(auto_climbs);
         }
 
@@ -536,13 +536,20 @@ impl ScenarioBuilder {
 
     /// Gets the appropriate athletic profile for the activity type.
     fn get_profile(&self) -> Box<dyn AthleteProfile> {
-        match self.activity_type {
-            ActivityType::Running => Box::new(RunnerProfile::default()),
-            ActivityType::RoadCycling | ActivityType::MountainBiking => {
-                Box::new(CyclistProfile::default())
-            }
-            ActivityType::Hiking | ActivityType::Walking => Box::new(HikerProfile::default()),
-            ActivityType::Unknown => Box::new(RunnerProfile::default()),
+        if self.activity_type_id == builtin_types::RUN {
+            Box::new(RunnerProfile::default())
+        } else if self.activity_type_id == builtin_types::ROAD
+            || self.activity_type_id == builtin_types::MTB
+            || self.activity_type_id == builtin_types::EMTB
+            || self.activity_type_id == builtin_types::GRAVEL
+        {
+            Box::new(CyclistProfile::default())
+        } else if self.activity_type_id == builtin_types::HIKE
+            || self.activity_type_id == builtin_types::WALK
+        {
+            Box::new(HikerProfile::default())
+        } else {
+            Box::new(RunnerProfile::default())
         }
     }
 
@@ -568,7 +575,7 @@ impl ScenarioBuilder {
         Self::new()
             .with_users(200)
             .with_region(Region::BOULDER)
-            .with_activity_type(ActivityType::Running)
+            .with_activity_type_id(builtin_types::RUN)
             .with_track_distance(5000.0)
             .with_segment(0.2, 0.7, "Test Leaderboard Segment")
             .with_efforts_per_user(1..=3)
@@ -584,7 +591,7 @@ impl ScenarioBuilder {
         Self::new()
             .with_users(50)
             .with_region(Region::BOULDER)
-            .with_activity_type(ActivityType::Running)
+            .with_activity_type_id(builtin_types::RUN)
             .with_track_distance(3000.0)
             .with_activities_per_user(3..=5)
             .with_social(true)
@@ -603,7 +610,7 @@ impl ScenarioBuilder {
         Self::new()
             .with_users(20)
             .with_region(Region::BOULDER)
-            .with_activity_type(ActivityType::Running)
+            .with_activity_type_id(builtin_types::RUN)
             .with_track_distance(8000.0)
             .with_segment(0.1, 0.4, "Segment A")
             .with_segment(0.3, 0.6, "Segment B (overlaps A)")
@@ -620,7 +627,7 @@ impl ScenarioBuilder {
         Self::new()
             .with_users(30)
             .with_region(Region::RENO_TAHOE)
-            .with_activity_type(ActivityType::RoadCycling)
+            .with_activity_type_id(builtin_types::ROAD)
             .with_track_distance(10000.0)
             .with_segment(0.1, 0.3, "Cat 4 Climb")
             .with_segment(0.4, 0.7, "Cat 3 Climb")
@@ -640,7 +647,7 @@ impl ScenarioBuilder {
         Self::new()
             .with_users(500)
             .with_region(Region::RENO_TAHOE)
-            .with_activity_type(ActivityType::RoadCycling)
+            .with_activity_type_id(builtin_types::ROAD)
             .with_track_distance(20000.0)
             .with_activities_per_user(2..=4)
             .with_auto_climbs(true)
@@ -662,7 +669,7 @@ impl ScenarioBuilder {
         Self::new()
             .with_users(100)
             .with_region(Region::BOULDER)
-            .with_activity_type(ActivityType::Running)
+            .with_activity_type_id(builtin_types::RUN)
             .with_track_distance(10000.0)
             .with_activities_per_user(2..=3)
             // Reference track segments
@@ -695,7 +702,7 @@ impl ScenarioBuilder {
         Self::new()
             .with_users(75)
             .with_region(Region::BOULDER)
-            .with_activity_type(ActivityType::RoadCycling)
+            .with_activity_type_id(builtin_types::ROAD)
             .with_track_distance(15000.0)
             .with_activities_per_user(2..=4)
             .with_segment(0.1, 0.3, "Sprint Section")

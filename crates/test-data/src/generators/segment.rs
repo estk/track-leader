@@ -3,7 +3,7 @@
 use rand::Rng;
 use uuid::Uuid;
 
-use tracks::models::{ActivityType, TrackPointData, Visibility};
+use tracks::models::{TrackPointData, Visibility};
 
 /// Generated segment data ready for database insertion.
 #[derive(Debug, Clone)]
@@ -12,7 +12,7 @@ pub struct GeneratedSegment {
     pub creator_id: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
     pub visibility: Visibility,
     /// Segment geometry as WKT LineString.
     pub geo_wkt: String,
@@ -80,7 +80,7 @@ impl SegmentGenerator {
     /// * `points` - Full track points
     /// * `start_fraction` - Start position as fraction of track (0.0 - 1.0)
     /// * `end_fraction` - End position as fraction of track (0.0 - 1.0)
-    /// * `activity_type` - Activity type for the segment
+    /// * `activity_type_id` - Activity type UUID for the segment
     /// * `name` - Segment name
     #[allow(clippy::too_many_arguments)]
     pub fn extract_from_track(
@@ -89,7 +89,7 @@ impl SegmentGenerator {
         points: &[TrackPointData],
         start_fraction: f64,
         end_fraction: f64,
-        activity_type: ActivityType,
+        activity_type_id: Uuid,
         name: impl Into<String>,
         rng: &mut impl Rng,
     ) -> Option<GeneratedSegment> {
@@ -105,7 +105,7 @@ impl SegmentGenerator {
         }
 
         let segment_points = &points[start_idx..end_idx];
-        self.from_points(creator_id, segment_points, activity_type, name, rng)
+        self.from_points(creator_id, segment_points, activity_type_id, name, rng)
     }
 
     /// Creates a segment from a set of points.
@@ -113,7 +113,7 @@ impl SegmentGenerator {
         &self,
         creator_id: Uuid,
         points: &[TrackPointData],
-        activity_type: ActivityType,
+        activity_type_id: Uuid,
         name: impl Into<String>,
         rng: &mut impl Rng,
     ) -> Option<GeneratedSegment> {
@@ -148,7 +148,7 @@ impl SegmentGenerator {
             creator_id,
             name: name.into(),
             description: None,
-            activity_type,
+            activity_type_id,
             visibility,
             geo_wkt,
             start_wkt,
@@ -178,7 +178,7 @@ impl SegmentGenerator {
         &self,
         creator_id: Uuid,
         points: &[TrackPointData],
-        activity_type: ActivityType,
+        activity_type_id: Uuid,
         rng: &mut impl Rng,
     ) -> Vec<GeneratedSegment> {
         if points.len() < 3 {
@@ -215,7 +215,7 @@ impl SegmentGenerator {
                     if let Some(mut seg) = self.from_points(
                         creator_id,
                         climb_points,
-                        activity_type,
+                        activity_type_id,
                         "", // Name will be set below
                         rng,
                     ) {
@@ -236,7 +236,7 @@ impl SegmentGenerator {
         {
             let climb_points = &points[start..];
             if let Some(mut seg) =
-                self.from_points(creator_id, climb_points, activity_type, "", rng)
+                self.from_points(creator_id, climb_points, activity_type_id, "", rng)
             {
                 let climb_num = segments.len() + 1;
                 self.set_climb_name_and_description(&mut seg, climb_num);
@@ -410,7 +410,7 @@ mod tests {
             &points,
             0.1,
             0.9,
-            ActivityType::Running,
+            tracks::models::builtin_types::RUN,
             "Test Segment",
             &mut rng,
         );

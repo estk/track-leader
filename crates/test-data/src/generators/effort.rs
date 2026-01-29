@@ -208,7 +208,7 @@ impl Default for EffortGenerator {
 mod tests {
     use super::*;
     use crate::profiles::RunnerProfile;
-    use tracks::models::ActivityType;
+    use tracks::models::builtin_types;
 
     fn make_test_segment() -> GeneratedSegment {
         GeneratedSegment {
@@ -216,7 +216,7 @@ mod tests {
             creator_id: Uuid::new_v4(),
             name: "Test Climb".into(),
             description: None,
-            activity_type: ActivityType::Running,
+            activity_type_id: builtin_types::RUN,
             visibility: tracks::models::Visibility::Public,
             geo_wkt: "LINESTRING(0 0, 1 1)".into(),
             start_wkt: "POINT(0 0)".into(),

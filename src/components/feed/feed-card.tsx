@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { FeedActivity, api } from "@/lib/api";
+import { FeedActivity, api, getActivityTypeName } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDistanceToNow } from "@/lib/utils";
@@ -95,7 +95,7 @@ export function FeedCard({ activity }: FeedCardProps) {
               href={`/activities/${activity.id}`}
               className="block mt-1 hover:underline"
             >
-              <span className="mr-2">{getActivityIcon(activity.activity_type)}</span>
+              <span className="mr-2">{getActivityIcon(getActivityTypeName(activity.activity_type_id))}</span>
               <span className="font-medium">{activity.name}</span>
             </Link>
 

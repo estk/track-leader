@@ -4,7 +4,7 @@ use rand::Rng;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use tracks::models::{ActivityType, TrackPointData, Visibility};
+use tracks::models::{builtin_types, TrackPointData, Visibility};
 
 /// Generated activity data ready for database insertion.
 #[derive(Debug, Clone)]
@@ -12,7 +12,7 @@ pub struct GeneratedActivity {
     pub id: Uuid,
     pub user_id: Uuid,
     pub name: String,
-    pub activity_type: ActivityType,
+    pub activity_type_id: Uuid,
     pub visibility: Visibility,
     pub submitted_at: OffsetDateTime,
     pub track_points: Vec<TrackPointData>,
@@ -99,12 +99,12 @@ impl ActivityGenerator {
     pub fn from_track(
         &self,
         user_id: Uuid,
-        activity_type: ActivityType,
+        activity_type_id: Uuid,
         track_points: Vec<TrackPointData>,
         rng: &mut impl Rng,
     ) -> GeneratedActivity {
         let id = Uuid::new_v4();
-        let name = self.generate_name(activity_type, rng);
+        let name = self.generate_name(activity_type_id, rng);
 
         // Calculate stats from track
         let (distance_meters, elevation_gain_meters) =
@@ -126,7 +126,7 @@ impl ActivityGenerator {
             id,
             user_id,
             name,
-            activity_type,
+            activity_type_id,
             visibility,
             submitted_at,
             track_points,
@@ -138,14 +138,21 @@ impl ActivityGenerator {
     }
 
     /// Generates an appropriate name for an activity.
-    fn generate_name(&self, activity_type: ActivityType, rng: &mut impl Rng) -> String {
-        let prefixes = match activity_type {
-            ActivityType::Running => &self.name_config.running_prefixes,
-            ActivityType::RoadCycling | ActivityType::MountainBiking => {
-                &self.name_config.cycling_prefixes
-            }
-            ActivityType::Hiking | ActivityType::Walking => &self.name_config.hiking_prefixes,
-            ActivityType::Unknown => &self.name_config.running_prefixes,
+    fn generate_name(&self, activity_type_id: Uuid, rng: &mut impl Rng) -> String {
+        let prefixes = if activity_type_id == builtin_types::RUN {
+            &self.name_config.running_prefixes
+        } else if activity_type_id == builtin_types::ROAD
+            || activity_type_id == builtin_types::MTB
+            || activity_type_id == builtin_types::EMTB
+            || activity_type_id == builtin_types::GRAVEL
+        {
+            &self.name_config.cycling_prefixes
+        } else if activity_type_id == builtin_types::HIKE
+            || activity_type_id == builtin_types::WALK
+        {
+            &self.name_config.hiking_prefixes
+        } else {
+            &self.name_config.running_prefixes
         };
 
         let prefix = &prefixes[rng.gen_range(0..prefixes.len())];
@@ -283,7 +290,7 @@ mod tests {
         ];
 
         let activity =
-            activity_gen.from_track(Uuid::new_v4(), ActivityType::Running, points, &mut rng);
+            activity_gen.from_track(Uuid::new_v4(), builtin_types::RUN, points, &mut rng);
 
         assert!(!activity.name.is_empty());
         assert!(activity.distance_meters > 0.0);

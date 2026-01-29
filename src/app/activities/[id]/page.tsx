@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LazyActivityMap } from "@/components/activity/lazy-activity-map";
 import { LazyElevationProfile } from "@/components/activity/lazy-elevation-profile";
 import { Textarea } from "@/components/ui/textarea";
-
-const ACTIVITY_TYPES = [
-  { value: "Running", label: "Run" },
-  { value: "RoadCycling", label: "Road Cycling" },
-  { value: "MountainBiking", label: "Mountain Biking" },
-  { value: "Hiking", label: "Hike" },
-  { value: "Walking", label: "Walk" },
-  { value: "Unknown", label: "Other" },
-];
 
 // Convert climb category number to display string
 function formatClimbCategory(category: number | null): string | null {
@@ -120,7 +111,7 @@ export default function ActivityDetailPage() {
   const handleEdit = () => {
     if (activity) {
       setEditName(activity.name);
-      setEditType(activity.activity_type);
+      setEditType(activity.activity_type_id);
       setEditVisibility(activity.visibility);
       setEditOpen(true);
     }
@@ -133,7 +124,7 @@ export default function ActivityDetailPage() {
     try {
       const updated = await api.updateActivity(activity.id, {
         name: editName !== activity.name ? editName : undefined,
-        activity_type: editType !== activity.activity_type ? editType : undefined,
+        activity_type_id: editType !== activity.activity_type_id ? editType : undefined,
         visibility: editVisibility !== activity.visibility ? editVisibility : undefined,
       });
       setActivity(updated);
@@ -269,9 +260,9 @@ export default function ActivityDetailPage() {
                   onChange={(e) => setEditType(e.target.value)}
                   className="w-full h-10 px-3 py-2 border rounded-md bg-background"
                 >
-                  {ACTIVITY_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
+                  {ACTIVITY_TYPE_OPTIONS.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
                     </option>
                   ))}
                 </select>
@@ -523,7 +514,7 @@ export default function ActivityDetailPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">{activity.name}</h1>
           <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2">
-            <Badge variant="secondary">{activity.activity_type}</Badge>
+            <Badge variant="secondary">{getActivityTypeName(activity.activity_type_id)}</Badge>
             <Badge variant={activity.visibility === "public" ? "default" : "outline"}>
               {activity.visibility === "public" ? "Public" : activity.visibility === "private" ? "Private" : "Teams Only"}
             </Badge>

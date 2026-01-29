@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity } from "@/lib/api";
+import { api, Activity, getActivityTypeName } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -88,7 +88,7 @@ export default function ActivitiesPage() {
                       </span>
                     )}
                   </div>
-                  <Badge variant="secondary">{activity.activity_type}</Badge>
+                  <Badge variant="secondary">{getActivityTypeName(activity.activity_type_id)}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {new Date(activity.submitted_at).toLocaleDateString(undefined, {

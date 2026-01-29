@@ -3,21 +3,13 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, ActivityVisibility } from "@/lib/api";
+import { api, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, ACTIVITY_TYPE_IDS } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TeamSelector } from "@/components/teams/team-selector";
 
-const ACTIVITY_TYPES = [
-  { value: "Running", label: "Run" },
-  { value: "RoadCycling", label: "Road Cycling" },
-  { value: "MountainBiking", label: "Mountain Biking" },
-  { value: "Hiking", label: "Hike" },
-  { value: "Walking", label: "Walk" },
-  { value: "Unknown", label: "Other" },
-];
 
 const VISIBILITY_OPTIONS: {
   value: ActivityVisibility;
@@ -63,7 +55,7 @@ export default function UploadActivityPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
-  const [activityType, setActivityType] = useState("Running");
+  const [activityType, setActivityType] = useState<string>(ACTIVITY_TYPE_IDS.RUN);
   const [visibility, setVisibility] = useState<ActivityVisibility>("public");
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -113,7 +105,7 @@ export default function UploadActivityPage() {
 
     try {
       const teamIds = visibility === "teams_only" ? selectedTeamIds : undefined;
-      await api.uploadActivity(file, name, activityType, visibility, teamIds);
+      await api.uploadActivity(file, name, activityType, visibility, { teamIds });
       router.push("/activities");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -182,9 +174,9 @@ export default function UploadActivityPage() {
                 onChange={(e) => setActivityType(e.target.value)}
                 className="w-full h-10 px-3 py-2 border rounded-md bg-background text-foreground"
               >
-                {ACTIVITY_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
+                {ACTIVITY_TYPE_OPTIONS.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
                   </option>
                 ))}
               </select>

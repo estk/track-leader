@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { api, Segment, StarredSegmentEffort, ListSegmentsOptions, SegmentSortBy, SortOrder, ClimbCategoryFilter } from "@/lib/api";
+import { api, Segment, StarredSegmentEffort, ListSegmentsOptions, SegmentSortBy, SortOrder, ClimbCategoryFilter, getActivityTypeName, ACTIVITY_TYPE_OPTIONS } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,15 +11,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LazySegmentsMap } from "@/components/segments/lazy-segments-map";
 
 type ViewMode = "list" | "map";
-
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  Running: "Run",
-  RoadCycling: "Road Cycling",
-  MountainBiking: "Mountain Biking",
-  Hiking: "Hike",
-  Walking: "Walk",
-  Unknown: "Other",
-};
 
 function formatDistance(meters: number): string {
   if (meters >= 1000) {
@@ -56,7 +47,10 @@ function formatTime(seconds: number | null): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-const ACTIVITY_TYPES = ["All", "Running", "RoadCycling", "MountainBiking", "Hiking", "Walking"];
+const ACTIVITY_TYPE_FILTERS = [
+  { id: "All", name: "All Types" },
+  ...ACTIVITY_TYPE_OPTIONS,
+];
 
 type SortOption = "newest" | "oldest" | "name-asc" | "name-desc" | "distance-asc" | "distance-desc" | "elevation-asc" | "elevation-desc";
 
@@ -170,7 +164,7 @@ export default function SegmentsPage() {
         const { sortBy: apiSortBy, sortOrder: apiSortOrder } = sortOptionToApi(sortBy);
 
         const options: ListSegmentsOptions = {
-          activityType: activityTypeFilter === "All" ? undefined : activityTypeFilter,
+          activityTypeId: activityTypeFilter === "All" ? undefined : activityTypeFilter,
           search: searchQuery || undefined,
           sortBy: apiSortBy,
           sortOrder: apiSortOrder,
@@ -350,14 +344,14 @@ export default function SegmentsPage() {
 
       {!showStarred && !showNearby && (
         <div className="flex flex-wrap gap-2">
-          {ACTIVITY_TYPES.map((type) => (
+          {ACTIVITY_TYPE_FILTERS.map((type) => (
             <Button
-              key={type}
-              variant={activityTypeFilter === type ? "default" : "outline"}
+              key={type.id}
+              variant={activityTypeFilter === type.id ? "default" : "outline"}
               size="sm"
-              onClick={() => setActivityTypeFilter(type)}
+              onClick={() => setActivityTypeFilter(type.id)}
             >
-              {type === "All" ? "All Types" : ACTIVITY_TYPE_LABELS[type] || type}
+              {type.name}
             </Button>
           ))}
         </div>
@@ -476,7 +470,7 @@ function SegmentsContent({
         creator_id: "",
         name: e.segment_name,
         description: null,
-        activity_type: e.activity_type,
+        activity_type_id: e.activity_type_id,
         distance_meters: e.distance_meters,
         elevation_gain_meters: e.elevation_gain_meters,
         elevation_loss_meters: null,
@@ -501,7 +495,7 @@ function SegmentsContent({
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">{effort.segment_name}</CardTitle>
                 <Badge variant="secondary">
-                  {ACTIVITY_TYPE_LABELS[effort.activity_type] || effort.activity_type}
+                  {getActivityTypeName(effort.activity_type_id)}
                 </Badge>
               </div>
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mt-2">
@@ -585,7 +579,7 @@ function SegmentsContent({
                   </Badge>
                 )}
                 <Badge variant="secondary">
-                  {ACTIVITY_TYPE_LABELS[segment.activity_type] || segment.activity_type}
+                  {getActivityTypeName(segment.activity_type_id)}
                 </Badge>
               </div>
             </div>
