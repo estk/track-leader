@@ -114,6 +114,8 @@ export default function SegmentLeaderboardPage() {
               scope: filters.scope,
               gender: filters.gender,
               age_group: filters.age_group,
+              weight_class: filters.weight_class,
+              country: filters.country,
             });
             setPosition(pos);
           } catch {

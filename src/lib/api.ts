@@ -226,14 +226,22 @@ export interface StarredSegmentEffort {
 // Leaderboard types
 export type LeaderboardScope = 'all_time' | 'year' | 'month' | 'week';
 export type GenderFilter = 'all' | 'male' | 'female';
-export type AgeGroup = 'all' | '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+';
+export type AgeGroup = 'all' | '18-24' | '25-29' | '30-34' | '35-39' | '40-49' | '50-59' | '60+';
+export type WeightClass = 'all' | 'featherweight' | 'lightweight' | 'welterweight' | 'middleweight' | 'cruiserweight' | 'heavyweight';
 
 export interface LeaderboardFilters {
   scope: LeaderboardScope;
   gender: GenderFilter;
   age_group: AgeGroup;
+  weight_class: WeightClass;
+  country: string | null;
   limit: number;
   offset: number;
+}
+
+export interface CountryStats {
+  country: string;
+  user_count: number;
 }
 
 export interface LeaderboardEntry {
@@ -843,6 +851,8 @@ class ApiClient {
     if (filters.scope) params.set('scope', filters.scope);
     if (filters.gender) params.set('gender', filters.gender);
     if (filters.age_group) params.set('age_group', filters.age_group);
+    if (filters.weight_class) params.set('weight_class', filters.weight_class);
+    if (filters.country) params.set('country', filters.country);
     if (filters.limit !== undefined) params.set('limit', filters.limit.toString());
     if (filters.offset !== undefined) params.set('offset', filters.offset.toString());
     const queryString = params.toString();
@@ -852,15 +862,22 @@ class ApiClient {
 
   async getLeaderboardPosition(
     segmentId: string,
-    filters: Partial<Pick<LeaderboardFilters, 'scope' | 'gender' | 'age_group'>>
+    filters: Partial<Pick<LeaderboardFilters, 'scope' | 'gender' | 'age_group' | 'weight_class' | 'country'>>
   ): Promise<LeaderboardPosition> {
     const params = new URLSearchParams();
     if (filters.scope) params.set('scope', filters.scope);
     if (filters.gender) params.set('gender', filters.gender);
     if (filters.age_group) params.set('age_group', filters.age_group);
+    if (filters.weight_class) params.set('weight_class', filters.weight_class);
+    if (filters.country) params.set('country', filters.country);
     const queryString = params.toString();
     const path = `/segments/${segmentId}/leaderboard/position${queryString ? `?${queryString}` : ''}`;
     return this.request<LeaderboardPosition>(path);
+  }
+
+  // Countries endpoint
+  async getCountries(): Promise<CountryStats[]> {
+    return this.request<CountryStats[]>('/leaderboards/countries');
   }
 
   // Demographics endpoints

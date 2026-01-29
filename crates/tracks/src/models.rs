@@ -295,7 +295,7 @@ impl std::str::FromStr for LeaderboardScope {
     }
 }
 
-/// Age group for demographic filtering
+/// Age group for demographic filtering (5-year brackets for younger, 10-year for older)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum AgeGroup {
@@ -303,29 +303,32 @@ pub enum AgeGroup {
     All,
     #[serde(rename = "18-24")]
     Age18To24,
-    #[serde(rename = "25-34")]
-    Age25To34,
-    #[serde(rename = "35-44")]
-    Age35To44,
-    #[serde(rename = "45-54")]
-    Age45To54,
-    #[serde(rename = "55-64")]
-    Age55To64,
-    #[serde(rename = "65+")]
-    Age65Plus,
+    #[serde(rename = "25-29")]
+    Age25To29,
+    #[serde(rename = "30-34")]
+    Age30To34,
+    #[serde(rename = "35-39")]
+    Age35To39,
+    #[serde(rename = "40-49")]
+    Age40To49,
+    #[serde(rename = "50-59")]
+    Age50To59,
+    #[serde(rename = "60+")]
+    Age60Plus,
 }
 
 impl AgeGroup {
-    /// Returns the age range (min, max) for this group. Max is None for 65+.
+    /// Returns the age range (min, max) for this group. Max is None for 60+.
     pub fn age_range(&self) -> Option<(i32, Option<i32>)> {
         match self {
             AgeGroup::All => None,
             AgeGroup::Age18To24 => Some((18, Some(24))),
-            AgeGroup::Age25To34 => Some((25, Some(34))),
-            AgeGroup::Age35To44 => Some((35, Some(44))),
-            AgeGroup::Age45To54 => Some((45, Some(54))),
-            AgeGroup::Age55To64 => Some((55, Some(64))),
-            AgeGroup::Age65Plus => Some((65, None)),
+            AgeGroup::Age25To29 => Some((25, Some(29))),
+            AgeGroup::Age30To34 => Some((30, Some(34))),
+            AgeGroup::Age35To39 => Some((35, Some(39))),
+            AgeGroup::Age40To49 => Some((40, Some(49))),
+            AgeGroup::Age50To59 => Some((50, Some(59))),
+            AgeGroup::Age60Plus => Some((60, None)),
         }
     }
 }
@@ -337,11 +340,12 @@ impl std::str::FromStr for AgeGroup {
         match s.to_lowercase().as_str() {
             "all" => Ok(AgeGroup::All),
             "18-24" => Ok(AgeGroup::Age18To24),
-            "25-34" => Ok(AgeGroup::Age25To34),
-            "35-44" => Ok(AgeGroup::Age35To44),
-            "45-54" => Ok(AgeGroup::Age45To54),
-            "55-64" => Ok(AgeGroup::Age55To64),
-            "65+" | "65_plus" => Ok(AgeGroup::Age65Plus),
+            "25-29" => Ok(AgeGroup::Age25To29),
+            "30-34" => Ok(AgeGroup::Age30To34),
+            "35-39" => Ok(AgeGroup::Age35To39),
+            "40-49" => Ok(AgeGroup::Age40To49),
+            "50-59" => Ok(AgeGroup::Age50To59),
+            "60+" | "60_plus" => Ok(AgeGroup::Age60Plus),
             _ => Err(format!("unknown age group: {s}")),
         }
     }
@@ -370,6 +374,58 @@ impl std::str::FromStr for GenderFilter {
     }
 }
 
+/// Weight class for leaderboard filtering
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum WeightClass {
+    #[default]
+    All,
+    /// < 55 kg
+    Featherweight,
+    /// 55-64 kg
+    Lightweight,
+    /// 65-74 kg
+    Welterweight,
+    /// 75-84 kg
+    Middleweight,
+    /// 85-94 kg
+    Cruiserweight,
+    /// 95+ kg
+    Heavyweight,
+}
+
+impl WeightClass {
+    /// Returns the weight range (min_kg, max_kg) for this class. Min is None for featherweight, max is None for heavyweight.
+    pub fn weight_range(&self) -> Option<(Option<f64>, Option<f64>)> {
+        match self {
+            WeightClass::All => None,
+            WeightClass::Featherweight => Some((None, Some(54.99))),
+            WeightClass::Lightweight => Some((Some(55.0), Some(64.99))),
+            WeightClass::Welterweight => Some((Some(65.0), Some(74.99))),
+            WeightClass::Middleweight => Some((Some(75.0), Some(84.99))),
+            WeightClass::Cruiserweight => Some((Some(85.0), Some(94.99))),
+            WeightClass::Heavyweight => Some((Some(95.0), None)),
+        }
+    }
+}
+
+impl std::str::FromStr for WeightClass {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "all" => Ok(WeightClass::All),
+            "featherweight" => Ok(WeightClass::Featherweight),
+            "lightweight" => Ok(WeightClass::Lightweight),
+            "welterweight" => Ok(WeightClass::Welterweight),
+            "middleweight" => Ok(WeightClass::Middleweight),
+            "cruiserweight" => Ok(WeightClass::Cruiserweight),
+            "heavyweight" => Ok(WeightClass::Heavyweight),
+            _ => Err(format!("unknown weight class: {s}")),
+        }
+    }
+}
+
 /// Query parameters for filtered leaderboard requests
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct LeaderboardFilters {
@@ -379,6 +435,10 @@ pub struct LeaderboardFilters {
     pub gender: GenderFilter,
     #[serde(default)]
     pub age_group: AgeGroup,
+    #[serde(default)]
+    pub weight_class: WeightClass,
+    #[serde(default)]
+    pub country: Option<String>,
     #[serde(default = "default_limit")]
     pub limit: i64,
     #[serde(default)]
@@ -424,6 +484,8 @@ pub struct LeaderboardFiltersResponse {
     pub scope: LeaderboardScope,
     pub gender: GenderFilter,
     pub age_group: AgeGroup,
+    pub weight_class: WeightClass,
+    pub country: Option<String>,
     pub limit: i64,
     pub offset: i64,
 }
@@ -436,6 +498,13 @@ pub struct LeaderboardPosition {
     pub entries_above: Vec<LeaderboardEntry>,
     pub entries_below: Vec<LeaderboardEntry>,
     pub total_count: i64,
+}
+
+/// Country with user count for the countries dropdown
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CountryStats {
+    pub country: String,
+    pub user_count: i64,
 }
 
 // ============================================================================

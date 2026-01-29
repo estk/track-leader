@@ -1,11 +1,13 @@
 use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
-    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, CrownCountEntry, DistanceLeaderEntry,
-    GenderFilter, LeaderboardEntry, LeaderboardFilters, LeaderboardScope, ResolvedActivityType,
-    Scores, Segment, SegmentEffort, Team, TeamInvitation, TeamInvitationWithDetails,
-    TeamJoinRequest, TeamJoinRequestWithUser, TeamMember, TeamMembership, TeamRole, TeamSummary,
-    TeamVisibility, TeamWithMembership, UpdateDemographicsRequest, User, UserWithDemographics,
+    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, CrownCountEntry, DistanceLeaderEntry, GenderFilter, LeaderboardEntry, LeaderboardFilters, LeaderboardScope, ResolvedActivityType, CountryStats,
+    Scores, Segment,
+    SegmentEffort, Team, TeamInvitation, TeamInvitationWithDetails,
+    TeamJoinRequest,
+    TeamJoinRequestWithUser, TeamMember, TeamMembership, TeamRole, TeamSummary,
+    TeamVisibility,
+    TeamWithMembership, UpdateDemographicsRequest, User, UserWithDemographics,
 };
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use serde::Serialize;
@@ -1434,6 +1436,26 @@ impl Database {
             }
         });
 
+        // Build the weight class filter
+        let weight_filter =
+            filters
+                .weight_class
+                .weight_range()
+                .map(|(min_kg, max_kg)| match (min_kg, max_kg) {
+                    (None, Some(max)) => format!("u.weight_kg < {max}"),
+                    (Some(min), Some(max)) => {
+                        format!("u.weight_kg >= {min} AND u.weight_kg < {max}")
+                    }
+                    (Some(min), None) => format!("u.weight_kg >= {min}"),
+                    (None, None) => unreachable!(),
+                });
+
+        // Build the country filter
+        let country_filter = filters
+            .country
+            .as_ref()
+            .map(|c| format!("u.country = '{}'", c.replace('\'', "''")));
+
         // Build WHERE clauses
         let mut where_clauses = vec!["e.segment_id = $1".to_string()];
         if let Some(tf) = time_filter {
@@ -1444,6 +1466,12 @@ impl Database {
         }
         if let Some(af) = age_filter {
             where_clauses.push(af);
+        }
+        if let Some(wf) = weight_filter {
+            where_clauses.push(wf);
+        }
+        if let Some(cf) = country_filter {
+            where_clauses.push(cf);
         }
         let where_clause = where_clauses.join(" AND ");
 
@@ -1564,6 +1592,26 @@ impl Database {
             }
         });
 
+        // Build the weight class filter
+        let weight_filter =
+            filters
+                .weight_class
+                .weight_range()
+                .map(|(min_kg, max_kg)| match (min_kg, max_kg) {
+                    (None, Some(max)) => format!("u.weight_kg < {max}"),
+                    (Some(min), Some(max)) => {
+                        format!("u.weight_kg >= {min} AND u.weight_kg < {max}")
+                    }
+                    (Some(min), None) => format!("u.weight_kg >= {min}"),
+                    (None, None) => unreachable!(),
+                });
+
+        // Build the country filter
+        let country_filter = filters
+            .country
+            .as_ref()
+            .map(|c| format!("u.country = '{}'", c.replace('\'', "''")));
+
         // Build WHERE clauses
         let mut where_clauses = vec!["e.segment_id = $1".to_string()];
         if let Some(tf) = time_filter {
@@ -1574,6 +1622,12 @@ impl Database {
         }
         if let Some(af) = age_filter {
             where_clauses.push(af);
+        }
+        if let Some(wf) = weight_filter {
+            where_clauses.push(wf);
+        }
+        if let Some(cf) = country_filter {
+            where_clauses.push(cf);
         }
         let where_clause = where_clauses.join(" AND ");
 
@@ -1991,6 +2045,25 @@ impl Database {
         .await?;
 
         Ok(entries)
+    }
+
+    /// Get list of countries with user counts for filter dropdown.
+    pub async fn get_countries_with_counts(&self) -> Result<Vec<CountryStats>, AppError> {
+        let countries: Vec<CountryStats> = sqlx::query_as(
+            r#"
+            SELECT
+                country,
+                COUNT(*) as user_count
+            FROM users
+            WHERE country IS NOT NULL AND country != ''
+            GROUP BY country
+            ORDER BY user_count DESC, country ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(countries)
     }
 
     // ========================================================================

@@ -17,7 +17,7 @@ use crate::{
     errors::AppError,
     models::{
         AchievementType, AchievementWithSegment, Activity, ChangeMemberRoleRequest,
-        CreateTeamRequest, CrownCountEntry, DistanceLeaderEntry, InviteToTeamRequest,
+        CountryStats, CreateTeamRequest, CrownCountEntry, DistanceLeaderEntry, InviteToTeamRequest,
         JoinTeamRequest, LeaderboardFilters, LeaderboardFiltersResponse, LeaderboardPosition,
         LeaderboardResponse, Segment, SegmentAchievements, SegmentEffort, ShareWithTeamsRequest,
         Stats, Team, TeamInvitationWithDetails, TeamMember, TeamRole, TeamSummary,
@@ -1527,6 +1527,8 @@ pub async fn get_filtered_leaderboard(
             scope: filters.scope,
             gender: filters.gender,
             age_group: filters.age_group,
+            weight_class: filters.weight_class,
+            country: filters.country.clone(),
             limit: filters.limit,
             offset: filters.offset,
         },
@@ -1681,6 +1683,14 @@ pub async fn get_distance_leaderboard(
         .get_distance_leaderboard(query.limit, query.offset)
         .await?;
     Ok(Json(entries))
+}
+
+/// Get list of countries with user counts for the filter dropdown.
+pub async fn get_countries(
+    Extension(db): Extension<Database>,
+) -> Result<Json<Vec<CountryStats>>, AppError> {
+    let countries = db.get_countries_with_counts().await?;
+    Ok(Json(countries))
 }
 
 // ============================================================================
