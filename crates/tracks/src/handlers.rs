@@ -7,6 +7,7 @@ use axum::{
 use axum_extra::headers::{ContentType, HeaderMapExt, Mime};
 use bytes::BytesMut;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -27,7 +28,7 @@ use crate::{
     object_store_service::{FileType, ObjectStoreService},
 };
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TrackPoint {
     pub lat: f64,
     pub lon: f64,
@@ -35,13 +36,13 @@ pub struct TrackPoint {
     pub time: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TrackData {
     pub points: Vec<TrackPoint>,
     pub bounds: TrackBounds,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TrackBounds {
     pub min_lat: f64,
     pub max_lat: f64,
@@ -49,7 +50,7 @@ pub struct TrackBounds {
     pub max_lon: f64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct NewUserQuery {
     pub name: String,
     pub email: String,
@@ -69,7 +70,7 @@ pub async fn all_users(Extension(db): Extension<Database>) -> Result<Json<Vec<Us
     Ok(Json(users))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UploadQuery {
     pub activity_type_id: Uuid,
     pub name: String,
@@ -210,7 +211,7 @@ pub async fn get_activity(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateActivityRequest {
     pub name: Option<String>,
     pub activity_type_id: Option<Uuid>,
@@ -246,7 +247,7 @@ pub async fn delete_activity(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UserActivitiesQuery {}
 
 pub async fn get_user_activities(
@@ -456,12 +457,12 @@ pub async fn create_activity_type(
 }
 
 /// Resolve an activity type by name or alias.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ResolveTypeQuery {
     pub name: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ResolveTypeResponse {
     pub result: String, // "exact", "ambiguous", "not_found"
     pub type_id: Option<Uuid>,
@@ -499,7 +500,7 @@ pub async fn resolve_activity_type(
 // Segment handlers
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateSegmentRequest {
     pub name: String,
     pub description: Option<String>,
@@ -521,7 +522,7 @@ fn default_visibility() -> String {
     "public".to_string()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct SegmentPoint {
     pub lat: f64,
     pub lon: f64,
@@ -983,7 +984,7 @@ pub async fn get_segment(
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SegmentSortBy {
     #[default]
@@ -993,7 +994,7 @@ pub enum SegmentSortBy {
     ElevationGain,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SortOrder {
     Asc,
@@ -1001,7 +1002,7 @@ pub enum SortOrder {
     Desc,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ClimbCategoryFilter {
     Hc,
@@ -1032,7 +1033,7 @@ impl ClimbCategoryFilter {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ListSegmentsQuery {
     pub activity_type_id: Option<Uuid>,
     #[serde(default = "default_limit")]
@@ -1082,13 +1083,13 @@ pub async fn get_my_segment_efforts(
     Ok(Json(efforts))
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SegmentTrackData {
     pub points: Vec<SegmentTrackPoint>,
     pub bounds: TrackBounds,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SegmentTrackPoint {
     pub lat: f64,
     pub lon: f64,
@@ -1178,12 +1179,12 @@ pub async fn get_segment_track(
 
 // -- Segment Preview Endpoint --
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct PreviewSegmentRequest {
     pub points: Vec<SegmentPoint>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PreviewSegmentResponse {
     pub distance_meters: f64,
     pub elevation_gain_meters: Option<f64>,
@@ -1195,7 +1196,7 @@ pub struct PreviewSegmentResponse {
     pub validation: SegmentValidation,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SegmentValidation {
     pub is_valid: bool,
     pub errors: Vec<String>,
@@ -1263,7 +1264,7 @@ pub async fn preview_segment(
     }))
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ReprocessResult {
     pub segment_id: Uuid,
     pub activities_checked: usize,
@@ -1425,7 +1426,7 @@ pub async fn reprocess_segment(
 
 // Segment star handlers
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct StarResponse {
     pub starred: bool,
 }
@@ -1484,7 +1485,7 @@ pub async fn get_starred_segment_efforts(
     Ok(Json(efforts))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct NearbySegmentsQuery {
     lat: f64,
     lon: f64,
@@ -1596,7 +1597,7 @@ pub async fn update_my_demographics(
 // ============================================================================
 
 /// Get achievements for a specific user.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct GetAchievementsQuery {
     #[serde(default)]
     pub include_lost: bool,
@@ -1655,7 +1656,7 @@ pub async fn get_segment_achievements(
 // Global Leaderboard Handlers
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct GlobalLeaderboardQuery {
     #[serde(default = "default_limit")]
     pub limit: i64,
@@ -1747,7 +1748,7 @@ pub async fn unfollow_user(
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FollowStatusResponse {
     pub is_following: bool,
 }
@@ -1762,7 +1763,7 @@ pub async fn get_follow_status(
     Ok(Json(FollowStatusResponse { is_following }))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct FollowListQuery {
     #[serde(default = "default_limit")]
     pub limit: i64,
@@ -1770,7 +1771,7 @@ pub struct FollowListQuery {
     pub offset: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FollowListResponse {
     pub users: Vec<crate::models::UserSummary>,
     pub total_count: i32,
@@ -1827,7 +1828,7 @@ pub async fn get_user_profile(
 // Notification Handlers
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct NotificationsQuery {
     #[serde(default = "default_limit")]
     pub limit: i64,
@@ -1884,7 +1885,7 @@ pub async fn mark_all_notifications_read(
 // Activity Feed Handlers
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct FeedQuery {
     #[serde(default = "default_limit")]
     pub limit: i64,
@@ -1909,7 +1910,7 @@ pub async fn get_feed(
 // Kudos Handlers
 // ============================================================================
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct KudosResponse {
     pub given: bool,
     pub kudos_count: i32,
@@ -1971,7 +1972,7 @@ pub async fn remove_kudos(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct KudosStatusResponse {
     pub has_given: bool,
 }
@@ -1999,7 +2000,7 @@ pub async fn get_kudos_givers(
 // Comments Handlers
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct AddCommentRequest {
     pub content: String,
     pub parent_id: Option<Uuid>,
@@ -2141,7 +2142,7 @@ pub async fn list_my_teams(
     Ok(Json(teams))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct DiscoverTeamsQuery {
     #[serde(default = "default_limit")]
     pub limit: i64,
@@ -2419,7 +2420,7 @@ pub async fn get_join_requests(
     Ok(Json(requests))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ReviewJoinRequestRequest {
     pub approved: bool,
 }
@@ -2835,7 +2836,7 @@ pub async fn unshare_segment_from_team(
 // Team Content Handlers
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct TeamContentQuery {
     #[serde(default = "default_limit")]
     pub limit: i64,

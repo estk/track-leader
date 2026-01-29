@@ -2,9 +2,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use time::OffsetDateTime;
 use time::serde::rfc3339;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct User {
     pub id: Uuid,
     pub email: String,
@@ -25,7 +26,7 @@ impl User {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     #[default]
@@ -54,7 +55,7 @@ impl std::str::FromStr for Visibility {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Activity {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -88,7 +89,7 @@ pub mod builtin_types {
 }
 
 /// Row from the activity_types table
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct ActivityTypeRow {
     pub id: Uuid,
     pub name: String,
@@ -120,7 +121,7 @@ pub enum ResolvedActivityType {
 }
 
 /// Request to create a custom activity type
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateActivityTypeRequest {
     pub name: String,
 }
@@ -157,7 +158,7 @@ pub struct Scores {
     pub elevation_gain: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Segment {
     pub id: Uuid,
     pub creator_id: Uuid,
@@ -175,7 +176,7 @@ pub struct Segment {
     pub created_at: OffsetDateTime,
 }
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct SegmentEffort {
     pub id: Uuid,
     pub segment_id: Uuid,
@@ -194,7 +195,7 @@ pub struct SegmentEffort {
     pub end_fraction: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SegmentWithStats {
     #[serde(flatten)]
     pub segment: Segment,
@@ -204,7 +205,7 @@ pub struct SegmentWithStats {
 }
 
 /// Segment effort with segment details, for displaying on activity detail page.
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct ActivitySegmentEffort {
     pub effort_id: Uuid,
     pub segment_id: Uuid,
@@ -221,7 +222,7 @@ pub struct ActivitySegmentEffort {
 }
 
 /// Starred segment with the user's effort stats, for the starred segments dashboard.
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct StarredSegmentEffort {
     // Segment basic info
     pub segment_id: Uuid,
@@ -245,7 +246,7 @@ pub struct StarredSegmentEffort {
 // ============================================================================
 
 /// User gender for demographic filtering
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
 #[sqlx(type_name = "gender", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum Gender {
@@ -271,7 +272,7 @@ impl std::str::FromStr for Gender {
 }
 
 /// Time scope for leaderboard filtering
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LeaderboardScope {
     #[default]
@@ -296,7 +297,7 @@ impl std::str::FromStr for LeaderboardScope {
 }
 
 /// Age group for demographic filtering (5-year brackets for younger, 10-year for older)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AgeGroup {
     #[default]
@@ -352,7 +353,7 @@ impl std::str::FromStr for AgeGroup {
 }
 
 /// Gender filter for leaderboards (includes "all" option)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum GenderFilter {
     #[default]
@@ -375,7 +376,7 @@ impl std::str::FromStr for GenderFilter {
 }
 
 /// Weight class for leaderboard filtering
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WeightClass {
     #[default]
@@ -427,7 +428,7 @@ impl std::str::FromStr for WeightClass {
 }
 
 /// Query parameters for filtered leaderboard requests
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, ToSchema)]
 pub struct LeaderboardFilters {
     #[serde(default)]
     pub scope: LeaderboardScope,
@@ -450,7 +451,7 @@ fn default_limit() -> i64 {
 }
 
 /// A single entry in the leaderboard with user info and ranking
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct LeaderboardEntry {
     // Effort data
     pub effort_id: Uuid,
@@ -471,7 +472,7 @@ pub struct LeaderboardEntry {
 }
 
 /// Response for paginated leaderboard
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct LeaderboardResponse {
     pub entries: Vec<LeaderboardEntry>,
     pub total_count: i64,
@@ -479,7 +480,7 @@ pub struct LeaderboardResponse {
 }
 
 /// Echoed filters in leaderboard response
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct LeaderboardFiltersResponse {
     pub scope: LeaderboardScope,
     pub gender: GenderFilter,
@@ -491,7 +492,7 @@ pub struct LeaderboardFiltersResponse {
 }
 
 /// User's position in the leaderboard with surrounding entries
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct LeaderboardPosition {
     pub user_rank: i64,
     pub user_entry: LeaderboardEntry,
@@ -501,7 +502,7 @@ pub struct LeaderboardPosition {
 }
 
 /// Country with user count for the countries dropdown
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct CountryStats {
     pub country: String,
     pub user_count: i64,
@@ -512,7 +513,7 @@ pub struct CountryStats {
 // ============================================================================
 
 /// Type of achievement/crown
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, ToSchema)]
 #[sqlx(type_name = "achievement_type", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum AchievementType {
@@ -534,7 +535,7 @@ impl std::fmt::Display for AchievementType {
 }
 
 /// An achievement/crown earned by a user
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Achievement {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -551,7 +552,7 @@ pub struct Achievement {
 }
 
 /// Achievement with segment details for display
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct AchievementWithSegment {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -570,7 +571,7 @@ pub struct AchievementWithSegment {
 }
 
 /// Current achievement holders for a segment
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SegmentAchievements {
     pub segment_id: Uuid,
     pub kom: Option<AchievementHolder>,
@@ -579,7 +580,7 @@ pub struct SegmentAchievements {
 }
 
 /// Holder of an achievement with their details
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct AchievementHolder {
     pub user_id: Uuid,
     pub user_name: String,
@@ -595,7 +596,7 @@ pub struct AchievementHolder {
 // ============================================================================
 
 /// User profile with demographics
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct UserWithDemographics {
     pub id: Uuid,
     pub email: String,
@@ -610,7 +611,7 @@ pub struct UserWithDemographics {
 }
 
 /// Request to update user demographics
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateDemographicsRequest {
     pub gender: Option<Gender>,
     pub birth_year: Option<i32>,
@@ -624,7 +625,7 @@ pub struct UpdateDemographicsRequest {
 // ============================================================================
 
 /// Entry in global crown count leaderboard
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct CrownCountEntry {
     pub user_id: Uuid,
     pub user_name: String,
@@ -636,7 +637,7 @@ pub struct CrownCountEntry {
 }
 
 /// Entry in global distance leaderboard
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct DistanceLeaderEntry {
     pub user_id: Uuid,
     pub user_name: String,
@@ -650,7 +651,7 @@ pub struct DistanceLeaderEntry {
 // ============================================================================
 
 /// A follow relationship between two users
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Follow {
     pub follower_id: Uuid,
     pub following_id: Uuid,
@@ -659,7 +660,7 @@ pub struct Follow {
 }
 
 /// User profile with follow counts for display
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct UserProfile {
     pub id: Uuid,
     pub email: String,
@@ -677,7 +678,7 @@ pub struct UserProfile {
 }
 
 /// Summary of a user for follower/following lists
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct UserSummary {
     pub id: Uuid,
     pub name: String,
@@ -688,7 +689,7 @@ pub struct UserSummary {
 }
 
 /// Type of notification
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationType {
     Follow,
@@ -729,7 +730,7 @@ impl std::str::FromStr for NotificationType {
 }
 
 /// A notification for a user
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Notification {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -745,7 +746,7 @@ pub struct Notification {
 }
 
 /// Notification with actor details for display
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct NotificationWithActor {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -762,7 +763,7 @@ pub struct NotificationWithActor {
 }
 
 /// Response for notifications list with unread count
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct NotificationsResponse {
     pub notifications: Vec<NotificationWithActor>,
     pub unread_count: i64,
@@ -774,7 +775,7 @@ pub struct NotificationsResponse {
 // ============================================================================
 
 /// Activity with user and stats for the feed
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct FeedActivity {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -796,7 +797,7 @@ pub struct FeedActivity {
 // ============================================================================
 
 /// User who gave kudos
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct KudosGiver {
     pub user_id: Uuid,
     pub user_name: String,
@@ -805,7 +806,7 @@ pub struct KudosGiver {
 }
 
 /// A comment on an activity
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Comment {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -821,7 +822,7 @@ pub struct Comment {
 }
 
 /// Comment with user info for display
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct CommentWithUser {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -840,7 +841,7 @@ pub struct CommentWithUser {
 // ============================================================================
 
 /// Platform statistics for the homepage
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Stats {
     pub active_users: i64,
     pub segments_created: i64,
@@ -865,7 +866,7 @@ pub struct TrackPointData {
 // ============================================================================
 
 /// Team role enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
 #[sqlx(type_name = "team_role", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum TeamRole {
@@ -914,7 +915,7 @@ impl std::str::FromStr for TeamRole {
 }
 
 /// Team visibility (whether team is discoverable)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
 #[sqlx(type_name = "team_visibility", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum TeamVisibility {
@@ -947,7 +948,7 @@ impl std::str::FromStr for TeamVisibility {
 }
 
 /// Team join policy
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema)]
 #[sqlx(type_name = "team_join_policy", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum TeamJoinPolicy {
@@ -984,7 +985,7 @@ impl std::str::FromStr for TeamJoinPolicy {
 }
 
 /// A team for sharing activities and segments
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct Team {
     pub id: Uuid,
     pub name: String,
@@ -1003,7 +1004,7 @@ pub struct Team {
 }
 
 /// Team with additional context for the current user
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TeamWithMembership {
     #[serde(flatten)]
     pub team: Team,
@@ -1013,7 +1014,7 @@ pub struct TeamWithMembership {
 }
 
 /// A membership in a team
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TeamMembership {
     pub team_id: Uuid,
     pub user_id: Uuid,
@@ -1024,7 +1025,7 @@ pub struct TeamMembership {
 }
 
 /// Team member with user details
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TeamMember {
     pub user_id: Uuid,
     pub user_name: String,
@@ -1036,7 +1037,7 @@ pub struct TeamMember {
 }
 
 /// Request to join a team
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TeamJoinRequest {
     pub id: Uuid,
     pub team_id: Uuid,
@@ -1051,7 +1052,7 @@ pub struct TeamJoinRequest {
 }
 
 /// Join request with user details for admin review
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TeamJoinRequestWithUser {
     pub id: Uuid,
     pub team_id: Uuid,
@@ -1064,7 +1065,7 @@ pub struct TeamJoinRequestWithUser {
 }
 
 /// An invitation to join a team
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TeamInvitation {
     pub id: Uuid,
     pub team_id: Uuid,
@@ -1081,7 +1082,7 @@ pub struct TeamInvitation {
 }
 
 /// Invitation with additional context
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TeamInvitationWithDetails {
     pub id: Uuid,
     pub team_id: Uuid,
@@ -1097,7 +1098,7 @@ pub struct TeamInvitationWithDetails {
 }
 
 /// Request to create a team
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTeamRequest {
     pub name: String,
     pub description: Option<String>,
@@ -1109,7 +1110,7 @@ pub struct CreateTeamRequest {
 }
 
 /// Request to update a team
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTeamRequest {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -1119,7 +1120,7 @@ pub struct UpdateTeamRequest {
 }
 
 /// Request to invite a user to a team
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct InviteToTeamRequest {
     pub email: String,
     #[serde(default)]
@@ -1127,25 +1128,25 @@ pub struct InviteToTeamRequest {
 }
 
 /// Request to change a member's role
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ChangeMemberRoleRequest {
     pub role: TeamRole,
 }
 
 /// Request to join a team
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct JoinTeamRequest {
     pub message: Option<String>,
 }
 
 /// Request to share activity/segment with teams
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ShareWithTeamsRequest {
     pub team_ids: Vec<Uuid>,
 }
 
 /// Team summary for listings
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
 pub struct TeamSummary {
     pub id: Uuid,
     pub name: String,

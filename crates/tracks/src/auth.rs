@@ -16,6 +16,7 @@ use pasetors::version4::V4;
 use pasetors::{Local, local};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
+use utoipa::ToSchema;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -58,7 +59,7 @@ pub struct Claims {
     pub iat: i64, // issued at
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct RegisterRequest {
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
@@ -72,7 +73,7 @@ pub struct RegisterRequest {
     pub name: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct LoginRequest {
     #[validate(email(message = "Invalid email address"))]
     pub email: String,
@@ -80,13 +81,13 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AuthResponse {
     pub token: String,
     pub user: UserResponse,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct UserResponse {
     pub id: Uuid,
     pub email: String,

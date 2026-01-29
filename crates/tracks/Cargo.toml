@@ -49,3 +49,8 @@ argon2 = "0.5"
 pasetors = "0.7"
 rand.workspace = true
 validator = { version = "0.18", features = ["derive"] }
+
+# OpenAPI / Swagger
+utoipa = { version = "5", features = ["axum_extras", "uuid", "time"] }
+utoipa-axum = "0.2"
+utoipa-swagger-ui = { version = "9", features = ["axum"] }

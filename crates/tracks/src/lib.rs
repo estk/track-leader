@@ -20,6 +20,8 @@ use tower_http::{
     cors::{Any, CorsLayer},
     set_header::SetResponseHeaderLayer,
 };
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     activity_queue::ActivityQueue,
@@ -29,7 +31,7 @@ use crate::{
         accept_invitation, add_comment, all_users, change_member_role, create_activity_type,
         create_segment, create_team, delete_activity, delete_comment, delete_team, discover_teams,
         download_gpx_file, follow_user, get_activity, get_activity_segments, get_activity_teams,
-        get_activity_track, get_activity_type, get_comments, get_crown_leaderboard,
+        get_activity_track, get_activity_type, get_comments, get_countries, get_crown_leaderboard,
         get_distance_leaderboard, get_feed, get_filtered_leaderboard, get_follow_status,
         get_followers, get_following, get_invitation, get_join_requests, get_kudos_givers,
         get_kudos_status, get_leaderboard_position, get_my_achievements, get_my_demographics,
@@ -48,32 +50,168 @@ use crate::{
     },
     object_store_service::ObjectStoreService,
 };
-use crate::{
-    activity_queue::ActivityQueue,
-    auth::{login, me, register},
-    database::Database,
-    handlers::{
-        accept_invitation, add_comment, all_users, change_member_role, create_segment, create_team,
-        delete_activity, delete_comment, delete_team, discover_teams, download_gpx_file,
-        follow_user, get_activity, get_activity_segments, get_activity_teams, get_activity_track,
-        get_comments, get_countries, get_crown_leaderboard, get_distance_leaderboard, get_feed,
-        get_filtered_leaderboard, get_follow_status, get_followers, get_following, get_invitation,
-        get_join_requests, get_kudos_givers, get_kudos_status, get_leaderboard_position,
-        get_my_achievements, get_my_demographics, get_my_segment_efforts, get_nearby_segments,
-        get_notifications, get_segment, get_segment_achievements, get_segment_leaderboard,
-        get_segment_teams, get_segment_track, get_starred_segment_efforts, get_starred_segments,
-        get_stats, get_team, get_team_activities, get_team_invitations, get_team_segments,
-        get_user_achievements, get_user_activities, get_user_profile, give_kudos, health_check,
-        invite_to_team, is_segment_starred, join_team, leave_team, list_my_teams, list_segments,
-        list_team_members, mark_all_notifications_read, mark_notification_read, new_activity,
-        new_user, preview_segment, remove_kudos, remove_team_member, reprocess_segment,
-        review_join_request, revoke_invitation, share_activity_with_teams,
-        share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team,
-        unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics,
-        update_team,
-    },
-    object_store_service::ObjectStoreService,
-};
+
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "Track Leader API",
+        description = "API for Track Leader - Activity tracking and segment leaderboards",
+        version = "1.0.0",
+        license(name = "MIT"),
+    ),
+    servers(
+        (url = "http://localhost:8000", description = "Local development server"),
+    ),
+    tags(
+        (name = "auth", description = "Authentication endpoints"),
+        (name = "users", description = "User management endpoints"),
+        (name = "activities", description = "Activity management endpoints"),
+        (name = "segments", description = "Segment management endpoints"),
+        (name = "leaderboards", description = "Leaderboard endpoints"),
+        (name = "social", description = "Social features (follows, kudos, comments)"),
+        (name = "notifications", description = "Notification endpoints"),
+        (name = "teams", description = "Team management endpoints"),
+        (name = "stats", description = "Platform statistics"),
+    ),
+    components(
+        schemas(
+            // Auth types
+            auth::RegisterRequest,
+            auth::LoginRequest,
+            auth::AuthResponse,
+            auth::UserResponse,
+            // Core models
+            models::User,
+            models::Activity,
+            models::Segment,
+            models::SegmentEffort,
+            models::ActivityTypeRow,
+            models::CreateActivityTypeRequest,
+            // Visibility and enums
+            models::Visibility,
+            models::Gender,
+            models::TeamRole,
+            models::TeamVisibility,
+            models::TeamJoinPolicy,
+            // Leaderboard types
+            models::LeaderboardScope,
+            models::AgeGroup,
+            models::GenderFilter,
+            models::WeightClass,
+            models::LeaderboardFilters,
+            models::LeaderboardEntry,
+            models::LeaderboardResponse,
+            models::LeaderboardFiltersResponse,
+            models::LeaderboardPosition,
+            models::CountryStats,
+            // Achievement types
+            models::AchievementType,
+            models::Achievement,
+            models::AchievementWithSegment,
+            models::AchievementHolder,
+            models::SegmentAchievements,
+            // User types
+            models::UserWithDemographics,
+            models::UpdateDemographicsRequest,
+            models::UserProfile,
+            models::UserSummary,
+            // Global leaderboards
+            models::CrownCountEntry,
+            models::DistanceLeaderEntry,
+            // Social types
+            models::Follow,
+            models::NotificationType,
+            models::Notification,
+            models::NotificationWithActor,
+            models::NotificationsResponse,
+            // Feed types
+            models::FeedActivity,
+            // Kudos/Comments
+            models::KudosGiver,
+            models::Comment,
+            models::CommentWithUser,
+            // Stats
+            models::Stats,
+            // Segment types
+            models::SegmentWithStats,
+            models::ActivitySegmentEffort,
+            models::StarredSegmentEffort,
+            // Team types
+            models::Team,
+            models::TeamWithMembership,
+            models::TeamMembership,
+            models::TeamMember,
+            models::TeamJoinRequest,
+            models::TeamJoinRequestWithUser,
+            models::TeamInvitation,
+            models::TeamInvitationWithDetails,
+            models::CreateTeamRequest,
+            models::UpdateTeamRequest,
+            models::InviteToTeamRequest,
+            models::ChangeMemberRoleRequest,
+            models::JoinTeamRequest,
+            models::ShareWithTeamsRequest,
+            models::TeamSummary,
+            // Handler request/response types
+            handlers::TrackPoint,
+            handlers::TrackData,
+            handlers::TrackBounds,
+            handlers::UploadQuery,
+            handlers::UpdateActivityRequest,
+            handlers::ResolveTypeQuery,
+            handlers::ResolveTypeResponse,
+            handlers::CreateSegmentRequest,
+            handlers::SegmentPoint,
+            handlers::SegmentSortBy,
+            handlers::SortOrder,
+            handlers::ClimbCategoryFilter,
+            handlers::ListSegmentsQuery,
+            handlers::SegmentTrackData,
+            handlers::SegmentTrackPoint,
+            handlers::PreviewSegmentRequest,
+            handlers::PreviewSegmentResponse,
+            handlers::SegmentValidation,
+            handlers::ReprocessResult,
+            handlers::StarResponse,
+            handlers::NearbySegmentsQuery,
+            handlers::GetAchievementsQuery,
+            handlers::GlobalLeaderboardQuery,
+            handlers::FollowStatusResponse,
+            handlers::FollowListQuery,
+            handlers::FollowListResponse,
+            handlers::NotificationsQuery,
+            handlers::FeedQuery,
+            handlers::KudosResponse,
+            handlers::KudosStatusResponse,
+            handlers::AddCommentRequest,
+            handlers::DiscoverTeamsQuery,
+            handlers::ReviewJoinRequestRequest,
+            handlers::TeamContentQuery,
+        )
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    modifiers(&SecurityAddon)
+)]
+pub struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
 
 pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
     let db = Database::new(pool);
@@ -237,6 +375,8 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             "/segments/{id}/teams/{team_id}",
             axum::routing::delete(unshare_segment_from_team),
         )
+        // OpenAPI / Swagger UI
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(Extension(db))
         .layer(Extension(store))
         .layer(Extension(aq))
@@ -267,6 +407,7 @@ pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> a
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
 
     println!("Server running on http://0.0.0.0:{}", port);
+    println!("Swagger UI available at http://0.0.0.0:{}/swagger-ui/", port);
 
     axum::serve(listener, app).await?;
 
