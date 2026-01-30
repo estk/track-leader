@@ -41,24 +41,16 @@ DATABASE_URL="postgres://tracks_user:tracks_password@localhost:5432/tracks_db" \
   cargo sqlx migrate run --source crates/tracks/migrations
 ```
 
-### Current Schema (16 migrations)
+### Current Schema (8 migrations)
 
-1. init - users, activities, scores tables
-2. add_constraints - foreign keys
-3. segments - segments table
-4. segments_z - elevation data
-5. tracks_spatial_index - PostGIS index
-6. segment_grades - grade calculations
-7. effort_positions - leaderboard positions
-8. add_demographics - user demographics
-9. leaderboard_cache - cached rankings
-10. achievements - user achievements
-11. social_follows - follow relationships
-12. notifications - user notifications
-13. kudos_comments - social features
-14. tracks_linestringzm - 4D track data
-15. performance_indexes - query optimization indexes
-16. segment_stars - starred/bookmarked segments
+1. core - users, activities, scores, tracks, follows, kudos, comments, notifications
+2. segments - segments table with effort matching
+3. social - follows and notifications
+4. achievements - KOM/QOM/CR achievements
+5. teams - team memberships, invitations, sharing
+6. activity_types - table-based activity types (replaces enum)
+7. remove_local_legend - removes deprecated achievement type
+8. stopped_segments - auto-detected stopped periods and user-tagged dig segments
 
 ## Code Patterns
 
