@@ -9,7 +9,9 @@ interface Stats {
 
 async function getStats(): Promise<Stats | null> {
   try {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    // Server components use BACKEND_URL (container-to-container in Docker)
+    // Falls back to localhost for local development without Docker
+    const apiBase = process.env.BACKEND_URL || 'http://localhost:3001';
     const response = await fetch(`${apiBase}/stats`, {
       cache: 'no-store',
     });
