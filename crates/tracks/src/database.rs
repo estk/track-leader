@@ -1,13 +1,14 @@
 use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
-    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, CountryStats, CrownCountEntry,
-    DistanceLeaderEntry, GenderFilter, LeaderboardEntry, LeaderboardFilters, LeaderboardScope,
-    ResolvedActivityType, Scores, Segment, SegmentEffort, Team, TeamInvitation,
-    TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser, TeamMember,
-    TeamMembership, TeamRole, TeamSummary, TeamVisibility, TeamWithMembership,
-    UpdateDemographicsRequest, User, UserWithDemographics,
+    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, AgeGroup, CountryStats,
+    CrownCountEntry, DateRangeFilter, DistanceLeaderEntry, GenderFilter, LeaderboardEntry,
+    LeaderboardFilters, LeaderboardScope, ResolvedActivityType, Scores, Segment, SegmentEffort,
+    Team, TeamInvitation, TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser,
+    TeamMember, TeamMembership, TeamRole, TeamSummary, TeamVisibility, TeamWithMembership,
+    UpdateDemographicsRequest, User, UserWithDemographics, WeightClass,
 };
+use crate::query_builder::QueryBuilder;
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
 use serde::Serialize;
 use sqlx::PgPool;
@@ -219,6 +220,114 @@ impl Database {
         .fetch_all(&self.pool)
         .await?;
 
+        Ok(activities)
+    }
+
+    /// Get user activities with filtering, sorting, and pagination.
+    pub async fn get_user_activities_filtered(
+        &self,
+        user_id: Uuid,
+        params: &crate::handlers::UserActivitiesQuery,
+    ) -> Result<Vec<Activity>, AppError> {
+        use crate::models::{DateRangeFilter, VisibilityFilter};
+        use crate::query_builder::QueryBuilder;
+
+        let mut qb = QueryBuilder::new();
+
+        // Base condition: user_id and not deleted
+        qb.add_param_condition("user_id = ");
+        qb.add_condition("deleted_at IS NULL");
+
+        // Activity type filter
+        if params.activity_type_id.is_some() {
+            qb.add_param_condition("activity_type_id = ");
+        }
+
+        // Date range filter
+        let date_range = params.date_range.unwrap_or_default();
+        qb.add_date_range(
+            date_range,
+            "submitted_at",
+            &params.start_date,
+            &params.end_date,
+        );
+
+        // Visibility filter (only the owner sees their activities, so all visibilities are visible)
+        if let Some(vis) = &params.visibility {
+            match vis {
+                VisibilityFilter::All => (),
+                VisibilityFilter::Public => {
+                    let _ = qb.add_condition("visibility = 'public'");
+                }
+                VisibilityFilter::Private => {
+                    let _ = qb.add_condition("visibility = 'private'");
+                }
+                VisibilityFilter::TeamsOnly => {
+                    let _ = qb.add_condition("visibility = 'teams_only'");
+                }
+            }
+        }
+
+        // Name search (case-insensitive)
+        let search_pattern = params
+            .search
+            .as_ref()
+            .map(|s| format!("%{}%", s.to_lowercase()));
+        if search_pattern.is_some() {
+            qb.add_param_condition("LOWER(name) LIKE ");
+        }
+
+        // Build ORDER BY clause
+        let sort_by = params.sort_by.unwrap_or_default();
+        let order_clause = sort_by.to_sql_order();
+
+        // Build the final query
+        let limit_idx = qb.next_param_idx();
+        let offset_idx = qb.next_param_idx();
+        let where_clause = qb.build_where_clause();
+
+        let query = format!(
+            r#"
+            SELECT id, user_id, activity_type_id, name, object_store_path,
+                   submitted_at, visibility, type_boundaries, segment_types
+            FROM activities
+            {where_clause}
+            ORDER BY {order_clause}
+            LIMIT ${limit_idx} OFFSET ${offset_idx}
+            "#
+        );
+
+        // Bind parameters in order
+        let mut q = sqlx::query_as::<_, Activity>(&query);
+
+        // user_id is always first
+        q = q.bind(user_id);
+
+        // Activity type filter
+        if let Some(type_id) = params.activity_type_id {
+            q = q.bind(type_id);
+        }
+
+        // Date range custom params
+        if date_range == DateRangeFilter::Custom {
+            if let Some(start) = params.start_date {
+                q = q.bind(start);
+            }
+            if let Some(end) = params.end_date {
+                q = q.bind(end);
+            }
+        }
+
+        // Name search
+        if let Some(ref pattern) = search_pattern {
+            q = q.bind(pattern);
+        }
+
+        // Pagination
+        q = q.bind(params.limit);
+        q = q.bind(params.offset);
+
+        let activities = q.fetch_all(&self.pool).await?;
         Ok(activities)
     }
 
@@ -2014,6 +2123,252 @@ impl Database {
         Ok(entries)
     }
 
+    /// Get filtered crown count leaderboard with demographic and time scope filtering.
+    ///
+    /// Filters:
+    /// - scope: Time period for counting crowns (based on segment_efforts.started_at)
+    /// - gender: Filter users by gender
+    /// - age_group: Filter users by age (calculated from birth_year)
+    /// - weight_class: Filter users by weight
+    /// - country: Filter users by country
+    /// - activity_type_id: Filter crowns by segment activity type
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_crown_leaderboard_filtered(
+        &self,
+        limit: i64,
+        offset: i64,
+        scope: LeaderboardScope,
+        gender: GenderFilter,
+        age_group: AgeGroup,
+        weight_class: WeightClass,
+        country: Option<&str>,
+        activity_type_id: Option<Uuid>,
+    ) -> Result<Vec<CrownCountEntry>, AppError> {
+        let mut qb = QueryBuilder::new();
+
+        // Base condition: only active crowns
+        qb.add_condition("a.lost_at IS NULL");
+
+        // Time scope filter on the effort that earned the crown
+        match scope {
+            LeaderboardScope::AllTime => {}
+            LeaderboardScope::Year => {
+                qb.add_condition("se.started_at >= NOW() - INTERVAL '1 year'");
+            }
+            LeaderboardScope::Month => {
+                qb.add_condition("se.started_at >= NOW() - INTERVAL '1 month'");
+            }
+            LeaderboardScope::Week => {
+                qb.add_condition("se.started_at >= NOW() - INTERVAL '7 days'");
+            }
+        }
+
+        // Gender filter
+        match gender {
+            GenderFilter::All => {}
+            GenderFilter::Male => {
+                qb.add_condition("u.gender = 'male'");
+            }
+            GenderFilter::Female => {
+                qb.add_condition("u.gender = 'female'");
+            }
+        }
+
+        // Age group filter (calculate age from birth_year)
+        if let Some((min_age, max_age)) = age_group.age_range() {
+            let current_year = time::OffsetDateTime::now_utc().year();
+            // birth_year = current_year - age, so for min_age we want birth_year <= current_year - min_age
+            let max_birth_year = current_year - min_age;
+            qb.add_condition(format!("u.birth_year <= {max_birth_year}"));
+            if let Some(max) = max_age {
+                let min_birth_year = current_year - max;
+                qb.add_condition(format!("u.birth_year >= {min_birth_year}"));
+            }
+        }
+
+        // Weight class filter
+        if let Some((min_kg, max_kg)) = weight_class.weight_range() {
+            if let Some(min) = min_kg {
+                qb.add_condition(format!("u.weight_kg >= {min}"));
+            }
+            if let Some(max) = max_kg {
+                qb.add_condition(format!("u.weight_kg <= {max}"));
+            }
+        }
+
+        // Country filter
+        if country.is_some() {
+            qb.add_param_condition("u.country = ");
+        }
+
+        // Activity type filter (filter by segment's activity type)
+        if activity_type_id.is_some() {
+            qb.add_param_condition("s.activity_type_id = ");
+        }
+
+        let where_clause = qb.build_where_clause();
+
+        let query = format!(
+            r#"
+            WITH crown_counts AS (
+                SELECT
+                    a.user_id,
+                    COUNT(*) FILTER (WHERE a.achievement_type = 'kom') as kom_count,
+                    COUNT(*) FILTER (WHERE a.achievement_type = 'qom') as qom_count,
+                    COUNT(*) as total_crowns
+                FROM achievements a
+                JOIN users u ON u.id = a.user_id
+                JOIN segments s ON s.id = a.segment_id
+                LEFT JOIN segment_efforts se ON se.id = a.effort_id
+                {where_clause}
+                GROUP BY a.user_id
+            )
+            SELECT
+                cc.user_id,
+                u.name as user_name,
+                cc.kom_count,
+                cc.qom_count,
+                cc.total_crowns,
+                ROW_NUMBER() OVER (ORDER BY cc.total_crowns DESC, cc.kom_count DESC) as rank
+            FROM crown_counts cc
+            JOIN users u ON u.id = cc.user_id
+            ORDER BY rank
+            LIMIT $1 OFFSET $2
+            "#
+        );
+
+        let mut query_builder = sqlx::query_as::<_, CrownCountEntry>(&query)
+            .bind(limit)
+            .bind(offset);
+
+        // Bind optional parameters in the order they were added
+        if let Some(c) = country {
+            query_builder = query_builder.bind(c);
+        }
+        if let Some(type_id) = activity_type_id {
+            query_builder = query_builder.bind(type_id);
+        }
+
+        let entries = query_builder.fetch_all(&self.pool).await?;
+        Ok(entries)
+    }
+
+    /// Get filtered distance leaderboard with demographic and time scope filtering.
+    ///
+    /// Filters:
+    /// - scope: Time period for summing distance (based on scores.created_at via activity submitted_at)
+    /// - gender: Filter users by gender
+    /// - age_group: Filter users by age (calculated from birth_year)
+    /// - weight_class: Filter users by weight
+    /// - country: Filter users by country
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_distance_leaderboard_filtered(
+        &self,
+        limit: i64,
+        offset: i64,
+        scope: LeaderboardScope,
+        gender: GenderFilter,
+        age_group: AgeGroup,
+        weight_class: WeightClass,
+        country: Option<&str>,
+    ) -> Result<Vec<DistanceLeaderEntry>, AppError> {
+        let mut qb = QueryBuilder::new();
+
+        // Time scope filter on scores.created_at
+        match scope {
+            LeaderboardScope::AllTime => {}
+            LeaderboardScope::Year => {
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '1 year'");
+            }
+            LeaderboardScope::Month => {
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '1 month'");
+            }
+            LeaderboardScope::Week => {
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '7 days'");
+            }
+        }
+
+        // Gender filter
+        match gender {
+            GenderFilter::All => {}
+            GenderFilter::Male => {
+                qb.add_condition("u.gender = 'male'");
+            }
+            GenderFilter::Female => {
+                qb.add_condition("u.gender = 'female'");
+            }
+        }
+
+        // Age group filter (calculate age from birth_year)
+        if let Some((min_age, max_age)) = age_group.age_range() {
+            let current_year = time::OffsetDateTime::now_utc().year();
+            let max_birth_year = current_year - min_age;
+            qb.add_condition(format!("u.birth_year <= {max_birth_year}"));
+            if let Some(max) = max_age {
+                let min_birth_year = current_year - max;
+                qb.add_condition(format!("u.birth_year >= {min_birth_year}"));
+            }
+        }
+
+        // Weight class filter
+        if let Some((min_kg, max_kg)) = weight_class.weight_range() {
+            if let Some(min) = min_kg {
+                qb.add_condition(format!("u.weight_kg >= {min}"));
+            }
+            if let Some(max) = max_kg {
+                qb.add_condition(format!("u.weight_kg <= {max}"));
+            }
+        }
+
+        // Country filter
+        if country.is_some() {
+            qb.add_param_condition("u.country = ");
+        }
+
+        let where_clause = if qb.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", qb.build_where())
+        };
+
+        let query = format!(
+            r#"
+            WITH distance_totals AS (
+                SELECT
+                    sc.user_id,
+                    SUM(sc.distance) as total_distance_meters,
+                    COUNT(*) as activity_count
+                FROM scores sc
+                JOIN users u ON u.id = sc.user_id
+                {where_clause}
+                GROUP BY sc.user_id
+            )
+            SELECT
+                dt.user_id,
+                u.name as user_name,
+                dt.total_distance_meters,
+                dt.activity_count,
+                ROW_NUMBER() OVER (ORDER BY dt.total_distance_meters DESC) as rank
+            FROM distance_totals dt
+            JOIN users u ON u.id = dt.user_id
+            ORDER BY rank
+            LIMIT $1 OFFSET $2
+            "#
+        );
+
+        let mut query_builder = sqlx::query_as::<_, DistanceLeaderEntry>(&query)
+            .bind(limit)
+            .bind(offset);
+
+        // Bind optional country parameter
+        if let Some(c) = country {
+            query_builder = query_builder.bind(c);
+        }
+
+        let entries = query_builder.fetch_all(&self.pool).await?;
+        Ok(entries)
+    }
+
     /// Get list of countries with user counts for filter dropdown.
     pub async fn get_countries_with_counts(&self) -> Result<Vec<CountryStats>, AppError> {
         let countries: Vec<CountryStats> = sqlx::query_as(
@@ -2297,6 +2652,97 @@ impl Database {
         .bind(offset)
         .fetch_all(&self.pool)
         .await?;
+
+        Ok(activities)
+    }
+
+    /// Get activity feed for a user with filtering support.
+    /// Filters activities from users they follow by activity type and date range.
+    pub async fn get_activity_feed_filtered(
+        &self,
+        user_id: Uuid,
+        activity_type_id: Option<Uuid>,
+        date_range: DateRangeFilter,
+        start_date: Option<time::Date>,
+        end_date: Option<time::Date>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::FeedActivity>, AppError> {
+        // Build dynamic WHERE conditions
+        let mut qb = QueryBuilder::new();
+
+        // Always filter to followed users (uses $1)
+        qb.add_param_condition(
+            "a.user_id IN (SELECT following_id FROM follows WHERE follower_id = ",
+        );
+        qb.add_condition(")");
+
+        // Always require public visibility and not deleted
+        qb.add_condition("a.visibility = 'public'");
+        qb.add_condition("a.deleted_at IS NULL");
+
+        // Optional activity type filter
+        qb.add_optional(&activity_type_id, |idx| {
+            format!("a.activity_type_id = ${idx}")
+        });
+
+        // Date range filter
+        qb.add_date_range(date_range, "a.submitted_at", &start_date, &end_date);
+
+        let where_clause = qb.build_where_clause();
+        let limit_idx = qb.next_param_idx();
+        let offset_idx = qb.next_param_idx();
+
+        let query = format!(
+            r#"
+            SELECT
+                a.id,
+                a.user_id,
+                a.name,
+                a.activity_type_id,
+                a.submitted_at,
+                a.visibility,
+                u.name as user_name,
+                s.distance,
+                s.duration,
+                s.elevation_gain,
+                COALESCE(a.kudos_count, 0) as kudos_count,
+                COALESCE(a.comment_count, 0) as comment_count
+            FROM activities a
+            JOIN users u ON a.user_id = u.id
+            LEFT JOIN scores s ON a.id = s.activity_id
+            {where_clause}
+            ORDER BY a.submitted_at DESC
+            LIMIT ${limit_idx} OFFSET ${offset_idx}
+            "#
+        );
+
+        // Build and execute query with dynamic bindings
+        let mut sqlx_query = sqlx::query_as::<_, crate::models::FeedActivity>(&query);
+
+        // Bind in order: user_id is always first
+        sqlx_query = sqlx_query.bind(user_id);
+
+        // Bind optional activity_type_id
+        if let Some(type_id) = activity_type_id {
+            sqlx_query = sqlx_query.bind(type_id);
+        }
+
+        // Bind custom date range params if applicable
+        if date_range == DateRangeFilter::Custom {
+            if let Some(start) = start_date {
+                sqlx_query = sqlx_query.bind(start);
+            }
+            if let Some(end) = end_date {
+                sqlx_query = sqlx_query.bind(end);
+            }
+        }
+
+        // Bind pagination
+        sqlx_query = sqlx_query.bind(limit);
+        sqlx_query = sqlx_query.bind(offset);
+
+        let activities = sqlx_query.fetch_all(&self.pool).await?;
 
         Ok(activities)
     }

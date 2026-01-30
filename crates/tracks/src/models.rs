@@ -431,6 +431,139 @@ impl std::str::FromStr for WeightClass {
     }
 }
 
+/// Date range filter for activities and feed
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DateRangeFilter {
+    #[default]
+    All,
+    Week,
+    Month,
+    Year,
+    Custom,
+}
+
+impl DateRangeFilter {
+    /// Returns the SQL condition for filtering by this date range.
+    /// Custom range is handled separately with start/end date params.
+    pub fn to_sql_condition(&self, column: &str) -> Option<String> {
+        match self {
+            DateRangeFilter::All => None,
+            DateRangeFilter::Week => Some(format!("{column} >= NOW() - INTERVAL '7 days'")),
+            DateRangeFilter::Month => Some(format!("{column} >= NOW() - INTERVAL '1 month'")),
+            DateRangeFilter::Year => Some(format!("{column} >= NOW() - INTERVAL '1 year'")),
+            DateRangeFilter::Custom => None,
+        }
+    }
+}
+
+impl std::str::FromStr for DateRangeFilter {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "all" => Ok(DateRangeFilter::All),
+            "week" => Ok(DateRangeFilter::Week),
+            "month" => Ok(DateRangeFilter::Month),
+            "year" => Ok(DateRangeFilter::Year),
+            "custom" => Ok(DateRangeFilter::Custom),
+            _ => Err(format!("unknown date range filter: {s}")),
+        }
+    }
+}
+
+/// Visibility filter for viewing activities
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VisibilityFilter {
+    #[default]
+    All,
+    Public,
+    Private,
+    TeamsOnly,
+}
+
+impl std::str::FromStr for VisibilityFilter {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "all" => Ok(VisibilityFilter::All),
+            "public" => Ok(VisibilityFilter::Public),
+            "private" => Ok(VisibilityFilter::Private),
+            "teams_only" => Ok(VisibilityFilter::TeamsOnly),
+            _ => Err(format!("unknown visibility filter: {s}")),
+        }
+    }
+}
+
+/// Sort options for activities
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivitySortBy {
+    #[default]
+    Recent,
+    Oldest,
+    Distance,
+    Duration,
+}
+
+impl ActivitySortBy {
+    /// Returns the SQL ORDER BY clause for this sort option.
+    pub fn to_sql_order(&self) -> &'static str {
+        match self {
+            ActivitySortBy::Recent => "submitted_at DESC",
+            ActivitySortBy::Oldest => "submitted_at ASC",
+            ActivitySortBy::Distance => "distance_meters DESC NULLS LAST",
+            ActivitySortBy::Duration => "duration_seconds DESC NULLS LAST",
+        }
+    }
+}
+
+impl std::str::FromStr for ActivitySortBy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "recent" => Ok(ActivitySortBy::Recent),
+            "oldest" => Ok(ActivitySortBy::Oldest),
+            "distance" => Ok(ActivitySortBy::Distance),
+            "duration" => Ok(ActivitySortBy::Duration),
+            _ => Err(format!("unknown activity sort: {s}")),
+        }
+    }
+}
+
+/// Generic sort order (reusable across different contexts)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SortOrder {
+    Asc,
+    #[default]
+    Desc,
+}
+
+impl SortOrder {
+    pub fn to_sql(&self) -> &'static str {
+        match self {
+            SortOrder::Asc => "ASC",
+            SortOrder::Desc => "DESC",
+        }
+    }
+}
+
+impl std::str::FromStr for SortOrder {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "asc" => Ok(SortOrder::Asc),
+            "desc" => Ok(SortOrder::Desc),
+            _ => Err(format!("unknown sort order: {s}")),
+        }
+    }
+}
+
 /// Query parameters for filtered leaderboard requests
 #[derive(Debug, Clone, Deserialize, Default, ToSchema, utoipa::IntoParams)]
 pub struct LeaderboardFilters {

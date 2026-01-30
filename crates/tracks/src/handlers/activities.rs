@@ -17,7 +17,7 @@ use crate::{
     auth::{AuthUser, OptionalAuthUser},
     database::Database,
     errors::AppError,
-    models::{Activity, FeedActivity},
+    models::{Activity, ActivitySortBy, DateRangeFilter, FeedActivity, VisibilityFilter},
     object_store_service::{FileType, ObjectStoreService},
 };
 
@@ -74,9 +74,33 @@ pub struct UpdateActivityRequest {
     pub visibility: Option<String>,
 }
 
-/// User activities query parameters (placeholder for future pagination).
-#[derive(Deserialize, ToSchema)]
-pub struct UserActivitiesQuery {}
+/// User activities query parameters with filtering and pagination.
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct UserActivitiesQuery {
+    /// Filter by activity type.
+    pub activity_type_id: Option<Uuid>,
+    /// Preset date range filter.
+    #[serde(default)]
+    pub date_range: Option<DateRangeFilter>,
+    /// Start date for custom range (YYYY-MM-DD).
+    pub start_date: Option<time::Date>,
+    /// End date for custom range (YYYY-MM-DD).
+    pub end_date: Option<time::Date>,
+    /// Filter by visibility (owner only).
+    #[serde(default)]
+    pub visibility: Option<VisibilityFilter>,
+    /// Sort field.
+    #[serde(default)]
+    pub sort_by: Option<ActivitySortBy>,
+    /// Case-insensitive search on activity name.
+    pub search: Option<String>,
+    /// Maximum number of results.
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    /// Number of results to skip.
+    #[serde(default)]
+    pub offset: i64,
+}
 
 /// Query parameters for activities by date.
 #[derive(Deserialize, ToSchema)]
@@ -339,7 +363,8 @@ pub async fn delete_activity(
     path = "/users/{id}/activities",
     tag = "activities",
     params(
-        ("id" = Uuid, Path, description = "User ID")
+        ("id" = Uuid, Path, description = "User ID"),
+        UserActivitiesQuery
     ),
     responses(
         (status = 200, description = "List of user's activities", body = Vec<Activity>)
@@ -347,10 +372,10 @@ pub async fn delete_activity(
 )]
 pub async fn get_user_activities(
     Extension(db): Extension<Database>,
-    Query(_params): Query<UserActivitiesQuery>,
+    Query(params): Query<UserActivitiesQuery>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<Activity>>, AppError> {
-    let activities = db.get_user_activities(id).await?;
+    let activities = db.get_user_activities_filtered(id, &params).await?;
     Ok(Json(activities))
 }
 

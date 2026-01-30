@@ -7,10 +7,10 @@ use axum::{
     response::Json,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::{auth::AuthUser, database::Database, errors::AppError};
+use crate::{auth::AuthUser, database::Database, errors::AppError, models::DateRangeFilter};
 
 use super::pagination::default_limit;
 
@@ -322,13 +322,24 @@ pub async fn mark_all_notifications_read(
 // Feed Types
 // ============================================================================
 
-/// Query parameters for activity feed.
-#[derive(Debug, Deserialize, ToSchema)]
+/// Query parameters for activity feed with filtering support.
+#[derive(Debug, Deserialize, ToSchema, IntoParams)]
 pub struct FeedQuery {
+    /// Maximum number of feed items to return
     #[serde(default = "default_limit")]
     pub limit: i64,
+    /// Number of feed items to skip
     #[serde(default)]
     pub offset: i64,
+    /// Filter by activity type
+    pub activity_type_id: Option<Uuid>,
+    /// Preset date range filter (defaults to All)
+    #[serde(default)]
+    pub date_range: DateRangeFilter,
+    /// Start date for custom date range (requires date_range=custom)
+    pub start_date: Option<time::Date>,
+    /// End date for custom date range (requires date_range=custom)
+    pub end_date: Option<time::Date>,
 }
 
 // ============================================================================
@@ -336,15 +347,12 @@ pub struct FeedQuery {
 // ============================================================================
 
 /// Get the activity feed for the authenticated user.
-/// Returns activities from users they follow.
+/// Returns activities from users they follow, with optional filtering.
 #[utoipa::path(
     get,
     path = "/feed",
     tag = "feed",
-    params(
-        ("limit" = Option<i64>, Query, description = "Maximum number of feed items to return"),
-        ("offset" = Option<i64>, Query, description = "Number of feed items to skip")
-    ),
+    params(FeedQuery),
     responses(
         (status = 200, description = "Activity feed", body = Vec<crate::models::FeedActivity>),
         (status = 401, description = "Unauthorized")
@@ -356,7 +364,15 @@ pub async fn get_feed(
     Query(query): Query<FeedQuery>,
 ) -> Result<Json<Vec<crate::models::FeedActivity>>, AppError> {
     let activities = db
-        .get_activity_feed(claims.sub, query.limit, query.offset)
+        .get_activity_feed_filtered(
+            claims.sub,
+            query.activity_type_id,
+            query.date_range,
+            query.start_date,
+            query.end_date,
+            query.limit,
+            query.offset,
+        )
         .await?;
     Ok(Json(activities))
 }

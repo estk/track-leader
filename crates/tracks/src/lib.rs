@@ -6,6 +6,7 @@ pub mod errors;
 pub mod handlers;
 pub mod models;
 pub mod object_store_service;
+pub mod query_builder;
 pub mod scoring;
 pub mod segment_matching;
 pub mod types;
@@ -205,6 +206,11 @@ use crate::{
             models::GenderFilter,
             models::WeightClass,
             models::LeaderboardFilters,
+            // Activity filter types
+            models::DateRangeFilter,
+            models::VisibilityFilter,
+            models::ActivitySortBy,
+            models::SortOrder,
             models::LeaderboardEntry,
             models::LeaderboardResponse,
             models::LeaderboardFiltersResponse,
@@ -264,6 +270,7 @@ use crate::{
             handlers::TrackBounds,
             handlers::UploadQuery,
             handlers::UpdateActivityRequest,
+            handlers::UserActivitiesQuery,
             handlers::ActivitiesByDateQuery,
             handlers::ResolveTypeQuery,
             handlers::ResolveTypeResponse,

@@ -83,6 +83,23 @@ export interface Activity {
   segment_types: string[] | null;     // Activity type UUIDs
 }
 
+// Activity filter types
+export type DateRangeFilter = 'all' | 'week' | 'month' | 'year';
+export type VisibilityFilter = 'all' | 'public' | 'private' | 'teams_only';
+export type ActivitySortBy = 'recent' | 'oldest' | 'distance' | 'duration';
+
+export interface UserActivitiesFilters {
+  activityTypeId?: string;
+  dateRange?: DateRangeFilter;
+  startDate?: string;  // YYYY-MM-DD
+  endDate?: string;
+  visibility?: VisibilityFilter;
+  sortBy?: ActivitySortBy;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface TrackPoint {
   lat: number;
   lon: number;
@@ -326,6 +343,17 @@ export interface UpdateDemographicsRequest {
 }
 
 // Global leaderboard types
+export interface GlobalLeaderboardFilters {
+  scope?: LeaderboardScope;
+  gender?: GenderFilter;
+  ageGroup?: AgeGroup;
+  weightClass?: WeightClass;
+  country?: string;
+  activityTypeId?: string;  // For crown leaderboard only
+  limit?: number;
+  offset?: number;
+}
+
 export interface CrownCountEntry {
   user_id: string;
   user_name: string;
@@ -411,6 +439,24 @@ export interface FeedActivity {
   kudos_count: number;
   comment_count: number;
 }
+
+// Feed filter options
+export interface FeedFilters {
+  activityTypeId?: string;
+  dateRange?: DateRangeFilter;
+  startDate?: string;  // YYYY-MM-DD for custom range
+  endDate?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// Date range options for UI
+export const DATE_RANGE_OPTIONS: { value: DateRangeFilter; label: string }[] = [
+  { value: 'all', label: 'All Time' },
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
+  { value: 'year', label: 'This Year' },
+];
 
 // Kudos types
 export interface KudosGiver {
@@ -653,8 +699,19 @@ class ApiClient {
   }
 
   // Activity endpoints
-  async getUserActivities(userId: string): Promise<Activity[]> {
-    return this.request<Activity[]>(`/users/${userId}/activities`);
+  async getUserActivities(userId: string, filters?: UserActivitiesFilters): Promise<Activity[]> {
+    const params = new URLSearchParams();
+    if (filters?.activityTypeId) params.set('activity_type_id', filters.activityTypeId);
+    if (filters?.dateRange) params.set('date_range', filters.dateRange);
+    if (filters?.startDate) params.set('start_date', filters.startDate);
+    if (filters?.endDate) params.set('end_date', filters.endDate);
+    if (filters?.visibility) params.set('visibility', filters.visibility);
+    if (filters?.sortBy) params.set('sort_by', filters.sortBy);
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
+    const queryString = params.toString();
+    return this.request<Activity[]>(`/users/${userId}/activities${queryString ? `?${queryString}` : ''}`);
   }
 
   async getActivity(id: string): Promise<Activity> {
@@ -908,19 +965,30 @@ class ApiClient {
   }
 
   // Global leaderboard endpoints
-  async getCrownLeaderboard(limit?: number, offset?: number): Promise<CrownCountEntry[]> {
+  async getCrownLeaderboard(filters?: GlobalLeaderboardFilters): Promise<CrownCountEntry[]> {
     const params = new URLSearchParams();
-    if (limit !== undefined) params.set('limit', limit.toString());
-    if (offset !== undefined) params.set('offset', offset.toString());
+    if (filters?.scope) params.set('scope', filters.scope);
+    if (filters?.gender) params.set('gender', filters.gender);
+    if (filters?.ageGroup) params.set('age_group', filters.ageGroup);
+    if (filters?.weightClass) params.set('weight_class', filters.weightClass);
+    if (filters?.country) params.set('country', filters.country);
+    if (filters?.activityTypeId) params.set('activity_type_id', filters.activityTypeId);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
     const queryString = params.toString();
     const path = `/leaderboards/crowns${queryString ? `?${queryString}` : ''}`;
     return this.request<CrownCountEntry[]>(path);
   }
 
-  async getDistanceLeaderboard(limit?: number, offset?: number): Promise<DistanceLeaderEntry[]> {
+  async getDistanceLeaderboard(filters?: GlobalLeaderboardFilters): Promise<DistanceLeaderEntry[]> {
     const params = new URLSearchParams();
-    if (limit !== undefined) params.set('limit', limit.toString());
-    if (offset !== undefined) params.set('offset', offset.toString());
+    if (filters?.scope) params.set('scope', filters.scope);
+    if (filters?.gender) params.set('gender', filters.gender);
+    if (filters?.ageGroup) params.set('age_group', filters.ageGroup);
+    if (filters?.weightClass) params.set('weight_class', filters.weightClass);
+    if (filters?.country) params.set('country', filters.country);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
     const queryString = params.toString();
     const path = `/leaderboards/distance${queryString ? `?${queryString}` : ''}`;
     return this.request<DistanceLeaderEntry[]>(path);
@@ -986,10 +1054,14 @@ class ApiClient {
   }
 
   // Activity feed endpoints
-  async getFeed(limit?: number, offset?: number): Promise<FeedActivity[]> {
+  async getFeed(filters?: FeedFilters): Promise<FeedActivity[]> {
     const params = new URLSearchParams();
-    if (limit !== undefined) params.set('limit', limit.toString());
-    if (offset !== undefined) params.set('offset', offset.toString());
+    if (filters?.activityTypeId) params.set('activity_type_id', filters.activityTypeId);
+    if (filters?.dateRange) params.set('date_range', filters.dateRange);
+    if (filters?.startDate) params.set('start_date', filters.startDate);
+    if (filters?.endDate) params.set('end_date', filters.endDate);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
     const queryString = params.toString();
     return this.request<FeedActivity[]>(`/feed${queryString ? `?${queryString}` : ''}`);
   }
