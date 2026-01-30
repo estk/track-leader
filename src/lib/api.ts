@@ -107,6 +107,33 @@ export interface TrackPoint {
   time: string | null;
 }
 
+// Stopped/Dig segment types
+export interface StoppedSegment {
+  id: string;
+  activity_id: string;
+  start_time: string;
+  end_time: string;
+  duration_seconds: number;
+}
+
+export interface DigSegment {
+  id: string;
+  activity_id: string;
+  start_time: string;
+  end_time: string;
+  duration_seconds: number;
+  created_at: string;
+}
+
+export interface CreateDigSegmentsRequest {
+  stopped_segment_ids: string[];
+}
+
+export interface DigTimeSummary {
+  total_dig_time_seconds: number;
+  dig_segment_count: number;
+}
+
 export interface TrackBounds {
   min_lat: number;
   max_lat: number;
@@ -438,6 +465,8 @@ export interface FeedActivity {
   elevation_gain: number | null;
   kudos_count: number;
   comment_count: number;
+  /** Team names this activity is shared with (for teams_only visibility) */
+  team_names?: string[];
 }
 
 // Feed filter options
@@ -740,6 +769,32 @@ class ApiClient {
     await this.request<void>(`/activities/${id}`, {
       method: 'DELETE',
     });
+  }
+
+  // Stopped/Dig segment endpoints
+  async getStoppedSegments(activityId: string): Promise<StoppedSegment[]> {
+    return this.request<StoppedSegment[]>(`/activities/${activityId}/stopped-segments`);
+  }
+
+  async getDigSegments(activityId: string): Promise<DigSegment[]> {
+    return this.request<DigSegment[]>(`/activities/${activityId}/dig-segments`);
+  }
+
+  async createDigSegments(activityId: string, stoppedSegmentIds: string[]): Promise<DigSegment[]> {
+    return this.request<DigSegment[]>(`/activities/${activityId}/dig-segments`, {
+      method: 'POST',
+      body: JSON.stringify({ stopped_segment_ids: stoppedSegmentIds }),
+    });
+  }
+
+  async deleteDigSegment(activityId: string, segmentId: string): Promise<void> {
+    await this.request<void>(`/activities/${activityId}/dig-segments/${segmentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getDigTime(activityId: string): Promise<DigTimeSummary> {
+    return this.request<DigTimeSummary>(`/activities/${activityId}/dig-time`);
   }
 
   /**
@@ -1282,6 +1337,18 @@ class ApiClient {
     if (offset !== undefined) params.set('offset', offset.toString());
     const queryString = params.toString();
     return this.request<Segment[]>(`/teams/${teamId}/segments${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getTeamActivitiesByDate(
+    teamId: string,
+    date: string,
+    limit?: number,
+    offset?: number
+  ): Promise<FeedActivity[]> {
+    const params = new URLSearchParams({ date });
+    if (limit !== undefined) params.set('limit', limit.toString());
+    if (offset !== undefined) params.set('offset', offset.toString());
+    return this.request<FeedActivity[]>(`/teams/${teamId}/activities/daily?${params.toString()}`);
   }
 }
 

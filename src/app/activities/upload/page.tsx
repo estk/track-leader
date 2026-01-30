@@ -9,7 +9,9 @@ import {
   ACTIVITY_TYPE_OPTIONS,
   ACTIVITY_TYPE_IDS,
   TrackPoint,
+  StoppedSegment,
 } from "@/lib/api";
+import { DigTaggingModal } from "@/components/activity/dig-tagging-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,6 +85,11 @@ export default function UploadActivityPage() {
 
   // Multi-sport mode state
   const [isMultiSport, setIsMultiSport] = useState(false);
+
+  // Dig tagging modal state
+  const [showDigModal, setShowDigModal] = useState(false);
+  const [uploadedActivityId, setUploadedActivityId] = useState<string | null>(null);
+  const [stoppedSegments, setStoppedSegments] = useState<StoppedSegment[]>([]);
   // Boundary indices: always includes 0 (start) and points.length-1 (end) implicitly
   // This array stores only the interior boundary indices
   const [boundaryIndices, setBoundaryIndices] = useState<number[]>([]);
@@ -226,6 +233,14 @@ export default function UploadActivityPage() {
     });
   }, []);
 
+  // Handler for when dig tagging modal completes
+  const handleDigModalClose = useCallback(() => {
+    setShowDigModal(false);
+    setUploadedActivityId(null);
+    setStoppedSegments([]);
+    router.push("/activities");
+  }, [router]);
+
   // Auth check - must be after all hooks
   if (!authLoading && !user) {
     router.push("/login");
@@ -281,11 +296,25 @@ export default function UploadActivityPage() {
         }
       }
 
-      await api.uploadActivity(file, name, activityType, visibility, {
+      const activity = await api.uploadActivity(file, name, activityType, visibility, {
         teamIds,
         typeBoundaries,
         segmentTypes: segmentTypeIds,
       });
+
+      // Check for stopped segments to offer dig tagging
+      try {
+        const segments = await api.getStoppedSegments(activity.id);
+        if (segments.length > 0) {
+          setUploadedActivityId(activity.id);
+          setStoppedSegments(segments);
+          setShowDigModal(true);
+          return; // Don't navigate yet - wait for modal
+        }
+      } catch {
+        // If fetching stopped segments fails, just continue to activities page
+      }
+
       router.push("/activities");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -560,6 +589,16 @@ export default function UploadActivityPage() {
           </CardContent>
         </form>
       </Card>
+
+      {/* Dig Tagging Modal */}
+      {showDigModal && uploadedActivityId && (
+        <DigTaggingModal
+          activityId={uploadedActivityId}
+          stoppedSegments={stoppedSegments}
+          onComplete={handleDigModalClose}
+          onSkip={handleDigModalClose}
+        />
+      )}
     </div>
   );
 }

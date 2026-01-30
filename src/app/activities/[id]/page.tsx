@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName, DigTimeSummary, DigSegment } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,8 @@ export default function ActivityDetailPage() {
   const [activity, setActivity] = useState<Activity | null>(null);
   const [trackData, setTrackData] = useState<TrackData | null>(null);
   const [segmentEfforts, setSegmentEfforts] = useState<ActivitySegmentEffort[]>([]);
+  const [digTimeSummary, setDigTimeSummary] = useState<DigTimeSummary | null>(null);
+  const [digSegments, setDigSegments] = useState<DigSegment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
@@ -103,11 +105,15 @@ export default function ActivityDetailPage() {
         api.getActivity(activityId),
         api.getActivityTrack(activityId),
         api.getActivitySegments(activityId),
+        api.getDigTime(activityId).catch(() => null),
+        api.getDigSegments(activityId).catch(() => []),
       ])
-        .then(([act, track, segments]) => {
+        .then(([act, track, segments, digTime, digs]) => {
           setActivity(act);
           setTrackData(track);
           setSegmentEfforts(segments);
+          setDigTimeSummary(digTime);
+          setDigSegments(digs);
         })
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
@@ -675,6 +681,61 @@ export default function ActivityDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Dig Time */}
+      {digTimeSummary && digTimeSummary.dig_segment_count > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-5 h-5 text-amber-600"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Trail Maintenance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <StatItem
+                label="Dig Time"
+                value={formatDigDuration(digTimeSummary.total_dig_time_seconds)}
+              />
+              <StatItem
+                label="Dig Sessions"
+                value={digTimeSummary.dig_segment_count.toString()}
+              />
+            </div>
+            {digSegments.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Sessions</p>
+                {digSegments.map((seg) => (
+                  <div
+                    key={seg.id}
+                    className="flex items-center justify-between p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md text-sm"
+                  >
+                    <span>
+                      {new Date(seg.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {" - "}
+                      {new Date(seg.end_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <span className="font-medium text-amber-700 dark:text-amber-400">
+                      {formatDigDuration(seg.duration_seconds)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Matched Segments */}
       {segmentEfforts.length > 0 && (
         <Card>
@@ -750,4 +811,16 @@ function formatTime(seconds: number): string {
     return `${hours}:${remainingMins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   }
   return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatDigDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  if (minutes === 0) {
+    return `${remainingSeconds}s`;
+  }
+  if (remainingSeconds === 0) {
+    return `${minutes}m`;
+  }
+  return `${minutes}m ${remainingSeconds}s`;
 }

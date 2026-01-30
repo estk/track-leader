@@ -479,7 +479,7 @@ function CrownLeaderboard({
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Crown Leaderboard</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Athletes ranked by total crowns (KOMs and QOMs)
+          Athletes ranked by total crowns
           {activityTypeFilter && (
             <span className="ml-1">
               for {getActivityTypeName(activityTypeFilter)}
@@ -489,12 +489,10 @@ function CrownLeaderboard({
       </CardHeader>
       <CardContent className="p-0">
         {/* Header row */}
-        <div className="hidden sm:grid sm:grid-cols-[3rem_1fr_5rem_5rem_5rem] gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b">
+        <div className="hidden sm:grid sm:grid-cols-[3rem_1fr_6rem] gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b">
           <div>Rank</div>
           <div>Athlete</div>
-          <div className="text-center">KOM</div>
-          <div className="text-center">QOM</div>
-          <div className="text-center">Total</div>
+          <div className="text-center">Crowns</div>
         </div>
 
         <div className="divide-y">
@@ -503,7 +501,7 @@ function CrownLeaderboard({
             return (
               <div
                 key={entry.user_id}
-                className={`grid grid-cols-[3rem_1fr] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem] gap-4 px-4 py-3 items-center ${
+                className={`grid grid-cols-[3rem_1fr_4rem] sm:grid-cols-[3rem_1fr_6rem] gap-4 px-4 py-3 items-center ${
                   isCurrentUser ? "bg-primary/5 border-l-2 border-l-primary" : ""
                 }`}
               >
@@ -525,34 +523,10 @@ function CrownLeaderboard({
                   )}
                 </div>
 
-                {/* KOM count */}
-                <div className="hidden sm:flex items-center justify-center gap-1">
+                {/* Crowns */}
+                <div className="flex items-center justify-center gap-1">
                   <Crown className="h-4 w-4 text-amber-500" />
-                  <span className="font-medium">{entry.kom_count}</span>
-                </div>
-
-                {/* QOM count */}
-                <div className="hidden sm:flex items-center justify-center gap-1">
-                  <Crown className="h-4 w-4 text-amber-500" />
-                  <span className="font-medium">{entry.qom_count}</span>
-                </div>
-
-                {/* Total */}
-                <div className="hidden sm:flex items-center justify-center">
                   <span className="font-bold text-lg">{entry.total_crowns}</span>
-                </div>
-
-                {/* Mobile-only stats row */}
-                <div className="sm:hidden col-span-2 flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Crown className="h-3 w-3 text-amber-500" />
-                    {entry.kom_count} KOM
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Crown className="h-3 w-3 text-amber-500" />
-                    {entry.qom_count} QOM
-                  </span>
-                  <span className="ml-auto font-bold">{entry.total_crowns} total</span>
                 </div>
               </div>
             );

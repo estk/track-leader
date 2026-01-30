@@ -1100,6 +1100,18 @@ pub struct TeamContentQuery {
     pub offset: i64,
 }
 
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct TeamActivitiesByDateQuery {
+    /// Date to filter activities by (YYYY-MM-DD).
+    pub date: time::Date,
+    /// Maximum number of results.
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    /// Number of results to skip.
+    #[serde(default)]
+    pub offset: i64,
+}
+
 #[utoipa::path(
     get,
     path = "/teams/{id}/activities",
@@ -1164,4 +1176,36 @@ pub async fn get_team_segments(
         .get_team_segments(team_id, query.limit, query.offset)
         .await?;
     Ok(Json(segments))
+}
+
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/activities/daily",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID"),
+        TeamActivitiesByDateQuery
+    ),
+    responses(
+        (status = 200, description = "Team activities for the specified date", body = Vec<crate::models::FeedActivity>),
+        (status = 404, description = "Team not found or not a member"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+/// Get activities shared with a team for a specific date.
+pub async fn get_team_activities_by_date(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(team_id): Path<Uuid>,
+    Query(query): Query<TeamActivitiesByDateQuery>,
+) -> Result<Json<Vec<crate::models::FeedActivity>>, AppError> {
+    // Verify user is a member
+    db.get_team_membership(team_id, claims.sub)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let activities = db
+        .get_team_activities_by_date(team_id, query.date, query.limit, query.offset)
+        .await?;
+    Ok(Json(activities))
 }

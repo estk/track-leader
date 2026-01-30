@@ -31,24 +31,26 @@ use crate::{
     database::Database,
     handlers::{
         accept_invitation, add_comment, all_users, change_member_role, create_activity_type,
-        create_segment, create_team, delete_activity, delete_comment, delete_team, discover_teams,
-        download_gpx_file, follow_user, get_activities_by_date, get_activity,
-        get_activity_segments, get_activity_teams, get_activity_track, get_activity_type,
-        get_comments, get_countries, get_crown_leaderboard, get_distance_leaderboard, get_feed,
+        create_dig_segments, create_segment, create_team, delete_activity, delete_comment,
+        delete_dig_segment, delete_team, discover_teams, download_gpx_file, follow_user,
+        get_activities_by_date, get_activity, get_activity_segments, get_activity_teams,
+        get_activity_track, get_activity_type, get_comments, get_countries,
+        get_crown_leaderboard, get_dig_segments, get_dig_time, get_distance_leaderboard, get_feed,
         get_filtered_leaderboard, get_follow_status, get_followers, get_following, get_invitation,
         get_join_requests, get_kudos_givers, get_kudos_status, get_leaderboard_position,
         get_my_achievements, get_my_demographics, get_my_segment_efforts, get_nearby_segments,
         get_notifications, get_segment, get_segment_achievements, get_segment_leaderboard,
         get_segment_teams, get_segment_track, get_starred_segment_efforts, get_starred_segments,
-        get_stats, get_team, get_team_activities, get_team_invitations, get_team_segments,
-        get_user_achievements, get_user_activities, get_user_profile, give_kudos, health_check,
-        invite_to_team, is_segment_starred, join_team, leave_team, list_activity_types,
-        list_my_teams, list_segments, list_team_members, mark_all_notifications_read,
-        mark_notification_read, new_activity, new_user, preview_segment, remove_kudos,
-        remove_team_member, reprocess_segment, resolve_activity_type, review_join_request,
-        revoke_invitation, share_activity_with_teams, share_segment_with_teams, star_segment,
-        unfollow_user, unshare_activity_from_team, unshare_segment_from_team, unstar_segment,
-        update_activity, update_my_demographics, update_team,
+        get_stats, get_stopped_segments, get_team, get_team_activities, get_team_activities_by_date,
+        get_team_invitations, get_team_segments, get_user_achievements, get_user_activities,
+        get_user_profile, give_kudos, health_check, invite_to_team, is_segment_starred, join_team,
+        leave_team, list_activity_types, list_my_teams, list_segments, list_team_members,
+        mark_all_notifications_read, mark_notification_read, new_activity, new_user,
+        preview_segment, remove_kudos, remove_team_member, reprocess_segment,
+        resolve_activity_type, review_join_request, revoke_invitation, share_activity_with_teams,
+        share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team,
+        unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics,
+        update_team,
     },
     object_store_service::ObjectStoreService,
 };
@@ -93,6 +95,11 @@ use crate::{
         handlers::get_activity_track,
         handlers::get_activity_segments,
         handlers::get_activities_by_date,
+        handlers::get_stopped_segments,
+        handlers::get_dig_segments,
+        handlers::create_dig_segments,
+        handlers::get_dig_time,
+        handlers::delete_dig_segment,
         // Activity types
         handlers::health_check,
         handlers::list_activity_types,
@@ -178,6 +185,7 @@ use crate::{
         handlers::share_segment_with_teams,
         handlers::unshare_segment_from_team,
         handlers::get_team_activities,
+        handlers::get_team_activities_by_date,
         handlers::get_team_segments,
     ),
     components(
@@ -238,6 +246,12 @@ use crate::{
             models::NotificationsResponse,
             // Feed types
             models::FeedActivity,
+            models::FeedActivityWithTeams,
+            // Stopped/Dig segment types
+            models::StoppedSegment,
+            models::DigSegment,
+            models::CreateDigSegmentsRequest,
+            models::DigTimeSummary,
             // Kudos/Comments
             models::KudosGiver,
             models::Comment,
@@ -301,6 +315,7 @@ use crate::{
             handlers::DiscoverTeamsQuery,
             handlers::ReviewJoinRequestRequest,
             handlers::TeamContentQuery,
+            handlers::TeamActivitiesByDateQuery,
         )
     ),
     security(
@@ -359,6 +374,19 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/activities/{id}/track", get(get_activity_track))
         .route("/activities/{id}/segments", get(get_activity_segments))
         .route("/activities/{id}/download", get(download_gpx_file))
+        .route(
+            "/activities/{id}/stopped-segments",
+            get(get_stopped_segments),
+        )
+        .route(
+            "/activities/{id}/dig-segments",
+            get(get_dig_segments).post(create_dig_segments),
+        )
+        .route("/activities/{id}/dig-time", get(get_dig_time))
+        .route(
+            "/activities/{activity_id}/dig-segments/{segment_id}",
+            axum::routing::delete(delete_dig_segment),
+        )
         .route("/users/{id}/activities", get(get_user_activities))
         // User demographics routes
         .route(
@@ -468,6 +496,10 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             axum::routing::delete(revoke_invitation),
         )
         .route("/teams/{id}/activities", get(get_team_activities))
+        .route(
+            "/teams/{id}/activities/daily",
+            get(get_team_activities_by_date),
+        )
         .route("/teams/{id}/segments", get(get_team_segments))
         // Invitation acceptance (public route, token-based)
         .route("/invitations/{token}", get(get_invitation))

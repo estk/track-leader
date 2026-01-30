@@ -1,9 +1,5 @@
 # Todo
 
-- the visibility of an activity should be easily understandable on the my activities page (pub priv what teams etc)
-- auto detect non-moving time on activity and allow user to easily tag as dig on activity upload
-- when showing crown leaderboard, dont distinguish between qom vs kom
-- need daily map on team home page
 - we need to add a heartrate and cadence and power graph
 - we need the ability to process tcx and fit files
 

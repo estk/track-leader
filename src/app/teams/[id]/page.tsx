@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,8 +16,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { RoleBadge } from "@/components/teams/role-badge";
 import { FeedCard } from "@/components/feed/feed-card";
+import { LazyDailyActivitiesMap } from "@/components/activity/lazy-daily-activities-map";
 import { cn } from "@/lib/utils";
 
 type TabType = "activities" | "segments" | "members";
@@ -252,7 +255,7 @@ export default function TeamDetailPage() {
           ) : (
             <>
               {activeTab === "activities" && (
-                <ActivitiesTab activities={activities} />
+                <ActivitiesTab activities={activities} teamId={teamId} />
               )}
               {activeTab === "segments" && (
                 <SegmentsTab segments={segments} router={router} />
@@ -348,24 +351,155 @@ function JoinButton({
   );
 }
 
-function ActivitiesTab({ activities }: { activities: FeedActivity[] }) {
-  if (activities.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <p className="text-muted-foreground">
-            No activities shared with this team yet.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+function getTodayDateString(): string {
+  const today = new Date();
+  return today.toISOString().split("T")[0];
+}
+
+function ActivitiesTab({
+  activities,
+  teamId,
+}: {
+  activities: FeedActivity[];
+  teamId: string;
+}) {
+  const [dailyDate, setDailyDate] = useState(getTodayDateString());
+  const [dailyActivities, setDailyActivities] = useState<FeedActivity[]>([]);
+  const [dailyLoading, setDailyLoading] = useState(true);
+
+  // Load daily activities for the map
+  const loadDailyActivities = useCallback(async () => {
+    setDailyLoading(true);
+    try {
+      const data = await api.getTeamActivitiesByDate(teamId, dailyDate);
+      setDailyActivities(data);
+    } catch {
+      setDailyActivities([]);
+    } finally {
+      setDailyLoading(false);
+    }
+  }, [teamId, dailyDate]);
+
+  useEffect(() => {
+    loadDailyActivities();
+  }, [loadDailyActivities]);
+
+  const handlePreviousDay = () => {
+    const currentDate = new Date(dailyDate);
+    currentDate.setDate(currentDate.getDate() - 1);
+    setDailyDate(currentDate.toISOString().split("T")[0]);
+  };
+
+  const handleNextDay = () => {
+    const currentDate = new Date(dailyDate);
+    currentDate.setDate(currentDate.getDate() + 1);
+    setDailyDate(currentDate.toISOString().split("T")[0]);
+  };
+
+  const handleToday = () => {
+    setDailyDate(getTodayDateString());
+  };
+
+  const isToday = dailyDate === getTodayDateString();
+
+  // Format the date for display
+  const displayDate = new Date(dailyDate + "T00:00:00").toLocaleDateString(
+    undefined,
+    {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }
+  );
 
   return (
-    <div className="space-y-4">
-      {activities.map((activity) => (
-        <FeedCard key={activity.id} activity={activity} />
-      ))}
+    <div className="space-y-6">
+      {/* Daily Map Section */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Daily Team Map</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Date picker controls */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="daily-date-picker">Date</Label>
+              <Input
+                id="daily-date-picker"
+                type="date"
+                value={dailyDate}
+                onChange={(e) => setDailyDate(e.target.value)}
+                className="w-full sm:w-auto"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePreviousDay}
+                title="Previous day"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextDay}
+                title="Next day"
+              >
+                Next
+              </Button>
+              {!isToday && (
+                <Button variant="outline" size="sm" onClick={handleToday}>
+                  Today
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">{displayDate}</p>
+
+          {/* Map */}
+          {dailyLoading ? (
+            <Skeleton className="h-[300px] w-full rounded-lg" />
+          ) : dailyActivities.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground border rounded-lg">
+              No team activities on this date.
+            </div>
+          ) : (
+            <div>
+              <LazyDailyActivitiesMap activities={dailyActivities} />
+              <p className="text-sm text-muted-foreground mt-2">
+                {dailyActivities.length}{" "}
+                {dailyActivities.length === 1 ? "activity" : "activities"} on
+                this date
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* All Activities Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4">All Team Activities</h3>
+        {activities.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">
+                No activities shared with this team yet.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {activities.map((activity) => (
+              <FeedCard key={activity.id} activity={activity} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

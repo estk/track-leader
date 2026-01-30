@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useUrlFilters } from "@/hooks/use-url-filters";
+import { Globe, Lock, Users } from "lucide-react";
 
 // Filter options
 const DATE_RANGE_OPTIONS: { value: DateRangeFilter | "all"; label: string }[] = [
@@ -246,17 +247,25 @@ function ActivitiesPageContent() {
             >
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <CardTitle className="text-lg">{activity.name}</CardTitle>
+                    {activity.visibility === "public" && (
+                      <Badge variant="secondary" className="gap-1">
+                        <Globe className="h-3 w-3" />
+                        Public
+                      </Badge>
+                    )}
                     {activity.visibility === "private" && (
-                      <span className="text-muted-foreground text-sm" title="Private">
-                        [Private]
-                      </span>
+                      <Badge variant="outline" className="gap-1">
+                        <Lock className="h-3 w-3" />
+                        Private
+                      </Badge>
                     )}
                     {activity.visibility === "teams_only" && (
-                      <span className="text-muted-foreground text-sm" title="Teams Only">
-                        [Teams]
-                      </span>
+                      <Badge variant="default" className="gap-1 bg-blue-600 hover:bg-blue-700">
+                        <Users className="h-3 w-3" />
+                        Teams
+                      </Badge>
                     )}
                   </div>
                   <Badge variant="secondary">

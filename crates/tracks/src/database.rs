@@ -4151,4 +4151,263 @@ impl Database {
 
         Ok(segments)
     }
+
+    /// Get activities shared with a team for a specific date.
+    pub async fn get_team_activities_by_date(
+        &self,
+        team_id: Uuid,
+        date: time::Date,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::FeedActivity>, AppError> {
+        let activities: Vec<crate::models::FeedActivity> = sqlx::query_as(
+            r#"
+            SELECT
+                a.id,
+                a.user_id,
+                a.name,
+                a.activity_type_id,
+                a.submitted_at,
+                a.visibility,
+                u.name as user_name,
+                s.distance,
+                s.duration,
+                s.elevation_gain,
+                COALESCE(a.kudos_count, 0) as kudos_count,
+                COALESCE(a.comment_count, 0) as comment_count
+            FROM activities a
+            JOIN activity_teams at ON at.activity_id = a.id
+            JOIN users u ON a.user_id = u.id
+            LEFT JOIN scores s ON a.id = s.activity_id
+            WHERE at.team_id = $1
+            AND DATE(a.submitted_at) = $2
+            AND a.deleted_at IS NULL
+            ORDER BY a.submitted_at DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(team_id)
+        .bind(date)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(activities)
+    }
+
+    /// Get team names for an activity (for teams_only visibility display).
+    pub async fn get_activity_team_names(&self, activity_id: Uuid) -> Result<Vec<String>, AppError> {
+        let names: Vec<(String,)> = sqlx::query_as(
+            r#"
+            SELECT t.name
+            FROM teams t
+            JOIN activity_teams at ON at.team_id = t.id
+            WHERE at.activity_id = $1
+            ORDER BY t.name
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(names.into_iter().map(|(name,)| name).collect())
+    }
+
+    /// Get team names for multiple activities in one query (for efficiency).
+    pub async fn get_activities_team_names(
+        &self,
+        activity_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<String>>, AppError> {
+        if activity_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let rows: Vec<(Uuid, String)> = sqlx::query_as(
+            r#"
+            SELECT at.activity_id, t.name
+            FROM teams t
+            JOIN activity_teams at ON at.team_id = t.id
+            WHERE at.activity_id = ANY($1)
+            ORDER BY t.name
+            "#,
+        )
+        .bind(activity_ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut result: std::collections::HashMap<Uuid, Vec<String>> =
+            std::collections::HashMap::new();
+        for (activity_id, team_name) in rows {
+            result.entry(activity_id).or_default().push(team_name);
+        }
+
+        Ok(result)
+    }
+
+    // ========================================================================
+    // Stopped Segment / Dig Tagging Methods
+    // ========================================================================
+
+    /// Save detected stopped segments for an activity.
+    pub async fn save_stopped_segments(
+        &self,
+        activity_id: Uuid,
+        segments: &[crate::activity_queue::DetectedStoppedSegment],
+    ) -> Result<(), AppError> {
+        for segment in segments {
+            sqlx::query(
+                r#"
+                INSERT INTO activity_stopped_segments
+                    (activity_id, start_time, end_time, duration_seconds)
+                VALUES ($1, $2, $3, $4)
+                "#,
+            )
+            .bind(activity_id)
+            .bind(segment.start_time)
+            .bind(segment.end_time)
+            .bind(segment.duration_seconds)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Get stopped segments for an activity.
+    pub async fn get_stopped_segments(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Vec<crate::models::StoppedSegment>, AppError> {
+        let segments: Vec<crate::models::StoppedSegment> = sqlx::query_as(
+            r#"
+            SELECT id, activity_id, start_time, end_time, duration_seconds, created_at
+            FROM activity_stopped_segments
+            WHERE activity_id = $1
+            ORDER BY start_time
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(segments)
+    }
+
+    /// Create dig segments from stopped segment IDs.
+    pub async fn create_dig_segments(
+        &self,
+        activity_id: Uuid,
+        stopped_segment_ids: &[Uuid],
+    ) -> Result<Vec<crate::models::DigSegment>, AppError> {
+        // First verify all stopped segments belong to this activity
+        let stopped_segments: Vec<crate::models::StoppedSegment> = sqlx::query_as(
+            r#"
+            SELECT id, activity_id, start_time, end_time, duration_seconds, created_at
+            FROM activity_stopped_segments
+            WHERE id = ANY($1) AND activity_id = $2
+            "#,
+        )
+        .bind(stopped_segment_ids)
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        if stopped_segments.len() != stopped_segment_ids.len() {
+            return Err(AppError::InvalidInput(
+                "Some stopped segment IDs are invalid or don't belong to this activity"
+                    .to_string(),
+            ));
+        }
+
+        // Create dig segments from the stopped segments
+        let mut dig_segments = Vec::new();
+        for stopped in &stopped_segments {
+            let dig: crate::models::DigSegment = sqlx::query_as(
+                r#"
+                INSERT INTO activity_dig_segments
+                    (activity_id, start_time, end_time, duration_seconds)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, activity_id, start_time, end_time, duration_seconds, created_at
+                "#,
+            )
+            .bind(activity_id)
+            .bind(stopped.start_time)
+            .bind(stopped.end_time)
+            .bind(stopped.duration_seconds)
+            .fetch_one(&self.pool)
+            .await?;
+
+            dig_segments.push(dig);
+        }
+
+        Ok(dig_segments)
+    }
+
+    /// Get dig segments for an activity.
+    pub async fn get_dig_segments(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Vec<crate::models::DigSegment>, AppError> {
+        let segments: Vec<crate::models::DigSegment> = sqlx::query_as(
+            r#"
+            SELECT id, activity_id, start_time, end_time, duration_seconds, created_at
+            FROM activity_dig_segments
+            WHERE activity_id = $1
+            ORDER BY start_time
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(segments)
+    }
+
+    /// Get dig time summary for an activity.
+    pub async fn get_dig_time_summary(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<crate::models::DigTimeSummary, AppError> {
+        let row: Option<(f64, i64)> = sqlx::query_as(
+            r#"
+            SELECT
+                COALESCE(SUM(duration_seconds), 0.0) as total_dig_time,
+                COUNT(*) as dig_count
+            FROM activity_dig_segments
+            WHERE activity_id = $1
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let (total_dig_time_seconds, dig_segment_count) = row.unwrap_or((0.0, 0));
+
+        Ok(crate::models::DigTimeSummary {
+            activity_id,
+            total_dig_time_seconds,
+            dig_segment_count,
+        })
+    }
+
+    /// Delete a dig segment.
+    pub async fn delete_dig_segment(
+        &self,
+        activity_id: Uuid,
+        dig_segment_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM activity_dig_segments
+            WHERE id = $1 AND activity_id = $2
+            "#,
+        )
+        .bind(dig_segment_id)
+        .bind(activity_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
 }

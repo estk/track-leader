@@ -925,6 +925,32 @@ pub struct FeedActivity {
     pub comment_count: i32,
 }
 
+/// Activity with user stats and team names (for displaying teams_only activities)
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct FeedActivityWithTeams {
+    #[serde(flatten)]
+    pub activity: FeedActivity,
+    /// Team names this activity is shared with (for teams_only visibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_names: Option<Vec<String>>,
+}
+
+impl FeedActivityWithTeams {
+    pub fn from_activity(activity: FeedActivity) -> Self {
+        Self {
+            activity,
+            team_names: None,
+        }
+    }
+
+    pub fn with_team_names(mut self, team_names: Vec<String>) -> Self {
+        if !team_names.is_empty() {
+            self.team_names = Some(team_names);
+        }
+        self
+    }
+}
+
 // ============================================================================
 // Kudos and Comments Models
 // ============================================================================
@@ -1294,4 +1320,52 @@ pub struct TeamSummary {
     pub member_count: i32,
     pub activity_count: i32,
     pub segment_count: i32,
+}
+
+// ============================================================================
+// Stopped Segment / Dig Tagging Models
+// ============================================================================
+
+/// A detected stopped segment during an activity (non-moving time).
+/// Detected when speed < 1 m/s for > 30 seconds.
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct StoppedSegment {
+    pub id: Uuid,
+    pub activity_id: Uuid,
+    #[serde(with = "rfc3339")]
+    pub start_time: OffsetDateTime,
+    #[serde(with = "rfc3339")]
+    pub end_time: OffsetDateTime,
+    pub duration_seconds: f64,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// A user-tagged dig segment (trail maintenance time).
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct DigSegment {
+    pub id: Uuid,
+    pub activity_id: Uuid,
+    #[serde(with = "rfc3339")]
+    pub start_time: OffsetDateTime,
+    #[serde(with = "rfc3339")]
+    pub end_time: OffsetDateTime,
+    pub duration_seconds: f64,
+    #[serde(with = "rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+/// Request to create dig segments from stopped segments
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateDigSegmentsRequest {
+    /// List of stopped segment IDs to tag as dig time
+    pub stopped_segment_ids: Vec<Uuid>,
+}
+
+/// Response with dig time summary for an activity
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct DigTimeSummary {
+    pub activity_id: Uuid,
+    pub total_dig_time_seconds: f64,
+    pub dig_segment_count: i64,
 }

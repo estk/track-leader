@@ -608,3 +608,197 @@ pub async fn get_activities_by_date(
 
     Ok(Json(activities))
 }
+
+// ============================================================================
+// Stopped Segments / Dig Tagging Endpoints
+// ============================================================================
+
+/// Get stopped segments detected in an activity.
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/stopped-segments",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Stopped segments for the activity", body = Vec<crate::models::StoppedSegment>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Activity not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_stopped_segments(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<crate::models::StoppedSegment>>, AppError> {
+    // Verify activity exists and user has access
+    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+
+    // Only activity owner can view stopped segments
+    if activity.user_id != claims.sub {
+        return Err(AppError::Forbidden);
+    }
+
+    let segments = db.get_stopped_segments(id).await?;
+    Ok(Json(segments))
+}
+
+/// Create dig segments from stopped segments.
+/// Tags the specified stopped segments as "dig time" (trail maintenance).
+#[utoipa::path(
+    post,
+    path = "/activities/{id}/dig-segments",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    request_body = crate::models::CreateDigSegmentsRequest,
+    responses(
+        (status = 201, description = "Dig segments created", body = Vec<crate::models::DigSegment>),
+        (status = 400, description = "Invalid input"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Activity not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn create_dig_segments(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<crate::models::CreateDigSegmentsRequest>,
+) -> Result<(StatusCode, Json<Vec<crate::models::DigSegment>>), AppError> {
+    // Verify activity exists and user is the owner
+    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+
+    if activity.user_id != claims.sub {
+        return Err(AppError::Forbidden);
+    }
+
+    if req.stopped_segment_ids.is_empty() {
+        return Err(AppError::InvalidInput(
+            "At least one stopped segment ID is required".to_string(),
+        ));
+    }
+
+    let dig_segments = db.create_dig_segments(id, &req.stopped_segment_ids).await?;
+    Ok((StatusCode::CREATED, Json(dig_segments)))
+}
+
+/// Get dig segments for an activity.
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/dig-segments",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Dig segments for the activity", body = Vec<crate::models::DigSegment>),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Activity not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_dig_segments(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<crate::models::DigSegment>>, AppError> {
+    // Verify activity exists and user has access
+    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+
+    // Only activity owner can view dig segments
+    if activity.user_id != claims.sub {
+        return Err(AppError::Forbidden);
+    }
+
+    let segments = db.get_dig_segments(id).await?;
+    Ok(Json(segments))
+}
+
+/// Get dig time summary for an activity.
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/dig-time",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Dig time summary", body = crate::models::DigTimeSummary),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Activity not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_dig_time(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<crate::models::DigTimeSummary>, AppError> {
+    // Verify activity exists and user has access
+    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+
+    // Only activity owner can view dig time
+    if activity.user_id != claims.sub {
+        return Err(AppError::Forbidden);
+    }
+
+    let summary = db.get_dig_time_summary(id).await?;
+    Ok(Json(summary))
+}
+
+/// Delete a dig segment.
+#[utoipa::path(
+    delete,
+    path = "/activities/{activity_id}/dig-segments/{segment_id}",
+    tag = "activities",
+    params(
+        ("activity_id" = Uuid, Path, description = "Activity ID"),
+        ("segment_id" = Uuid, Path, description = "Dig segment ID")
+    ),
+    responses(
+        (status = 204, description = "Dig segment deleted"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Activity or dig segment not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn delete_dig_segment(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path((activity_id, segment_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AppError> {
+    // Verify activity exists and user is the owner
+    let activity = db
+        .get_activity(activity_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    if activity.user_id != claims.sub {
+        return Err(AppError::Forbidden);
+    }
+
+    if db.delete_dig_segment(activity_id, segment_id).await? {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(AppError::NotFound)
+    }
+}

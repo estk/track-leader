@@ -139,11 +139,134 @@ impl ActivityQueue {
                         process_segment_match(&db, &parsed_track, uid, id, segment_match).await;
                     }
                 }
+
+                // Detect and save stopped segments
+                let stopped_segments = detect_stopped_segments(&track_points);
+                if !stopped_segments.is_empty() {
+                    tracing::info!(
+                        "Detected {} stopped segments in activity {}",
+                        stopped_segments.len(),
+                        id
+                    );
+                    if let Err(e) = db.save_stopped_segments(id, &stopped_segments).await {
+                        tracing::error!("Failed to save stopped segments: {e}");
+                    }
+                }
             });
             tx.send(id).unwrap();
         });
         Ok(())
     }
+}
+
+/// Detected stopped segment with timestamps
+pub struct DetectedStoppedSegment {
+    pub start_time: OffsetDateTime,
+    pub end_time: OffsetDateTime,
+    pub duration_seconds: f64,
+}
+
+/// Detect stopped segments in a track.
+/// A stopped segment is defined as consecutive points where:
+/// - Speed < 1 m/s (essentially not moving)
+/// - Duration > 30 seconds
+fn detect_stopped_segments(points: &[TrackPointData]) -> Vec<DetectedStoppedSegment> {
+    const SPEED_THRESHOLD_MPS: f64 = 1.0; // 1 m/s = 3.6 km/h
+    const MIN_STOPPED_DURATION_SECS: f64 = 30.0;
+
+    let mut segments = Vec::new();
+
+    // Need at least 2 points with timestamps to detect stopped segments
+    if points.len() < 2 {
+        return segments;
+    }
+
+    let mut stop_start: Option<(usize, OffsetDateTime)> = None;
+
+    for i in 1..points.len() {
+        let prev = &points[i - 1];
+        let curr = &points[i];
+
+        // Skip points without timestamps
+        let (Some(prev_time), Some(curr_time)) = (&prev.timestamp, &curr.timestamp) else {
+            // End any current stopped segment if we lose timestamp continuity
+            if let Some((_, start_time)) = stop_start.take() {
+                if let Some(end_time) = points[i - 1].timestamp {
+                    let duration = (end_time - start_time).as_seconds_f64();
+                    if duration >= MIN_STOPPED_DURATION_SECS {
+                        segments.push(DetectedStoppedSegment {
+                            start_time,
+                            end_time,
+                            duration_seconds: duration,
+                        });
+                    }
+                }
+            }
+            continue;
+        };
+
+        // Calculate distance and speed
+        let distance = haversine_distance(prev.lat, prev.lon, curr.lat, curr.lon);
+        let time_diff = (*curr_time - *prev_time).as_seconds_f64();
+
+        // Skip if time_diff is zero or negative (bad data)
+        if time_diff <= 0.0 {
+            continue;
+        }
+
+        let speed = distance / time_diff;
+
+        if speed < SPEED_THRESHOLD_MPS {
+            // Moving slowly or stopped
+            if stop_start.is_none() {
+                stop_start = Some((i - 1, *prev_time));
+            }
+        } else {
+            // Moving again - end any current stopped segment
+            if let Some((_, start_time)) = stop_start.take() {
+                let duration = (*prev_time - start_time).as_seconds_f64();
+                if duration >= MIN_STOPPED_DURATION_SECS {
+                    segments.push(DetectedStoppedSegment {
+                        start_time,
+                        end_time: *prev_time,
+                        duration_seconds: duration,
+                    });
+                }
+            }
+        }
+    }
+
+    // Handle case where track ends while stopped
+    if let Some((_, start_time)) = stop_start {
+        if let Some(end_time) = points.last().and_then(|p| p.timestamp) {
+            let duration = (end_time - start_time).as_seconds_f64();
+            if duration >= MIN_STOPPED_DURATION_SECS {
+                segments.push(DetectedStoppedSegment {
+                    start_time,
+                    end_time,
+                    duration_seconds: duration,
+                });
+            }
+        }
+    }
+
+    segments
+}
+
+/// Calculate the distance in meters between two lat/lon points using the haversine formula
+fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const EARTH_RADIUS_METERS: f64 = 6_371_000.0;
+
+    let lat1_rad = lat1.to_radians();
+    let lat2_rad = lat2.to_radians();
+    let delta_lat = (lat2 - lat1).to_radians();
+    let delta_lon = (lon2 - lon1).to_radians();
+
+    let a = (delta_lat / 2.0).sin().powi(2)
+        + lat1_rad.cos() * lat2_rad.cos() * (delta_lon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().asin();
+
+    EARTH_RADIUS_METERS * c
 }
 
 /// Extract track points with elevation and timestamps from GPX
