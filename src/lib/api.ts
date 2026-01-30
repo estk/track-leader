@@ -1186,6 +1186,15 @@ class ApiClient {
     });
   }
 
+  // Daily activities endpoint
+  async getActivitiesByDate(date: string, mineOnly?: boolean): Promise<FeedActivity[]> {
+    const params = new URLSearchParams({ date });
+    if (mineOnly !== undefined) {
+      params.set('mine_only', mineOnly.toString());
+    }
+    return this.request<FeedActivity[]>(`/activities/by-date?${params.toString()}`);
+  }
+
   // Team content endpoints
   async getTeamActivities(teamId: string, limit?: number, offset?: number): Promise<FeedActivity[]> {
     const params = new URLSearchParams();

@@ -23,12 +23,12 @@ pub use achievements::{
     GetAchievementsQuery, get_my_achievements, get_segment_achievements, get_user_achievements,
 };
 pub use activities::{
-    __path_delete_activity, __path_download_gpx_file, __path_get_activity,
-    __path_get_activity_segments, __path_get_activity_track, __path_get_user_activities,
-    __path_new_activity, __path_update_activity, TrackBounds, TrackData, TrackPoint,
-    UpdateActivityRequest, UploadQuery, UserActivitiesQuery, delete_activity, download_gpx_file,
-    get_activity, get_activity_segments, get_activity_track, get_user_activities, new_activity,
-    update_activity,
+    __path_delete_activity, __path_download_gpx_file, __path_get_activities_by_date,
+    __path_get_activity, __path_get_activity_segments, __path_get_activity_track,
+    __path_get_user_activities, __path_new_activity, __path_update_activity, ActivitiesByDateQuery,
+    TrackBounds, TrackData, TrackPoint, UpdateActivityRequest, UploadQuery, UserActivitiesQuery,
+    delete_activity, download_gpx_file, get_activities_by_date, get_activity,
+    get_activity_segments, get_activity_track, get_user_activities, new_activity, update_activity,
 };
 pub use activity_types::{
     __path_create_activity_type, __path_get_activity_type, __path_list_activity_types,

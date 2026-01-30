@@ -31,23 +31,23 @@ use crate::{
     handlers::{
         accept_invitation, add_comment, all_users, change_member_role, create_activity_type,
         create_segment, create_team, delete_activity, delete_comment, delete_team, discover_teams,
-        download_gpx_file, follow_user, get_activity, get_activity_segments, get_activity_teams,
-        get_activity_track, get_activity_type, get_comments, get_countries, get_crown_leaderboard,
-        get_distance_leaderboard, get_feed, get_filtered_leaderboard, get_follow_status,
-        get_followers, get_following, get_invitation, get_join_requests, get_kudos_givers,
-        get_kudos_status, get_leaderboard_position, get_my_achievements, get_my_demographics,
-        get_my_segment_efforts, get_nearby_segments, get_notifications, get_segment,
-        get_segment_achievements, get_segment_leaderboard, get_segment_teams, get_segment_track,
-        get_starred_segment_efforts, get_starred_segments, get_stats, get_team,
-        get_team_activities, get_team_invitations, get_team_segments, get_user_achievements,
-        get_user_activities, get_user_profile, give_kudos, health_check, invite_to_team,
-        is_segment_starred, join_team, leave_team, list_activity_types, list_my_teams,
-        list_segments, list_team_members, mark_all_notifications_read, mark_notification_read,
-        new_activity, new_user, preview_segment, remove_kudos, remove_team_member,
-        reprocess_segment, resolve_activity_type, review_join_request, revoke_invitation,
-        share_activity_with_teams, share_segment_with_teams, star_segment, unfollow_user,
-        unshare_activity_from_team, unshare_segment_from_team, unstar_segment, update_activity,
-        update_my_demographics, update_team,
+        download_gpx_file, follow_user, get_activities_by_date, get_activity,
+        get_activity_segments, get_activity_teams, get_activity_track, get_activity_type,
+        get_comments, get_countries, get_crown_leaderboard, get_distance_leaderboard, get_feed,
+        get_filtered_leaderboard, get_follow_status, get_followers, get_following, get_invitation,
+        get_join_requests, get_kudos_givers, get_kudos_status, get_leaderboard_position,
+        get_my_achievements, get_my_demographics, get_my_segment_efforts, get_nearby_segments,
+        get_notifications, get_segment, get_segment_achievements, get_segment_leaderboard,
+        get_segment_teams, get_segment_track, get_starred_segment_efforts, get_starred_segments,
+        get_stats, get_team, get_team_activities, get_team_invitations, get_team_segments,
+        get_user_achievements, get_user_activities, get_user_profile, give_kudos, health_check,
+        invite_to_team, is_segment_starred, join_team, leave_team, list_activity_types,
+        list_my_teams, list_segments, list_team_members, mark_all_notifications_read,
+        mark_notification_read, new_activity, new_user, preview_segment, remove_kudos,
+        remove_team_member, reprocess_segment, resolve_activity_type, review_join_request,
+        revoke_invitation, share_activity_with_teams, share_segment_with_teams, star_segment,
+        unfollow_user, unshare_activity_from_team, unshare_segment_from_team, unstar_segment,
+        update_activity, update_my_demographics, update_team,
     },
     object_store_service::ObjectStoreService,
 };
@@ -91,6 +91,7 @@ use crate::{
         handlers::download_gpx_file,
         handlers::get_activity_track,
         handlers::get_activity_segments,
+        handlers::get_activities_by_date,
         // Activity types
         handlers::health_check,
         handlers::list_activity_types,
@@ -263,6 +264,7 @@ use crate::{
             handlers::TrackBounds,
             handlers::UploadQuery,
             handlers::UpdateActivityRequest,
+            handlers::ActivitiesByDateQuery,
             handlers::ResolveTypeQuery,
             handlers::ResolveTypeResponse,
             handlers::CreateSegmentRequest,
@@ -340,6 +342,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/users", get(all_users))
         // Activity routes
         .route("/activities/new", post(new_activity))
+        .route("/activities/by-date", get(get_activities_by_date))
         .route(
             "/activities/{id}",
             get(get_activity)

@@ -42,6 +42,9 @@ export function Header() {
               Feed
             </Link>
           )}
+          <Link href="/activities/daily" className="text-muted-foreground hover:text-foreground">
+            Daily
+          </Link>
           <Link href="/activities" className="text-muted-foreground hover:text-foreground">
             Activities
           </Link>
@@ -136,6 +139,13 @@ export function Header() {
                 Feed
               </Link>
             )}
+            <Link
+              href="/activities/daily"
+              className="text-muted-foreground hover:text-foreground py-2"
+              onClick={closeMobileMenu}
+            >
+              Daily
+            </Link>
             <Link
               href="/activities"
               className="text-muted-foreground hover:text-foreground py-2"

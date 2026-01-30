@@ -17,9 +17,11 @@ use crate::{
     auth::{AuthUser, OptionalAuthUser},
     database::Database,
     errors::AppError,
-    models::Activity,
+    models::{Activity, FeedActivity},
     object_store_service::{FileType, ObjectStoreService},
 };
+
+use super::pagination::default_limit;
 
 /// Track point in activity track data.
 #[derive(Debug, Serialize, ToSchema)]
@@ -75,6 +77,22 @@ pub struct UpdateActivityRequest {
 /// User activities query parameters (placeholder for future pagination).
 #[derive(Deserialize, ToSchema)]
 pub struct UserActivitiesQuery {}
+
+/// Query parameters for activities by date.
+#[derive(Deserialize, ToSchema)]
+pub struct ActivitiesByDateQuery {
+    /// Date to filter activities by (YYYY-MM-DD).
+    pub date: time::Date,
+    /// Filter to only the authenticated user's activities.
+    #[serde(default)]
+    pub mine_only: Option<bool>,
+    /// Maximum number of results.
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    /// Number of results to skip.
+    #[serde(default)]
+    pub offset: i64,
+}
 
 /// Create a new activity by uploading a GPX file.
 #[utoipa::path(
@@ -524,4 +542,44 @@ pub async fn get_activity_segments(
 
     let efforts = db.get_activity_segment_efforts(id).await?;
     Ok(Json(efforts))
+}
+
+/// Get activities by date.
+///
+/// Returns activities submitted on the specified date. Visibility filtering is applied:
+/// - Anonymous users only see public activities
+/// - Authenticated users see public activities, their own private activities,
+///   and activities shared with teams they are members of
+#[utoipa::path(
+    get,
+    path = "/activities/by-date",
+    tag = "activities",
+    params(
+        ("date" = String, Query, description = "Date to filter by (YYYY-MM-DD)"),
+        ("mine_only" = Option<bool>, Query, description = "Filter to own activities only"),
+        ("limit" = Option<i64>, Query, description = "Maximum number of results"),
+        ("offset" = Option<i64>, Query, description = "Number of results to skip")
+    ),
+    responses(
+        (status = 200, description = "Activities for the specified date", body = Vec<FeedActivity>)
+    )
+)]
+pub async fn get_activities_by_date(
+    Extension(db): Extension<Database>,
+    OptionalAuthUser(claims): OptionalAuthUser,
+    Query(query): Query<ActivitiesByDateQuery>,
+) -> Result<Json<Vec<FeedActivity>>, AppError> {
+    let user_id = claims.as_ref().map(|c| c.sub);
+    let mine_only = query.mine_only.unwrap_or(false);
+
+    // If mine_only is requested but user is not authenticated, return empty
+    if mine_only && user_id.is_none() {
+        return Ok(Json(vec![]));
+    }
+
+    let activities = db
+        .get_activities_by_date(query.date, user_id, mine_only, query.limit, query.offset)
+        .await?;
+
+    Ok(Json(activities))
 }

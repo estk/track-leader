@@ -2301,6 +2301,135 @@ impl Database {
         Ok(activities)
     }
 
+    /// Get activities for a specific date with visibility filtering.
+    ///
+    /// - If `user_id` is None (anonymous), only public activities are returned.
+    /// - If `user_id` is Some and `mine_only` is true, only that user's activities are returned.
+    /// - If `user_id` is Some and `mine_only` is false, returns public activities,
+    ///   the user's own private activities, and activities shared with teams the user is a member of.
+    pub async fn get_activities_by_date(
+        &self,
+        date: time::Date,
+        user_id: Option<Uuid>,
+        mine_only: bool,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<crate::models::FeedActivity>, AppError> {
+        let activities: Vec<crate::models::FeedActivity> = match (user_id, mine_only) {
+            // mine_only requires authentication and filters to user's activities only
+            (Some(uid), true) => {
+                sqlx::query_as(
+                    r#"
+                    SELECT
+                        a.id,
+                        a.user_id,
+                        a.name,
+                        a.activity_type_id,
+                        a.submitted_at,
+                        a.visibility,
+                        u.name as user_name,
+                        s.distance,
+                        s.duration,
+                        s.elevation_gain,
+                        COALESCE(a.kudos_count, 0) as kudos_count,
+                        COALESCE(a.comment_count, 0) as comment_count
+                    FROM activities a
+                    JOIN users u ON a.user_id = u.id
+                    LEFT JOIN scores s ON a.id = s.activity_id
+                    WHERE DATE(a.submitted_at) = $1
+                    AND a.user_id = $2
+                    AND a.deleted_at IS NULL
+                    ORDER BY a.submitted_at DESC
+                    LIMIT $3 OFFSET $4
+                    "#,
+                )
+                .bind(date)
+                .bind(uid)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Authenticated user sees public + own private + team-shared
+            (Some(uid), false) => {
+                sqlx::query_as(
+                    r#"
+                    SELECT
+                        a.id,
+                        a.user_id,
+                        a.name,
+                        a.activity_type_id,
+                        a.submitted_at,
+                        a.visibility,
+                        u.name as user_name,
+                        s.distance,
+                        s.duration,
+                        s.elevation_gain,
+                        COALESCE(a.kudos_count, 0) as kudos_count,
+                        COALESCE(a.comment_count, 0) as comment_count
+                    FROM activities a
+                    JOIN users u ON a.user_id = u.id
+                    LEFT JOIN scores s ON a.id = s.activity_id
+                    WHERE DATE(a.submitted_at) = $1
+                    AND a.deleted_at IS NULL
+                    AND (
+                        a.visibility = 'public'
+                        OR a.user_id = $2
+                        OR (a.visibility = 'teams_only' AND EXISTS (
+                            SELECT 1 FROM activity_teams at
+                            JOIN team_memberships tm ON tm.team_id = at.team_id
+                            WHERE at.activity_id = a.id AND tm.user_id = $2
+                        ))
+                    )
+                    ORDER BY a.submitted_at DESC
+                    LIMIT $3 OFFSET $4
+                    "#,
+                )
+                .bind(date)
+                .bind(uid)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Anonymous user sees only public activities
+            (None, _) => {
+                sqlx::query_as(
+                    r#"
+                    SELECT
+                        a.id,
+                        a.user_id,
+                        a.name,
+                        a.activity_type_id,
+                        a.submitted_at,
+                        a.visibility,
+                        u.name as user_name,
+                        s.distance,
+                        s.duration,
+                        s.elevation_gain,
+                        COALESCE(a.kudos_count, 0) as kudos_count,
+                        COALESCE(a.comment_count, 0) as comment_count
+                    FROM activities a
+                    JOIN users u ON a.user_id = u.id
+                    LEFT JOIN scores s ON a.id = s.activity_id
+                    WHERE DATE(a.submitted_at) = $1
+                    AND a.visibility = 'public'
+                    AND a.deleted_at IS NULL
+                    ORDER BY a.submitted_at DESC
+                    LIMIT $2 OFFSET $3
+                    "#,
+                )
+                .bind(date)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+        };
+
+        Ok(activities)
+    }
+
     // ========================================================================
     // Kudos Methods
     // ========================================================================

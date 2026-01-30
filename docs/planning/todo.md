@@ -1,9 +1,10 @@
 # Todo
 
-- segment efforts should have athlete name not uuid
-- we need to generate many more segments in our test data generator
-- test efforts should match the elevation profile of the terrain instaed of just noise
-- we need to add a heartrate and cadence and power graph
-- tooltips for climb category, ensure they match the terrain
-- why are there no crowns on the crowns leaderboard, there should be right?
+- in the distance leaderboard we should be able to click on users and also you should be able to get to the actual segment effort page
+- on segments pages it says craeted by: <uuid> it should be the user name
+- we need to have user pages so you can click on the users page and see their visible activities etc
+- you should be able to follow users and that should be in your feed
+
+
 - all activities for today should be viewable, add a date picker, have a combined map
+- we need to add a heartrate and cadence and power graph
