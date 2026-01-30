@@ -232,22 +232,24 @@ impl Database {
         use crate::models::{DateRangeFilter, VisibilityFilter};
         use crate::query_builder::QueryBuilder;
 
+        use crate::models::ActivitySortBy;
+
         let mut qb = QueryBuilder::new();
 
-        // Base condition: user_id and not deleted
-        qb.add_param_condition("user_id = ");
-        qb.add_condition("deleted_at IS NULL");
+        // Base condition: user_id and not deleted (use 'a.' prefix for activities table)
+        qb.add_param_condition("a.user_id = ");
+        qb.add_condition("a.deleted_at IS NULL");
 
         // Activity type filter
         if params.activity_type_id.is_some() {
-            qb.add_param_condition("activity_type_id = ");
+            qb.add_param_condition("a.activity_type_id = ");
         }
 
         // Date range filter
         let date_range = params.date_range.unwrap_or_default();
         qb.add_date_range(
             date_range,
-            "submitted_at",
+            "a.submitted_at",
             &params.start_date,
             &params.end_date,
         );
@@ -257,13 +259,13 @@ impl Database {
             match vis {
                 VisibilityFilter::All => (),
                 VisibilityFilter::Public => {
-                    let _ = qb.add_condition("visibility = 'public'");
+                    let _ = qb.add_condition("a.visibility = 'public'");
                 }
                 VisibilityFilter::Private => {
-                    let _ = qb.add_condition("visibility = 'private'");
+                    let _ = qb.add_condition("a.visibility = 'private'");
                 }
                 VisibilityFilter::TeamsOnly => {
-                    let _ = qb.add_condition("visibility = 'teams_only'");
+                    let _ = qb.add_condition("a.visibility = 'teams_only'");
                 }
             }
         }
@@ -274,23 +276,30 @@ impl Database {
             .as_ref()
             .map(|s| format!("%{}%", s.to_lowercase()));
         if search_pattern.is_some() {
-            qb.add_param_condition("LOWER(name) LIKE ");
+            qb.add_param_condition("LOWER(a.name) LIKE ");
         }
 
-        // Build ORDER BY clause
+        // Build ORDER BY clause (join with scores for distance/duration sorting)
         let sort_by = params.sort_by.unwrap_or_default();
-        let order_clause = sort_by.to_sql_order();
+        let order_clause = match sort_by {
+            ActivitySortBy::Recent => "a.submitted_at DESC",
+            ActivitySortBy::Oldest => "a.submitted_at ASC",
+            ActivitySortBy::Distance => "COALESCE(s.distance, 0) DESC",
+            ActivitySortBy::Duration => "COALESCE(s.duration, 0) DESC",
+        };
 
         // Build the final query
         let limit_idx = qb.next_param_idx();
         let offset_idx = qb.next_param_idx();
         let where_clause = qb.build_where_clause();
 
+        // LEFT JOIN with scores to get distance/duration for sorting
         let query = format!(
             r#"
-            SELECT id, user_id, activity_type_id, name, object_store_path,
-                   submitted_at, visibility, type_boundaries, segment_types
-            FROM activities
+            SELECT a.id, a.user_id, a.activity_type_id, a.name, a.object_store_path,
+                   a.submitted_at, a.visibility, a.type_boundaries, a.segment_types
+            FROM activities a
+            LEFT JOIN scores s ON s.activity_id = a.id
             {where_clause}
             ORDER BY {order_clause}
             LIMIT ${limit_idx} OFFSET ${offset_idx}
