@@ -95,12 +95,10 @@ export default function ActivityDetailPage() {
   const activityId = params.id as string;
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-      return;
-    }
+    // Wait for auth to finish loading before making requests
+    if (authLoading) return;
 
-    if (user && activityId) {
+    if (activityId) {
       Promise.all([
         api.getActivity(activityId),
         api.getActivityTrack(activityId),
@@ -114,7 +112,7 @@ export default function ActivityDetailPage() {
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
     }
-  }, [user, authLoading, activityId, router]);
+  }, [authLoading, activityId]);
 
   // Fetch segment preview when selection changes
   useEffect(() => {
@@ -185,6 +183,9 @@ export default function ActivityDetailPage() {
       setDeleting(false);
     }
   };
+
+  // Check if current user is the owner of this activity
+  const isOwner = user && activity && user.id === activity.user_id;
 
   const handleSegmentPointClick = (index: number) => {
     if (!segmentMode) return;
@@ -573,9 +574,11 @@ export default function ActivityDetailPage() {
           >
             Back
           </Button>
-          <Button variant="outline" size="sm" onClick={handleEdit}>
-            Edit
-          </Button>
+          {isOwner && (
+            <Button variant="outline" size="sm" onClick={handleEdit}>
+              Edit
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -585,30 +588,34 @@ export default function ActivityDetailPage() {
           >
             Download
           </Button>
-          {!segmentMode ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setSegmentMode(true)}
-            >
-              Create Segment
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cancelSegmentMode}
-            >
-              Cancel Segment
-            </Button>
+          {isOwner && (
+            <>
+              {!segmentMode ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setSegmentMode(true)}
+                >
+                  Create Segment
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={cancelSegmentMode}
+                >
+                  Cancel Segment
+                </Button>
+              )}
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteOpen(true)}
+              >
+                Delete
+              </Button>
+            </>
           )}
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setDeleteOpen(true)}
-          >
-            Delete
-          </Button>
         </div>
       </div>
 
