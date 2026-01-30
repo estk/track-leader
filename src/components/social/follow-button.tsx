@@ -20,19 +20,21 @@ export function FollowButton({
 
   const handleToggleFollow = async () => {
     setLoading(true);
+    const previousState = isFollowing;
+
     try {
       if (isFollowing) {
-        await api.unfollowUser(userId);
         setIsFollowing(false);
+        await api.unfollowUser(userId);
         onFollowChange?.(false);
       } else {
-        await api.followUser(userId);
         setIsFollowing(true);
+        await api.followUser(userId);
         onFollowChange?.(true);
       }
-    } catch {
-      // Revert on error
-      setIsFollowing(isFollowing);
+    } catch (error) {
+      setIsFollowing(previousState);
+      console.error("Failed to update follow status:", error);
     } finally {
       setLoading(false);
     }
