@@ -1,47 +1,41 @@
 # Todo
 
-- you should be able to follow users and that should be in your feed
-- all activities for user page not found: http://localhost:16542/profile/a79dbe78-7e3c-4b9e-9ec8-fcbd634844ee/activities
-- achivements not found http://localhost:16542/profile/a79dbe78-7e3c-4b9e-9ec8-fcbd634844ee/achievements
-- no visible change when clicking follow user button
-
+- the visibility of an activity should be easily understandable on the my activities page (pub priv what teams etc)
+- auto detect non-moving time on activity and allow user to easily tag as dig on activity upload
+- when showing crown leaderboard, dont distinguish between qom vs kom
+- need daily map on team home page
 - we need to add a heartrate and cadence and power graph
+- we need the ability to process tcx and fit files
 
 ## Filter Implementation
 
 ### Current State
 
-**Already Filtered:**
+**Fully Filtered:**
 - ✅ **Segments Page** (`/segments`) - Full filtering (activity type, distance, climb category, sort, search, location)
 - ✅ **Segment Leaderboard** (`/segments/[id]/leaderboard`) - Full filtering (time scope, gender, age, weight, country) with URL persistence
-- ✅ **Achievements Page** (`/profile/achievements`) - Partial (type toggle, lost/current toggle)
+- ✅ **Activities** (`/activities`) - Activity type, date range, visibility, sort by, search with URL persistence
+- ✅ **Activity Feed** (`/feed`) - Activity type, date range
+- ✅ **Global Leaderboards** (`/leaderboards`) - Time scope, gender, age group, weight class, country, activity type (crowns only)
 
-### Priority 1 - High Value
+**Partially Filtered:**
+- ✅ **Achievements Page** (`/profile/achievements`) - Type toggle, lost/current toggle
 
-| Page | Proposed Filters |
-|------|------------------|
-| **Activities** (`/activities`) | Activity type, date range, visibility, sort, search |
-| **Activity Feed** (`/feed`) | Activity type, date range, specific users filter |
-
-### Priority 2 - Medium Value
+### Remaining - Lower Priority
 
 | Page | Proposed Filters |
 |------|------------------|
-| **Global Leaderboards** (`/leaderboards`) | Activity type, time period (week/month/year/all), country |
 | **Rankings** (`/profile/rankings`) | Expand beyond sort-only to include activity type, time period |
-
-### Priority 3 - Lower Value
-
-| Page | Proposed Filters |
-|------|------------------|
 | **Notifications** (`/notifications`) | Type (follow, kudos, comment, crown), read status |
 | **Teams** (`/teams`) | Team size, activity focus, search by name |
 | **Followers/Following** (`/profile/[userId]/followers`) | Country, activity level, alphabetical/recent sort |
 
 ### Implementation Notes
 
-- Use URL-based filters (like Segment Leaderboard's `useLeaderboardFilters()` pattern) for shareability
-- Backend APIs for Activities, Feed, and Global Leaderboards don't support filtering yet - will need either:
-  - Client-side filtering (quick but limits dataset size)
-  - Backend API extensions (preferred for large datasets)
-- Consider creating reusable filter components for common filters (Activity Type, Date Range)
+- ✅ URL-based filters implemented using `useUrlFilters` hook for shareability
+- ✅ Backend APIs extended with full filtering support:
+  - `get_user_activities_filtered` - activity type, date range, visibility, sort, search
+  - `get_activity_feed_filtered` - activity type, date range
+  - `get_crown_leaderboard_filtered` / `get_distance_leaderboard_filtered` - demographic filters
+- ✅ Reusable `QueryBuilder` module created for dynamic SQL WHERE clauses
+- ✅ Filter enums added to models: `DateRangeFilter`, `VisibilityFilter`, `ActivitySortBy`, `SortOrder`
