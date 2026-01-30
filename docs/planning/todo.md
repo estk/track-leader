@@ -14,7 +14,7 @@
 **Fully Filtered:**
 - ✅ **Segments Page** (`/segments`) - Full filtering (activity type, distance, climb category, sort, search, location)
 - ✅ **Segment Leaderboard** (`/segments/[id]/leaderboard`) - Full filtering (time scope, gender, age, weight, country) with URL persistence
-- ✅ **Activities** (`/activities`) - Activity type, date range, visibility, sort by, search with URL persistence
+- ✅ **Activities** (`/activities`) - Activity type, date range, visibility, sort by (recent/oldest/distance/duration), search with URL persistence
 - ✅ **Activity Feed** (`/feed`) - Activity type, date range
 - ✅ **Global Leaderboards** (`/leaderboards`) - Time scope, gender, age group, weight class, country, activity type (crowns only)
 
@@ -34,7 +34,7 @@
 
 - ✅ URL-based filters implemented using `useUrlFilters` hook for shareability
 - ✅ Backend APIs extended with full filtering support:
-  - `get_user_activities_filtered` - activity type, date range, visibility, sort, search
+  - `get_user_activities_filtered` - activity type, date range, visibility, sort (joins scores for distance/duration), search
   - `get_activity_feed_filtered` - activity type, date range
   - `get_crown_leaderboard_filtered` / `get_distance_leaderboard_filtered` - demographic filters
 - ✅ Reusable `QueryBuilder` module created for dynamic SQL WHERE clauses
