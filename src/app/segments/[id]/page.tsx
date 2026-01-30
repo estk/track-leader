@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, Segment, SegmentEffort, SegmentTrackData, TrackData, getActivityTypeName } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -167,7 +168,17 @@ export default function SegmentDetailPage() {
               {getActivityTypeName(segment.activity_type_id)}
             </Badge>
             <span className="text-sm md:text-base text-muted-foreground">
-              Created by {currentUserId === segment.creator_id ? "you" : `${segment.creator_id.slice(0, 8)}...`}
+              Created by{" "}
+              {currentUserId === segment.creator_id ? (
+                "you"
+              ) : (
+                <Link
+                  href={`/profile/${segment.creator_id}`}
+                  className="hover:underline"
+                >
+                  {segment.creator_name || `${segment.creator_id.slice(0, 8)}...`}
+                </Link>
+              )}
             </span>
             <span className="text-sm md:text-base text-muted-foreground">
               {new Date(segment.created_at).toLocaleDateString()}
@@ -316,7 +327,17 @@ export default function SegmentDetailPage() {
                       {index + 1}
                     </span>
                     <span className="truncate">
-                      {isCurrentUser ? "You" : (effort.user_name || `${effort.user_id.slice(0, 8)}...`)}
+                      {isCurrentUser ? (
+                        "You"
+                      ) : (
+                        <Link
+                          href={`/profile/${effort.user_id}`}
+                          className="hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {effort.user_name || `${effort.user_id.slice(0, 8)}...`}
+                        </Link>
+                      )}
                       {effort.is_personal_record && (
                         <Badge variant="outline" className="ml-2 text-xs">
                           PR
@@ -457,7 +478,13 @@ function EffortComparisonCard({ myEfforts, efforts, currentUserId }: EffortCompa
               <span className="font-mono font-medium">
                 {formatTime(segmentRecord.elapsed_time_seconds)}
                 <span className="text-muted-foreground ml-2">
-                  by {segmentRecord.user_name || `${segmentRecord.user_id.slice(0, 8)}...`}
+                  by{" "}
+                  <Link
+                    href={`/profile/${segmentRecord.user_id}`}
+                    className="hover:underline"
+                  >
+                    {segmentRecord.user_name || `${segmentRecord.user_id.slice(0, 8)}...`}
+                  </Link>
                 </span>
               </span>
             </div>

@@ -162,6 +162,7 @@ pub struct Scores {
 pub struct Segment {
     pub id: Uuid,
     pub creator_id: Uuid,
+    pub creator_name: Option<String>,
     pub name: String,
     pub description: Option<String>,
     pub activity_type_id: Uuid,

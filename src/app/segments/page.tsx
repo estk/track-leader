@@ -463,6 +463,7 @@ function SegmentsContent({
       const mapSegments: Segment[] = filteredStarredEfforts.map((e) => ({
         id: e.segment_id,
         creator_id: "",
+        creator_name: null,
         name: e.segment_name,
         description: null,
         activity_type_id: e.activity_type_id,

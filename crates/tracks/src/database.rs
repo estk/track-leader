@@ -411,7 +411,7 @@ impl Database {
         climb_category: Option<i32>,
         visibility: &str,
     ) -> Result<Segment, AppError> {
-        let segment = sqlx::query_as(
+        sqlx::query(
             r#"
             INSERT INTO segments (
                 id, creator_id, name, description, activity_type_id,
@@ -427,10 +427,6 @@ impl Database {
                 $12, $13, $14,
                 $15, NOW()
             )
-            RETURNING id, creator_id, name, description, activity_type_id,
-                      distance_meters, elevation_gain_meters, elevation_loss_meters,
-                      average_grade, max_grade, climb_category,
-                      visibility, created_at
             "#,
         )
         .bind(id)
@@ -448,21 +444,23 @@ impl Database {
         .bind(max_grade)
         .bind(climb_category)
         .bind(visibility)
-        .fetch_one(&self.pool)
+        .execute(&self.pool)
         .await?;
 
-        Ok(segment)
+        // Fetch the segment with the creator name via a JOIN query
+        self.get_segment(id).await?.ok_or(AppError::NotFound)
     }
 
     pub async fn get_segment(&self, id: Uuid) -> Result<Option<Segment>, AppError> {
         let segment = sqlx::query_as(
             r#"
-            SELECT id, creator_id, name, description, activity_type_id,
-                   distance_meters, elevation_gain_meters, elevation_loss_meters,
-                   average_grade, max_grade, climb_category,
-                   visibility, created_at
-            FROM segments
-            WHERE id = $1 AND deleted_at IS NULL
+            SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
+                   s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                   s.average_grade, s.max_grade, s.climb_category,
+                   s.visibility, s.created_at
+            FROM segments s
+            JOIN users u ON u.id = s.creator_id
+            WHERE s.id = $1 AND s.deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -480,13 +478,14 @@ impl Database {
         let segments: Vec<Segment> = if let Some(type_id) = activity_type_id {
             sqlx::query_as(
                 r#"
-                SELECT id, creator_id, name, description, activity_type_id,
-                       distance_meters, elevation_gain_meters, elevation_loss_meters,
-                       average_grade, max_grade, climb_category,
-                       visibility, created_at
-                FROM segments
-                WHERE deleted_at IS NULL AND visibility = 'public' AND activity_type_id = $1
-                ORDER BY created_at DESC
+                SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
+                       s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                       s.average_grade, s.max_grade, s.climb_category,
+                       s.visibility, s.created_at
+                FROM segments s
+                JOIN users u ON u.id = s.creator_id
+                WHERE s.deleted_at IS NULL AND s.visibility = 'public' AND s.activity_type_id = $1
+                ORDER BY s.created_at DESC
                 LIMIT $2
                 "#,
             )
@@ -497,13 +496,14 @@ impl Database {
         } else {
             sqlx::query_as(
                 r#"
-                SELECT id, creator_id, name, description, activity_type_id,
-                       distance_meters, elevation_gain_meters, elevation_loss_meters,
-                       average_grade, max_grade, climb_category,
-                       visibility, created_at
-                FROM segments
-                WHERE deleted_at IS NULL AND visibility = 'public'
-                ORDER BY created_at DESC
+                SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
+                       s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                       s.average_grade, s.max_grade, s.climb_category,
+                       s.visibility, s.created_at
+                FROM segments s
+                JOIN users u ON u.id = s.creator_id
+                WHERE s.deleted_at IS NULL AND s.visibility = 'public'
+                ORDER BY s.created_at DESC
                 LIMIT $1
                 "#,
             )
@@ -524,13 +524,15 @@ impl Database {
         use crate::handlers::{SegmentSortBy, SortOrder};
 
         // Build WHERE clause dynamically
-        let mut conditions: Vec<String> =
-            vec!["deleted_at IS NULL".into(), "visibility = 'public'".into()];
+        let mut conditions: Vec<String> = vec![
+            "s.deleted_at IS NULL".into(),
+            "s.visibility = 'public'".into(),
+        ];
         let mut param_idx = 1;
 
         // Activity type filter
         if params.activity_type_id.is_some() {
-            conditions.push(format!("activity_type_id = ${param_idx}"));
+            conditions.push(format!("s.activity_type_id = ${param_idx}"));
             param_idx += 1;
         }
 
@@ -540,38 +542,38 @@ impl Database {
             .as_ref()
             .map(|s| format!("%{}%", s.to_lowercase()));
         if search_pattern.is_some() {
-            conditions.push(format!("LOWER(name) LIKE ${param_idx}"));
+            conditions.push(format!("LOWER(s.name) LIKE ${param_idx}"));
             param_idx += 1;
         }
 
         // Min distance filter
         if params.min_distance_meters.is_some() {
-            conditions.push(format!("distance_meters >= ${param_idx}"));
+            conditions.push(format!("s.distance_meters >= ${param_idx}"));
             param_idx += 1;
         }
 
         // Max distance filter
         if params.max_distance_meters.is_some() {
-            conditions.push(format!("distance_meters <= ${param_idx}"));
+            conditions.push(format!("s.distance_meters <= ${param_idx}"));
             param_idx += 1;
         }
 
         // Climb category filter
         if let Some(ref cat) = params.climb_category {
             if cat.is_flat() {
-                conditions.push("climb_category IS NULL".into());
+                conditions.push("s.climb_category IS NULL".into());
             } else {
-                conditions.push(format!("climb_category = ${param_idx}"));
+                conditions.push(format!("s.climb_category = ${param_idx}"));
                 param_idx += 1;
             }
         }
 
         // Build ORDER BY clause
         let order_col = match params.sort_by {
-            SegmentSortBy::CreatedAt => "created_at",
-            SegmentSortBy::Name => "name",
-            SegmentSortBy::Distance => "distance_meters",
-            SegmentSortBy::ElevationGain => "COALESCE(elevation_gain_meters, 0)",
+            SegmentSortBy::CreatedAt => "s.created_at",
+            SegmentSortBy::Name => "s.name",
+            SegmentSortBy::Distance => "s.distance_meters",
+            SegmentSortBy::ElevationGain => "COALESCE(s.elevation_gain_meters, 0)",
         };
         let order_dir = match params.sort_order {
             SortOrder::Asc => "ASC",
@@ -583,11 +585,12 @@ impl Database {
         let where_clause = conditions.join(" AND ");
         let query = format!(
             r#"
-            SELECT id, creator_id, name, description, activity_type_id,
-                   distance_meters, elevation_gain_meters, elevation_loss_meters,
-                   average_grade, max_grade, climb_category,
-                   visibility, created_at
-            FROM segments
+            SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
+                   s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                   s.average_grade, s.max_grade, s.climb_category,
+                   s.visibility, s.created_at
+            FROM segments s
+            JOIN users u ON u.id = s.creator_id
             WHERE {where_clause}
             ORDER BY {order_col} {order_dir}
             LIMIT ${limit_param_idx}
@@ -624,13 +627,14 @@ impl Database {
     pub async fn get_user_segments(&self, user_id: Uuid) -> Result<Vec<Segment>, AppError> {
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT id, creator_id, name, description, activity_type_id,
-                   distance_meters, elevation_gain_meters, elevation_loss_meters,
-                   average_grade, max_grade, climb_category,
-                   visibility, created_at
-            FROM segments
-            WHERE creator_id = $1 AND deleted_at IS NULL
-            ORDER BY created_at DESC
+            SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
+                   s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                   s.average_grade, s.max_grade, s.climb_category,
+                   s.visibility, s.created_at
+            FROM segments s
+            JOIN users u ON u.id = s.creator_id
+            WHERE s.creator_id = $1 AND s.deleted_at IS NULL
+            ORDER BY s.created_at DESC
             "#,
         )
         .bind(user_id)
@@ -1265,12 +1269,13 @@ impl Database {
     pub async fn get_user_starred_segments(&self, user_id: Uuid) -> Result<Vec<Segment>, AppError> {
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type_id,
+            SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
                    s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
                    s.average_grade, s.max_grade, s.climb_category,
                    s.visibility, s.created_at
             FROM segments s
             JOIN segment_stars ss ON ss.segment_id = s.id
+            JOIN users u ON u.id = s.creator_id
             WHERE ss.user_id = $1 AND s.deleted_at IS NULL
             ORDER BY ss.created_at DESC
             "#,
@@ -1385,19 +1390,20 @@ impl Database {
         let point_wkt = format!("POINT({lon} {lat})");
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT id, creator_id, name, description, activity_type_id,
-                   distance_meters, elevation_gain_meters, elevation_loss_meters,
-                   average_grade, max_grade, climb_category,
-                   visibility, created_at
-            FROM segments
-            WHERE deleted_at IS NULL
-              AND visibility = 'public'
+            SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
+                   s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
+                   s.average_grade, s.max_grade, s.climb_category,
+                   s.visibility, s.created_at
+            FROM segments s
+            JOIN users u ON u.id = s.creator_id
+            WHERE s.deleted_at IS NULL
+              AND s.visibility = 'public'
               AND ST_DWithin(
-                  start_point,
+                  s.start_point,
                   ST_GeogFromText($1),
                   $2
               )
-            ORDER BY ST_Distance(start_point, ST_GeogFromText($1))
+            ORDER BY ST_Distance(s.start_point, ST_GeogFromText($1))
             LIMIT $3
             "#,
         )
@@ -3541,12 +3547,13 @@ impl Database {
     ) -> Result<Vec<Segment>, AppError> {
         let segments: Vec<Segment> = sqlx::query_as(
             r#"
-            SELECT s.id, s.creator_id, s.name, s.description, s.activity_type_id,
+            SELECT s.id, s.creator_id, u.name as creator_name, s.name, s.description, s.activity_type_id,
                    s.distance_meters, s.elevation_gain_meters, s.elevation_loss_meters,
                    s.average_grade, s.max_grade, s.climb_category,
                    s.visibility, s.created_at
             FROM segments s
             JOIN segment_teams st ON st.segment_id = s.id
+            JOIN users u ON u.id = s.creator_id
             WHERE st.team_id = $1 AND s.deleted_at IS NULL
             ORDER BY st.shared_at DESC
             LIMIT $2 OFFSET $3

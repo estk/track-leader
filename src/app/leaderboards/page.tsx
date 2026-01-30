@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, CrownCountEntry, DistanceLeaderEntry } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -220,8 +221,13 @@ function CrownLeaderboard({
                 </div>
 
                 {/* User name */}
-                <div className="font-medium truncate">
-                  {entry.user_name}
+                <div className="truncate">
+                  <Link
+                    href={`/profile/${entry.user_id}`}
+                    className="font-medium truncate hover:underline"
+                  >
+                    {entry.user_name}
+                  </Link>
                   {isCurrentUser && (
                     <span className="text-xs text-muted-foreground ml-2">(you)</span>
                   )}
@@ -340,8 +346,13 @@ function DistanceLeaderboard({
                 </div>
 
                 {/* User name */}
-                <div className="font-medium truncate">
-                  {entry.user_name}
+                <div className="truncate">
+                  <Link
+                    href={`/profile/${entry.user_id}`}
+                    className="font-medium truncate hover:underline"
+                  >
+                    {entry.user_name}
+                  </Link>
                   {isCurrentUser && (
                     <span className="text-xs text-muted-foreground ml-2">(you)</span>
                   )}

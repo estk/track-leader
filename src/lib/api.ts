@@ -107,6 +107,7 @@ export type SegmentVisibility = 'public' | 'private' | 'teams_only';
 export interface Segment {
   id: string;
   creator_id: string;
+  creator_name: string | null;
   name: string;
   description: string | null;
   activity_type_id: string;
