@@ -271,7 +271,7 @@ async fn process_segment_match(
             {
                 tracing::error!("Failed to update personal records: {e}");
             }
-            // Check and award achievements (KOM/QOM and Local Legend)
+            // Check and award achievements (KOM/QOM)
             if let Err(e) = achievements_service::process_achievements(
                 db,
                 segment_match.segment_id,

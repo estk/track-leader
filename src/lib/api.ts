@@ -273,7 +273,7 @@ export interface LeaderboardPosition {
 }
 
 // Achievement types
-export type AchievementType = 'kom' | 'qom' | 'local_legend' | 'course_record';
+export type AchievementType = 'kom' | 'qom' | 'course_record';
 
 export interface Achievement {
   id: string;
@@ -305,7 +305,6 @@ export interface SegmentAchievements {
   segment_id: string;
   kom: AchievementHolder | null;
   qom: AchievementHolder | null;
-  local_legend: AchievementHolder | null;
 }
 
 // User demographics types
@@ -331,7 +330,6 @@ export interface CrownCountEntry {
   user_name: string;
   kom_count: number;
   qom_count: number;
-  local_legend_count: number;
   total_crowns: number;
   rank: number;
 }

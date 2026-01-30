@@ -32,7 +32,7 @@ const features = [
     icon: Award,
     title: "Earn Crowns",
     description:
-      "Claim KOMs, QOMs, and Local Legend status. Track your crown collection across all segments.",
+      "Claim KOMs and QOMs. Track your crown collection across all segments.",
   },
   {
     icon: Users,

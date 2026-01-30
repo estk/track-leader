@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RankBadge, CrownBadge } from "@/components/leaderboard/crown-badge";
-import { Crown, Star, MapPin } from "lucide-react";
+import { Crown, MapPin } from "lucide-react";
 
 type LeaderboardTab = "crowns" | "distance";
 
@@ -179,7 +179,7 @@ function CrownLeaderboard({
           <Crown className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-muted-foreground">No crown holders yet</p>
           <p className="text-sm text-muted-foreground mt-2">
-            Be the first to claim a KOM, QOM, or Local Legend!
+            Be the first to claim a KOM or QOM!
           </p>
         </CardContent>
       </Card>
@@ -191,17 +191,16 @@ function CrownLeaderboard({
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Crown Leaderboard</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Athletes ranked by total crowns (KOMs, QOMs, and Local Legends)
+          Athletes ranked by total crowns (KOMs and QOMs)
         </p>
       </CardHeader>
       <CardContent className="p-0">
         {/* Header row */}
-        <div className="hidden sm:grid sm:grid-cols-[3rem_1fr_5rem_5rem_5rem_5rem] gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b">
+        <div className="hidden sm:grid sm:grid-cols-[3rem_1fr_5rem_5rem_5rem] gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b">
           <div>Rank</div>
           <div>Athlete</div>
           <div className="text-center">KOM</div>
           <div className="text-center">QOM</div>
-          <div className="text-center">Legend</div>
           <div className="text-center">Total</div>
         </div>
 
@@ -211,7 +210,7 @@ function CrownLeaderboard({
             return (
               <div
                 key={entry.user_id}
-                className={`grid grid-cols-[3rem_1fr] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem_5rem] gap-4 px-4 py-3 items-center ${
+                className={`grid grid-cols-[3rem_1fr] sm:grid-cols-[3rem_1fr_5rem_5rem_5rem] gap-4 px-4 py-3 items-center ${
                   isCurrentUser ? "bg-primary/5 border-l-2 border-l-primary" : ""
                 }`}
               >
@@ -240,12 +239,6 @@ function CrownLeaderboard({
                   <span className="font-medium">{entry.qom_count}</span>
                 </div>
 
-                {/* Local Legend count */}
-                <div className="hidden sm:flex items-center justify-center gap-1">
-                  <Star className="h-4 w-4 text-purple-500" />
-                  <span className="font-medium">{entry.local_legend_count}</span>
-                </div>
-
                 {/* Total */}
                 <div className="hidden sm:flex items-center justify-center">
                   <span className="font-bold text-lg">{entry.total_crowns}</span>
@@ -260,10 +253,6 @@ function CrownLeaderboard({
                   <span className="flex items-center gap-1">
                     <Crown className="h-3 w-3 text-amber-500" />
                     {entry.qom_count} QOM
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Star className="h-3 w-3 text-purple-500" />
-                    {entry.local_legend_count}
                   </span>
                   <span className="ml-auto font-bold">{entry.total_crowns} total</span>
                 </div>

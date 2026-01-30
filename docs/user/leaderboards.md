@@ -56,9 +56,6 @@ Awarded to the fastest male athlete on a segment. Only one KOM per segment exist
 ### QOM (Queen of the Mountain) 👑
 Awarded to the fastest female athlete on a segment. Only one QOM per segment exists at any time.
 
-### Local Legend 🏆
-Awarded to the athlete with the most attempts on a segment in the last 90 days. This rewards consistency and dedication to a particular segment.
-
 ## Tracking Your Crowns
 
 ### Profile Crown Summary
@@ -66,7 +63,6 @@ Awarded to the athlete with the most attempts on a segment in the last 90 days. 
 Your profile shows:
 - Total KOMs held
 - Total QOMs held
-- Local Legend count
 
 ### Crown History
 

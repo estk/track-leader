@@ -9,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CrownBadge } from "@/components/leaderboard/crown-badge";
-import { Crown, Star, Trophy } from "lucide-react";
+import { Crown, Trophy } from "lucide-react";
 
-type FilterType = "all" | "kom" | "qom" | "local_legend";
+type FilterType = "all" | "kom" | "qom";
 
 function formatTime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -87,9 +87,6 @@ export default function AchievementsPage() {
   const allCurrentAchievements = achievements.filter((a) => !a.lost_at);
   const komCount = allCurrentAchievements.filter((a) => a.achievement_type === "kom").length;
   const qomCount = allCurrentAchievements.filter((a) => a.achievement_type === "qom").length;
-  const localLegendCount = allCurrentAchievements.filter(
-    (a) => a.achievement_type === "local_legend"
-  ).length;
   const totalCrowns = allCurrentAchievements.length;
 
   return (
@@ -111,13 +108,13 @@ export default function AchievementsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="grid grid-cols-4 gap-4">
-              {[...Array(4)].map((_, i) => (
+            <div className="grid grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
                 <Skeleton key={i} className="h-20 w-full" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-3 gap-4 text-center">
               <div className="p-4 bg-muted/50 rounded-lg">
                 <p className="text-3xl font-bold">{totalCrowns}</p>
                 <p className="text-sm text-muted-foreground">Total Crowns</p>
@@ -139,15 +136,6 @@ export default function AchievementsPage() {
                   </p>
                 </div>
                 <p className="text-sm text-amber-600 dark:text-amber-500">QOMs</p>
-              </div>
-              <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                <div className="flex items-center justify-center gap-1">
-                  <Star className="h-5 w-5 text-purple-600" />
-                  <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">
-                    {localLegendCount}
-                  </p>
-                </div>
-                <p className="text-sm text-purple-600 dark:text-purple-500">Local Legends</p>
               </div>
             </div>
           )}
@@ -183,17 +171,6 @@ export default function AchievementsPage() {
               >
                 <Crown className="h-4 w-4 mr-1" />
                 QOM
-              </Button>
-              <Button
-                variant={filter === "local_legend" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter("local_legend")}
-                className={
-                  filter === "local_legend" ? "" : "hover:bg-purple-50 hover:text-purple-700"
-                }
-              >
-                <Star className="h-4 w-4 mr-1" />
-                Local Legend
               </Button>
             </div>
             <Button
@@ -234,8 +211,8 @@ export default function AchievementsPage() {
               <h3 className="text-lg font-semibold mb-2">No Achievements Yet</h3>
               <p className="text-muted-foreground mb-4">
                 {filter === "all"
-                  ? "Start riding segments to earn KOMs, QOMs, and Local Legend crowns!"
-                  : `You haven't earned any ${filter === "local_legend" ? "Local Legend" : filter.toUpperCase()} achievements yet.`}
+                  ? "Start riding segments to earn KOMs and QOMs!"
+                  : `You haven't earned any ${filter.toUpperCase()} achievements yet.`}
               </p>
               <Button onClick={() => router.push("/segments")}>Explore Segments</Button>
             </div>
@@ -328,8 +305,8 @@ function LoadingSkeleton() {
           <Skeleton className="h-6 w-40" />
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
+          <div className="grid grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-20 w-full" />
             ))}
           </div>
@@ -338,7 +315,7 @@ function LoadingSkeleton() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex gap-2">
-            {[...Array(4)].map((_, i) => (
+            {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-8 w-20" />
             ))}
           </div>

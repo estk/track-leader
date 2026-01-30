@@ -123,9 +123,8 @@ Earn crowns by holding the top position on a segment:
 
 | Crown | Description |
 |-------|-------------|
-| 👑 KOM | King of the Mountain - Fastest male overall |
-| 👑 QOM | Queen of the Mountain - Fastest female overall |
-| 🏆 Local Legend | Most attempts on a segment (in last 90 days) |
+| KOM | King of the Mountain - Fastest male overall |
+| QOM | Queen of the Mountain - Fastest female overall |
 
 ### Crown Counts
 

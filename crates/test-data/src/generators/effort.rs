@@ -151,17 +151,72 @@ impl EffortGenerator {
     }
 
     /// Calculates expected time for a segment based on athletic profile.
+    ///
+    /// Uses elevation gain and loss separately to model the asymmetry between
+    /// climbing (harder/slower) and descending (easier/faster but not as much).
+    /// This produces more realistic times than using average grade alone.
     fn calculate_expected_time<P: AthleteProfile>(
         &self,
         segment: &GeneratedSegment,
         profile: &P,
     ) -> f64 {
-        let avg_grade = segment.average_grade.unwrap_or(0.0);
         let base_speed = profile.base_speed_mps();
-        let grade_factor = profile.grade_factor(avg_grade);
+        let distance = segment.distance_meters;
+        let elevation_gain = segment.elevation_gain_meters.unwrap_or(0.0);
+        let elevation_loss = segment.elevation_loss_meters.unwrap_or(0.0);
 
-        let effective_speed = base_speed * grade_factor;
-        segment.distance_meters / effective_speed
+        // If no elevation data, use flat terrain calculation
+        if elevation_gain == 0.0 && elevation_loss == 0.0 {
+            return distance / base_speed;
+        }
+
+        // Calculate the horizontal distance for uphill, downhill, and flat portions.
+        // We approximate by assuming elevation changes are distributed over the segment.
+        let total_elevation_change = elevation_gain + elevation_loss;
+
+        // Estimate the proportion of distance spent climbing vs descending
+        // Using a simple model: steeper sections cover less horizontal distance
+        let gain_fraction = if total_elevation_change > 0.0 {
+            elevation_gain / total_elevation_change
+        } else {
+            0.5
+        };
+        let loss_fraction = 1.0 - gain_fraction;
+
+        // Calculate effective grades for uphill and downhill sections
+        // The grade is the elevation change divided by the horizontal distance
+        let uphill_distance = distance * gain_fraction;
+        let downhill_distance = distance * loss_fraction;
+
+        // Avoid division by zero
+        let uphill_grade = if uphill_distance > 1.0 {
+            elevation_gain / uphill_distance
+        } else {
+            0.0
+        };
+        let downhill_grade = if downhill_distance > 1.0 {
+            -(elevation_loss / downhill_distance)
+        } else {
+            0.0
+        };
+
+        // Calculate time for each section using profile's grade factors
+        let uphill_speed = base_speed * profile.grade_factor(uphill_grade);
+        let downhill_speed = base_speed * profile.grade_factor(downhill_grade);
+
+        let uphill_time = if uphill_speed > 0.1 {
+            uphill_distance / uphill_speed
+        } else {
+            uphill_distance / 0.5 // Minimum walking speed
+        };
+
+        let downhill_time = if downhill_speed > 0.1 {
+            downhill_distance / downhill_speed
+        } else {
+            downhill_distance / 0.5
+        };
+
+        uphill_time + downhill_time
     }
 
     /// Samples a skill factor from the configured distribution.
@@ -228,6 +283,109 @@ mod tests {
             max_grade: Some(0.08),
             climb_category: Some(4),
         }
+    }
+
+    fn make_flat_segment() -> GeneratedSegment {
+        GeneratedSegment {
+            id: Uuid::new_v4(),
+            creator_id: Uuid::new_v4(),
+            name: "Flat Sprint".into(),
+            description: None,
+            activity_type_id: builtin_types::RUN,
+            visibility: tracks::models::Visibility::Public,
+            geo_wkt: "LINESTRING(0 0, 1 1)".into(),
+            start_wkt: "POINT(0 0)".into(),
+            end_wkt: "POINT(1 1)".into(),
+            distance_meters: 1000.0,
+            elevation_gain_meters: None,
+            elevation_loss_meters: None,
+            average_grade: None,
+            max_grade: None,
+            climb_category: None,
+        }
+    }
+
+    fn make_descent_segment() -> GeneratedSegment {
+        // Pure descent - no uphill sections
+        GeneratedSegment {
+            id: Uuid::new_v4(),
+            creator_id: Uuid::new_v4(),
+            name: "Downhill Run".into(),
+            description: None,
+            activity_type_id: builtin_types::RUN,
+            visibility: tracks::models::Visibility::Public,
+            geo_wkt: "LINESTRING(0 0, 1 1)".into(),
+            start_wkt: "POINT(0 0)".into(),
+            end_wkt: "POINT(1 1)".into(),
+            distance_meters: 1000.0,
+            elevation_gain_meters: Some(0.0),
+            elevation_loss_meters: Some(50.0),
+            average_grade: Some(-0.05),
+            max_grade: Some(-0.08),
+            climb_category: None,
+        }
+    }
+
+    fn make_roller_segment() -> GeneratedSegment {
+        // Segment with equal up and down (e.g., goes up 50m then down 50m)
+        GeneratedSegment {
+            id: Uuid::new_v4(),
+            creator_id: Uuid::new_v4(),
+            name: "Rolling Hills".into(),
+            description: None,
+            activity_type_id: builtin_types::RUN,
+            visibility: tracks::models::Visibility::Public,
+            geo_wkt: "LINESTRING(0 0, 1 1)".into(),
+            start_wkt: "POINT(0 0)".into(),
+            end_wkt: "POINT(1 1)".into(),
+            distance_meters: 1000.0,
+            elevation_gain_meters: Some(50.0),
+            elevation_loss_meters: Some(50.0),
+            average_grade: Some(0.0), // Net zero elevation change
+            max_grade: Some(0.10),
+            climb_category: None,
+        }
+    }
+
+    #[test]
+    fn test_terrain_affects_time() {
+        let effort_gen = EffortGenerator::new();
+        let profile = RunnerProfile::default();
+
+        let flat = make_flat_segment();
+        let climb = make_test_segment();
+        let descent = make_descent_segment();
+        let roller = make_roller_segment();
+
+        let flat_time = effort_gen.calculate_expected_time(&flat, &profile);
+        let climb_time = effort_gen.calculate_expected_time(&climb, &profile);
+        let descent_time = effort_gen.calculate_expected_time(&descent, &profile);
+        let roller_time = effort_gen.calculate_expected_time(&roller, &profile);
+
+        // Climbing should be slowest
+        assert!(
+            climb_time > flat_time,
+            "Climb ({climb_time:.1}s) should take longer than flat ({flat_time:.1}s)"
+        );
+
+        // Descent should be faster than flat
+        assert!(
+            descent_time < flat_time,
+            "Descent ({descent_time:.1}s) should be faster than flat ({flat_time:.1}s)"
+        );
+
+        // Roller (up then down with net zero) should take longer than flat
+        // because climbing penalty is greater than descent benefit
+        assert!(
+            roller_time > flat_time,
+            "Roller ({roller_time:.1}s) should take longer than flat ({flat_time:.1}s) due to climb asymmetry"
+        );
+
+        // Roller should be faster than pure climb
+        assert!(
+            roller_time < climb_time,
+            "Roller ({roller_time:.1}s) should be faster than climb ({climb_time:.1}s)"
+        );
     }
 
     #[test]

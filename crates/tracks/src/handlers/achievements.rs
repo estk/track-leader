@@ -95,14 +95,10 @@ pub async fn get_segment_achievements(
     let qom = db
         .get_current_achievement_holder(id, AchievementType::Qom)
         .await?;
-    let local_legend = db
-        .get_current_achievement_holder(id, AchievementType::LocalLegend)
-        .await?;
 
     Ok(Json(SegmentAchievements {
         segment_id: id,
         kom,
         qom,
-        local_legend,
     }))
 }

@@ -1912,68 +1912,18 @@ impl Database {
     }
 
     /// Get achievement counts for a user.
-    pub async fn get_user_achievement_counts(
-        &self,
-        user_id: Uuid,
-    ) -> Result<(i64, i64, i64), AppError> {
-        let counts: (i64, i64, i64) = sqlx::query_as(
+    pub async fn get_user_achievement_counts(&self, user_id: Uuid) -> Result<(i64, i64), AppError> {
+        let counts: (i64, i64) = sqlx::query_as(
             r#"
             SELECT
                 COUNT(*) FILTER (WHERE achievement_type = 'kom' AND lost_at IS NULL),
-                COUNT(*) FILTER (WHERE achievement_type = 'qom' AND lost_at IS NULL),
-                COUNT(*) FILTER (WHERE achievement_type = 'local_legend' AND lost_at IS NULL)
+                COUNT(*) FILTER (WHERE achievement_type = 'qom' AND lost_at IS NULL)
             FROM achievements
             WHERE user_id = $1
             "#,
         )
         .bind(user_id)
         .fetch_one(&self.pool)
-        .await?;
-
-        Ok(counts)
-    }
-
-    /// Get the user's effort count on a segment in the last 90 days (for Local Legend).
-    pub async fn get_user_recent_effort_count(
-        &self,
-        user_id: Uuid,
-        segment_id: Uuid,
-    ) -> Result<i64, AppError> {
-        let count: (i64,) = sqlx::query_as(
-            r#"
-            SELECT COUNT(*)
-            FROM segment_efforts
-            WHERE user_id = $1 AND segment_id = $2
-              AND started_at >= NOW() - INTERVAL '90 days'
-            "#,
-        )
-        .bind(user_id)
-        .bind(segment_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(count.0)
-    }
-
-    /// Get the top effort counts on a segment in the last 90 days (for Local Legend determination).
-    pub async fn get_top_recent_effort_counts(
-        &self,
-        segment_id: Uuid,
-        limit: i64,
-    ) -> Result<Vec<(Uuid, i64)>, AppError> {
-        let counts: Vec<(Uuid, i64)> = sqlx::query_as(
-            r#"
-            SELECT user_id, COUNT(*) as cnt
-            FROM segment_efforts
-            WHERE segment_id = $1 AND started_at >= NOW() - INTERVAL '90 days'
-            GROUP BY user_id
-            ORDER BY cnt DESC
-            LIMIT $2
-            "#,
-        )
-        .bind(segment_id)
-        .bind(limit)
-        .fetch_all(&self.pool)
         .await?;
 
         Ok(counts)
@@ -1996,7 +1946,6 @@ impl Database {
                     user_id,
                     COUNT(*) FILTER (WHERE achievement_type = 'kom') as kom_count,
                     COUNT(*) FILTER (WHERE achievement_type = 'qom') as qom_count,
-                    COUNT(*) FILTER (WHERE achievement_type = 'local_legend') as local_legend_count,
                     COUNT(*) as total_crowns
                 FROM achievements
                 WHERE lost_at IS NULL
@@ -2007,7 +1956,6 @@ impl Database {
                 u.name as user_name,
                 cc.kom_count,
                 cc.qom_count,
-                cc.local_legend_count,
                 cc.total_crowns,
                 ROW_NUMBER() OVER (ORDER BY cc.total_crowns DESC, cc.kom_count DESC) as rank
             FROM crown_counts cc

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Crown, Star, CheckCircle, Medal } from "lucide-react";
+import { Crown, CheckCircle, Medal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Size variants shared across badge components
@@ -11,7 +11,7 @@ const sizeConfig = {
 };
 
 // CrownBadge Component
-type CrownType = "kom" | "qom" | "local_legend" | "course_record";
+type CrownType = "kom" | "qom" | "course_record";
 
 const crownConfig: Record<
   CrownType,
@@ -26,11 +26,6 @@ const crownConfig: Record<
     label: "QOM",
     tooltip: "Queen of the Mountain",
     colors: "bg-amber-100 text-amber-800 border-amber-300",
-  },
-  local_legend: {
-    label: "Local Legend",
-    tooltip: "Local Legend - Most efforts on this segment",
-    colors: "bg-purple-100 text-purple-800 border-purple-300",
   },
   course_record: {
     label: "CR",
@@ -55,12 +50,7 @@ export function CrownBadge({
   const config = crownConfig[type];
   const sizeValues = sizeConfig[size];
 
-  const Icon =
-    type === "local_legend"
-      ? Star
-      : type === "course_record"
-        ? CheckCircle
-        : Crown;
+  const Icon = type === "course_record" ? CheckCircle : Crown;
 
   return (
     <span

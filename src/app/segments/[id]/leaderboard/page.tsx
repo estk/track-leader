@@ -213,13 +213,13 @@ export default function SegmentLeaderboardPage() {
       </div>
 
       {/* Achievements section */}
-      {achievements && (achievements.kom || achievements.qom || achievements.local_legend) && (
+      {achievements && (achievements.kom || achievements.qom) && (
         <Card>
           <CardHeader>
             <CardTitle>Segment Records</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {achievements.kom && (
                 <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
                   <CrownBadge type="kom" size="lg" />
@@ -241,19 +241,6 @@ export default function SegmentLeaderboardPage() {
                     {achievements.qom.elapsed_time_seconds && (
                       <p className="text-sm text-muted-foreground font-mono">
                         {formatTime(achievements.qom.elapsed_time_seconds)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-              {achievements.local_legend && (
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <CrownBadge type="local_legend" size="lg" />
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{achievements.local_legend.user_name}</p>
-                    {achievements.local_legend.effort_count && (
-                      <p className="text-sm text-muted-foreground">
-                        {achievements.local_legend.effort_count} efforts
                       </p>
                     )}
                   </div>

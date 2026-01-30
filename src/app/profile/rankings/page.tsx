@@ -279,7 +279,6 @@ export default function RankingsPage() {
                   const segmentAchievements = achievementsBySegment.get(effort.segment_id);
                   const hasKOM = segmentAchievements?.has("kom");
                   const hasQOM = segmentAchievements?.has("qom");
-                  const hasLocalLegend = segmentAchievements?.has("local_legend");
                   const isLeader = effort.best_effort_rank === 1;
                   const isTop3 = effort.best_effort_rank !== null && effort.best_effort_rank <= 3;
                   const isTop10 = effort.best_effort_rank !== null && effort.best_effort_rank <= 10;
@@ -310,7 +309,6 @@ export default function RankingsPage() {
                           <div className="flex items-center gap-1 flex-wrap">
                             {hasKOM && <CrownBadge type="kom" size="sm" />}
                             {hasQOM && <CrownBadge type="qom" size="sm" />}
-                            {hasLocalLegend && <CrownBadge type="local_legend" size="sm" />}
                           </div>
                         </div>
                       </td>

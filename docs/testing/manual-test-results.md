@@ -256,7 +256,6 @@ Key (activity_id)=(52ac093a-338b-47da-8fbb-ef7c1350be67) is not present in table
 - Test efforts are random noise instead of matching terrain elevation
 - Climb category tooltips don't match actual terrain
 - Crowns leaderboard is empty (achievements not being awarded)
-- Remove "Local Legends" concept from codebase
 
 ### Overall Assessment
 **The handler refactoring is successful.** Core functionality works correctly across both API and UI:
@@ -286,14 +285,8 @@ Two issues need addressing before multi-sport feature is complete:
 5. **Generate more segments** - Modify test data generator to create 10-20 segments with varied characteristics
 6. **Match efforts to terrain** - Generate effort data that follows actual elevation profiles (climbs slower, descents faster)
 
-### Priority 4: Feature Removal
-7. **Remove Local Legends** - Delete all references to Local Legend achievements from:
-   - Database schema/migrations
-   - Backend models and handlers
-   - Frontend components and API types
-
-### Priority 5: Achievement System
-8. **Debug crown awarding** - Investigate why KOM/QOM achievements aren't being created for top efforts
+### Priority 4: Achievement System
+7. **Debug crown awarding** - Investigate why KOM/QOM achievements aren't being created for top efforts
 
 ---
 

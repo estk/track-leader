@@ -8,7 +8,7 @@ use crate::generators::{
     GeneratedActivity, GeneratedComment, GeneratedEffort, GeneratedFollow, GeneratedKudos,
     GeneratedSegment, GeneratedUser,
 };
-use tracks::models::Gender;
+use tracks::models::{AchievementType, Gender};
 
 /// Convert Gender enum to its database string representation.
 fn gender_to_db_str(gender: &Gender) -> &'static str {
@@ -374,6 +374,104 @@ impl Seeder {
         Ok(())
     }
 
+    /// Seeds KOM/QOM achievements based on fastest efforts per segment.
+    ///
+    /// For each segment, finds the fastest male and female efforts and creates
+    /// corresponding KOM and QOM achievements.
+    pub async fn seed_achievements(
+        &self,
+        segments: &[GeneratedSegment],
+        efforts: &[GeneratedEffort],
+        users: &[GeneratedUser],
+    ) -> Result<(), SeedError> {
+        info!("Seeding achievements for {} segments...", segments.len());
+
+        // Build a map from user_id to gender for efficient lookup
+        let user_genders: std::collections::HashMap<uuid::Uuid, Option<Gender>> =
+            users.iter().map(|u| (u.id, u.gender.clone())).collect();
+
+        let mut kom_count = 0;
+        let mut qom_count = 0;
+
+        for segment in segments {
+            // Find efforts for this segment
+            let segment_efforts: Vec<&GeneratedEffort> = efforts
+                .iter()
+                .filter(|e| e.segment_id == segment.id)
+                .collect();
+
+            // Find fastest male effort (KOM)
+            let fastest_male = segment_efforts
+                .iter()
+                .filter(|e| user_genders.get(&e.user_id) == Some(&Some(Gender::Male)))
+                .min_by(|a, b| {
+                    a.elapsed_time_seconds
+                        .partial_cmp(&b.elapsed_time_seconds)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
+            if let Some(effort) = fastest_male {
+                self.insert_achievement(
+                    effort.user_id,
+                    segment.id,
+                    effort.id,
+                    AchievementType::Kom,
+                )
+                .await?;
+                kom_count += 1;
+            }
+
+            // Find fastest female effort (QOM)
+            let fastest_female = segment_efforts
+                .iter()
+                .filter(|e| user_genders.get(&e.user_id) == Some(&Some(Gender::Female)))
+                .min_by(|a, b| {
+                    a.elapsed_time_seconds
+                        .partial_cmp(&b.elapsed_time_seconds)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
+            if let Some(effort) = fastest_female {
+                self.insert_achievement(
+                    effort.user_id,
+                    segment.id,
+                    effort.id,
+                    AchievementType::Qom,
+                )
+                .await?;
+                qom_count += 1;
+            }
+        }
+
+        info!("Seeded {} KOMs and {} QOMs", kom_count, qom_count);
+        Ok(())
+    }
+
+    /// Inserts a single achievement record.
+    async fn insert_achievement(
+        &self,
+        user_id: uuid::Uuid,
+        segment_id: uuid::Uuid,
+        effort_id: uuid::Uuid,
+        achievement_type: AchievementType,
+    ) -> Result<(), SeedError> {
+        sqlx::query(
+            r#"
+            INSERT INTO achievements (id, user_id, segment_id, effort_id, achievement_type, earned_at, created_at)
+            VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(user_id)
+        .bind(segment_id)
+        .bind(effort_id)
+        .bind(achievement_type)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Clears all seeded test data.
     ///
     /// **WARNING**: This deletes all data from the tables. Use with caution.
@@ -385,6 +483,9 @@ impl Seeder {
             .execute(&self.pool)
             .await?;
         sqlx::query("DELETE FROM kudos").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM achievements")
+            .execute(&self.pool)
+            .await?;
         sqlx::query("DELETE FROM segment_efforts")
             .execute(&self.pool)
             .await?;

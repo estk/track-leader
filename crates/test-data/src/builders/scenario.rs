@@ -516,6 +516,11 @@ impl ScenarioBuilder {
         seeder.seed_segments(&result.segments).await?;
         seeder.seed_efforts(&result.efforts).await?;
 
+        // Seed KOM/QOM achievements based on fastest efforts
+        seeder
+            .seed_achievements(&result.segments, &result.efforts, &result.users)
+            .await?;
+
         if !result.follows.is_empty() {
             seeder.seed_follows(&result.follows).await?;
         }
@@ -569,17 +574,43 @@ impl ScenarioBuilder {
     /// Creates a scenario for testing leaderboard functionality.
     ///
     /// - 200 users with varied skill levels
-    /// - One primary segment with all users having efforts
+    /// - 15 varied segments across different activity types, distances, and regions:
+    ///   - Short (1-5km), medium (5-15km), and long (15-30km) distances
+    ///   - Flat, rolling, and steep climb profiles
+    ///   - Running, cycling, and hiking segments
+    ///   - Boulder and Reno/Tahoe regions
     /// - Power-law time distribution for realistic rankings
     pub fn leaderboard_test() -> Self {
         Self::new()
             .with_users(200)
             .with_region(Region::BOULDER)
             .with_activity_type_id(builtin_types::RUN)
-            .with_track_distance(5000.0)
-            .with_segment(0.2, 0.7, "Test Leaderboard Segment")
+            .with_track_distance(25000.0) // Longer track to accommodate more segments
+            // Short running segments (1-5km) - flat to rolling terrain (Boulder)
+            .with_segment(0.02, 0.08, "Boulder Creek Sprint")
+            .with_segment(0.10, 0.18, "Chautauqua Park Loop")
+            .with_segment(0.20, 0.26, "Bear Creek Dash")
+            // Medium running segments (5-15km) - varied terrain
+            .with_segment(0.28, 0.48, "Sanitas Valley Trail")
+            .with_segment(0.50, 0.68, "Flagstaff Mountain Run")
+            // Long running segment (15+ km)
+            .with_segment(0.70, 0.98, "Boulder Skyline Traverse")
+            // Independent short segments - cycling (Boulder, flat)
+            .with_independent_segment(2000.0, "Pearl Street Time Trial")
+            .with_independent_segment(4000.0, "Valmont Bike Path Sprint")
+            // Independent medium segments - cycling with climbing (Reno/Tahoe)
+            .with_independent_segment(8000.0, "Tahoe Rim Trail Climb")
+            .with_independent_segment(12000.0, "Mount Rose Highway Ascent")
+            // Independent long cycling segments - steep terrain
+            .with_independent_segment(18000.0, "Kingsbury Grade Challenge")
+            .with_independent_segment(25000.0, "Spooner Summit Epic")
+            // Independent hiking segments - varied difficulty
+            .with_independent_segment(3000.0, "Emerald Bay Vista Trail")
+            .with_independent_segment(6000.0, "Donner Pass Historical Trail")
+            .with_independent_segment(10000.0, "Desolation Wilderness Loop")
             .with_efforts_per_user(1..=3)
             .with_skill_distribution(SkillDistribution::power_law())
+            .with_effort_coverage(EffortCoverage::Sparse { fraction: 0.6 })
             .with_social(false)
     }
 
@@ -746,7 +777,7 @@ mod tests {
     fn test_preset_leaderboard() {
         let builder = ScenarioBuilder::leaderboard_test();
         assert_eq!(builder.user_count, 200);
-        assert_eq!(builder.segments.len(), 1);
+        assert_eq!(builder.segments.len(), 15);
     }
 
     #[test]

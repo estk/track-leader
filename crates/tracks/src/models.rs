@@ -522,7 +522,6 @@ pub struct CountryStats {
 pub enum AchievementType {
     Kom,
     Qom,
-    LocalLegend,
     CourseRecord,
 }
 
@@ -531,7 +530,6 @@ impl std::fmt::Display for AchievementType {
         match self {
             AchievementType::Kom => write!(f, "KOM"),
             AchievementType::Qom => write!(f, "QOM"),
-            AchievementType::LocalLegend => write!(f, "Local Legend"),
             AchievementType::CourseRecord => write!(f, "Course Record"),
         }
     }
@@ -579,7 +577,6 @@ pub struct SegmentAchievements {
     pub segment_id: Uuid,
     pub kom: Option<AchievementHolder>,
     pub qom: Option<AchievementHolder>,
-    pub local_legend: Option<AchievementHolder>,
 }
 
 /// Holder of an achievement with their details
@@ -634,7 +631,6 @@ pub struct CrownCountEntry {
     pub user_name: String,
     pub kom_count: i64,
     pub qom_count: i64,
-    pub local_legend_count: i64,
     pub total_crowns: i64,
     pub rank: i64,
 }

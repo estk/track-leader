@@ -289,7 +289,7 @@ pub async fn create_segment(
                         .update_personal_records(segment_id, activity_match.user_id)
                         .await;
 
-                    // Process achievements (KOM/QOM and Local Legend)
+                    // Process achievements (KOM/QOM)
                     if let Err(e) = achievements_service::process_achievements(
                         &db,
                         segment_id,
@@ -1008,7 +1008,7 @@ pub async fn reprocess_segment(
                     tracing::error!("Failed to update personal records: {e}");
                 }
 
-                // Process achievements (KOM/QOM and Local Legend)
+                // Process achievements (KOM/QOM)
                 if let Err(e) = achievements_service::process_achievements(
                     &db,
                     segment_id,

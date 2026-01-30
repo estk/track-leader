@@ -30,7 +30,7 @@ export type AchievementHolder = {
 /**
  * Type of achievement/crown
  */
-export type AchievementType = 'kom' | 'qom' | 'local_legend' | 'course_record';
+export type AchievementType = 'kom' | 'qom' | 'course_record';
 
 /**
  * Achievement with segment details for display
@@ -193,7 +193,6 @@ export type CreateTeamRequest = {
  */
 export type CrownCountEntry = {
     kom_count: number;
-    local_legend_count: number;
     qom_count: number;
     rank: number;
     total_crowns: number;
@@ -538,7 +537,6 @@ export type Segment = {
  */
 export type SegmentAchievements = {
     kom?: (null | AchievementHolder);
-    local_legend?: (null | AchievementHolder);
     qom?: (null | AchievementHolder);
     segment_id: string;
 };
