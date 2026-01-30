@@ -802,3 +802,50 @@ pub async fn delete_dig_segment(
         Err(AppError::NotFound)
     }
 }
+
+/// Get sensor data for an activity.
+/// Returns heart rate, cadence, power, and temperature data if available.
+#[utoipa::path(
+    get,
+    path = "/activities/{id}/sensor-data",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Sensor data for the activity", body = crate::models::ActivitySensorDataResponse),
+        (status = 404, description = "Activity not found or no sensor data available")
+    )
+)]
+pub async fn get_activity_sensor_data(
+    Extension(db): Extension<Database>,
+    OptionalAuthUser(user): OptionalAuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<crate::models::ActivitySensorDataResponse>, AppError> {
+    // Get activity to check visibility
+    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+
+    // Check visibility - public activities are visible to all, private only to owner
+    let is_owner = user.as_ref().map(|u| u.sub == activity.user_id).unwrap_or(false);
+
+    if activity.visibility != "public" && !is_owner {
+        // Check if user has team access
+        let has_team_access = if let Some(ref u) = user {
+            db.user_has_activity_team_access(u.sub, id).await?
+        } else {
+            false
+        };
+
+        if !has_team_access {
+            return Err(AppError::NotFound);
+        }
+    }
+
+    // Get sensor data
+    let sensor_data = db
+        .get_sensor_data(id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    Ok(Json(sensor_data))
+}

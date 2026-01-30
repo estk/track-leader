@@ -10,6 +10,8 @@ use crate::errors::AppError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileType {
     Gpx,
+    Tcx,
+    Fit,
     Other,
 }
 impl From<Mime> for FileType {
@@ -17,8 +19,11 @@ impl From<Mime> for FileType {
         match mime.type_().as_str() {
             "application" => match mime.subtype().as_str() {
                 "gpx" | "gpx+xml" => FileType::Gpx,
-                // Browsers often send GPX files as octet-stream
-                "octet-stream" => FileType::Gpx,
+                "vnd.garmin.tcx+xml" | "tcx+xml" | "tcx" => FileType::Tcx,
+                "vnd.ant.fit" | "fit" => FileType::Fit,
+                // Browsers often send activity files as octet-stream - caller must
+                // use detect_from_bytes() to determine actual type
+                "octet-stream" => FileType::Other,
                 s => {
                     tracing::warn!("Unknown mime subtype: {s}");
                     FileType::Other
@@ -36,8 +41,52 @@ impl FileType {
     pub fn as_mime_str(self) -> &'static str {
         match self {
             FileType::Gpx => "application/gpx+xml",
+            FileType::Tcx => "application/vnd.garmin.tcx+xml",
+            FileType::Fit => "application/vnd.ant.fit",
             FileType::Other => "application/octet-stream",
         }
+    }
+
+    /// Detect file type from raw bytes by checking magic bytes/signatures.
+    /// Used when MIME type is octet-stream and we need to determine actual format.
+    pub fn detect_from_bytes(bytes: &[u8]) -> Self {
+        // FIT files start with header size byte, then ".FIT" signature at offset 8-11
+        if bytes.len() >= 12 {
+            let header_size = bytes[0];
+            // FIT header is either 12 or 14 bytes
+            if (header_size == 12 || header_size == 14)
+                && bytes.len() >= header_size as usize
+                && &bytes[8..12] == b".FIT"
+            {
+                return FileType::Fit;
+            }
+        }
+
+        // Check for XML-based formats (GPX and TCX)
+        // Skip BOM if present and look for XML declaration or root element
+        let text = match std::str::from_utf8(bytes) {
+            Ok(s) => s,
+            Err(_) => return FileType::Other,
+        };
+
+        let trimmed = text.trim_start_matches('\u{feff}').trim();
+
+        // Look for TCX root element
+        if trimmed.contains("<TrainingCenterDatabase") {
+            return FileType::Tcx;
+        }
+
+        // Look for GPX root element
+        if trimmed.contains("<gpx") {
+            return FileType::Gpx;
+        }
+
+        FileType::Other
+    }
+
+    /// Returns true if this file type is a supported activity format
+    pub fn is_supported_activity_format(self) -> bool {
+        matches!(self, FileType::Gpx | FileType::Tcx | FileType::Fit)
     }
 }
 
@@ -65,9 +114,9 @@ impl ObjectStoreService {
         file_type: FileType,
         content: Bytes,
     ) -> Result<String, AppError> {
-        if !matches!(file_type, FileType::Gpx) {
+        if !file_type.is_supported_activity_format() {
             return Err(AppError::InvalidInput(format!(
-                "Unsupported file type: {file_type:?}. Only GPX files are supported."
+                "Unsupported file type: {file_type:?}. Only GPX, TCX, and FIT files are supported."
             )));
         }
 

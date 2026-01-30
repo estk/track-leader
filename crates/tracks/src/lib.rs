@@ -3,6 +3,7 @@ pub mod activity_queue;
 pub mod auth;
 pub mod database;
 pub mod errors;
+pub mod file_parsers;
 pub mod handlers;
 pub mod models;
 pub mod object_store_service;
@@ -33,8 +34,8 @@ use crate::{
         accept_invitation, add_comment, all_users, change_member_role, create_activity_type,
         create_dig_segments, create_segment, create_team, delete_activity, delete_comment,
         delete_dig_segment, delete_team, discover_teams, download_gpx_file, follow_user,
-        get_activities_by_date, get_activity, get_activity_segments, get_activity_teams,
-        get_activity_track, get_activity_type, get_comments, get_countries,
+        get_activities_by_date, get_activity, get_activity_segments, get_activity_sensor_data,
+        get_activity_teams, get_activity_track, get_activity_type, get_comments, get_countries,
         get_crown_leaderboard, get_dig_segments, get_dig_time, get_distance_leaderboard, get_feed,
         get_filtered_leaderboard, get_follow_status, get_followers, get_following, get_invitation,
         get_join_requests, get_kudos_givers, get_kudos_status, get_leaderboard_position,
@@ -100,6 +101,7 @@ use crate::{
         handlers::create_dig_segments,
         handlers::get_dig_time,
         handlers::delete_dig_segment,
+        handlers::get_activity_sensor_data,
         // Activity types
         handlers::health_check,
         handlers::list_activity_types,
@@ -252,6 +254,8 @@ use crate::{
             models::DigSegment,
             models::CreateDigSegmentsRequest,
             models::DigTimeSummary,
+            // Sensor data types
+            models::ActivitySensorDataResponse,
             // Kudos/Comments
             models::KudosGiver,
             models::Comment,
@@ -387,6 +391,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             "/activities/{activity_id}/dig-segments/{segment_id}",
             axum::routing::delete(delete_dig_segment),
         )
+        .route("/activities/{id}/sensor-data", get(get_activity_sensor_data))
         .route("/users/{id}/activities", get(get_user_activities))
         // User demographics routes
         .route(

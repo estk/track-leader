@@ -1,7 +1,7 @@
 use geo::{Distance as _, Haversine, geometry::Point};
 use gpx::Gpx;
 
-use crate::models::Scores;
+use crate::models::{Scores, TrackPointData};
 
 type TrackPoint = gpx::Waypoint;
 
@@ -24,6 +24,55 @@ pub fn score_track(track: &Gpx) -> Scores {
     }
 
     acc.finish()
+}
+
+/// Score track from TrackPointData (works with all file formats)
+pub fn score_track_points(points: &[TrackPointData]) -> Scores {
+    let mut distance = 0.0f64;
+    let mut elevation_gain = 0.0f64;
+    let mut last_point: Option<Point> = None;
+    let mut last_elevation: Option<f64> = None;
+    let mut start_time: Option<time::OffsetDateTime> = None;
+    let mut end_time: Option<time::OffsetDateTime> = None;
+
+    for point in points {
+        // Distance calculation
+        let current_point = Point::new(point.lon, point.lat);
+        if let Some(prev) = last_point {
+            distance += Haversine.distance(prev, current_point);
+        }
+        last_point = Some(current_point);
+
+        // Elevation gain calculation
+        if let Some(ele) = point.elevation {
+            if let Some(last_ele) = last_elevation {
+                let gain = ele - last_ele;
+                if gain > 0.0 {
+                    elevation_gain += gain;
+                }
+            }
+            last_elevation = Some(ele);
+        }
+
+        // Duration calculation
+        if let Some(ts) = point.timestamp {
+            if start_time.is_none() {
+                start_time = Some(ts);
+            }
+            end_time = Some(ts);
+        }
+    }
+
+    let duration = match (start_time, end_time) {
+        (Some(start), Some(end)) => (end - start).as_seconds_f64(),
+        _ => 0.0,
+    };
+
+    Scores {
+        distance,
+        duration,
+        elevation_gain,
+    }
 }
 
 #[derive(Debug, Clone, Default)]

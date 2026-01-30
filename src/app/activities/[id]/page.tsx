@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName, DigTimeSummary, DigSegment } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName, DigTimeSummary, DigSegment, SensorData } from "@/lib/api";
+import { SensorGraphs } from "@/components/activity/sensor-graphs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ export default function ActivityDetailPage() {
   const [segmentEfforts, setSegmentEfforts] = useState<ActivitySegmentEffort[]>([]);
   const [digTimeSummary, setDigTimeSummary] = useState<DigTimeSummary | null>(null);
   const [digSegments, setDigSegments] = useState<DigSegment[]>([]);
+  const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
@@ -107,13 +109,15 @@ export default function ActivityDetailPage() {
         api.getActivitySegments(activityId),
         api.getDigTime(activityId).catch(() => null),
         api.getDigSegments(activityId).catch(() => []),
+        api.getActivitySensorData(activityId).catch(() => null),
       ])
-        .then(([act, track, segments, digTime, digs]) => {
+        .then(([act, track, segments, digTime, digs, sensor]) => {
           setActivity(act);
           setTrackData(track);
           setSegmentEfforts(segments);
           setDigTimeSummary(digTime);
           setDigSegments(digs);
+          setSensorData(sensor);
         })
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
@@ -654,6 +658,51 @@ export default function ActivityDetailPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Sensor Data Graphs */}
+      {sensorData && (sensorData.has_heart_rate || sensorData.has_cadence || sensorData.has_power || sensorData.has_temperature) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sensor Data</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SensorGraphs
+              sensorData={sensorData}
+              onHover={(distanceKm) => {
+                if (distanceKm === null || !trackData) {
+                  setHighlightIndex(null);
+                  return;
+                }
+                // Find the closest point by distance
+                const targetDistance = distanceKm * 1000; // Convert to meters
+                let cumulativeDistance = 0;
+                let closestIndex = 0;
+                let closestDiff = Infinity;
+
+                for (let i = 0; i < trackData.points.length; i++) {
+                  if (i > 0) {
+                    const prev = trackData.points[i - 1];
+                    const curr = trackData.points[i];
+                    // Simple distance calculation using Haversine would be better, but for hover sync a rough estimate works
+                    const dlat = curr.lat - prev.lat;
+                    const dlon = curr.lon - prev.lon;
+                    const latRad = (prev.lat * Math.PI) / 180;
+                    const dx = dlon * Math.cos(latRad) * 111320;
+                    const dy = dlat * 111320;
+                    cumulativeDistance += Math.sqrt(dx * dx + dy * dy);
+                  }
+                  const diff = Math.abs(cumulativeDistance - targetDistance);
+                  if (diff < closestDiff) {
+                    closestDiff = diff;
+                    closestIndex = i;
+                  }
+                }
+                setHighlightIndex(closestIndex);
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

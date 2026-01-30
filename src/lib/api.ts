@@ -146,6 +146,20 @@ export interface TrackData {
   bounds: TrackBounds;
 }
 
+// Sensor data types
+export interface SensorData {
+  activity_id: string;
+  has_heart_rate: boolean;
+  has_cadence: boolean;
+  has_power: boolean;
+  has_temperature: boolean;
+  distances: number[];
+  heart_rates?: (number | null)[];
+  cadences?: (number | null)[];
+  powers?: (number | null)[];
+  temperatures?: (number | null)[];
+}
+
 export type SegmentVisibility = 'public' | 'private' | 'teams_only';
 
 export interface Segment {
@@ -749,6 +763,15 @@ class ApiClient {
 
   async getActivityTrack(id: string): Promise<TrackData> {
     return this.request<TrackData>(`/activities/${id}/track`);
+  }
+
+  async getActivitySensorData(id: string): Promise<SensorData | null> {
+    try {
+      return await this.request<SensorData>(`/activities/${id}/sensor-data`);
+    } catch {
+      // Return null if no sensor data is available
+      return null;
+    }
   }
 
   async getActivitySegments(id: string): Promise<ActivitySegmentEffort[]> {

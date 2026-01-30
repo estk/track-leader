@@ -1369,3 +1369,37 @@ pub struct DigTimeSummary {
     pub total_dig_time_seconds: f64,
     pub dig_segment_count: i64,
 }
+
+// ============================================================================
+// Sensor Data Models
+// ============================================================================
+
+/// Sensor data response for an activity.
+/// Arrays are parallel to the distance array - each index corresponds to the same point.
+/// Null values indicate no sensor data available for that point.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ActivitySensorDataResponse {
+    pub activity_id: Uuid,
+    /// Whether this activity has heart rate data
+    pub has_heart_rate: bool,
+    /// Whether this activity has cadence data
+    pub has_cadence: bool,
+    /// Whether this activity has power data
+    pub has_power: bool,
+    /// Whether this activity has temperature data
+    pub has_temperature: bool,
+    /// Distance in meters for each point (X-axis values for graphs)
+    pub distances: Vec<f64>,
+    /// Heart rate in beats per minute (parallel to distances)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heart_rates: Option<Vec<Option<i32>>>,
+    /// Cadence in RPM (parallel to distances)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cadences: Option<Vec<Option<i32>>>,
+    /// Power in watts (parallel to distances)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub powers: Option<Vec<Option<i32>>>,
+    /// Temperature in degrees Celsius (parallel to distances)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperatures: Option<Vec<Option<f64>>>,
+}

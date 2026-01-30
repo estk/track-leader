@@ -4410,4 +4410,131 @@ impl Database {
 
         Ok(result.rows_affected() > 0)
     }
+
+    // ========================================================================
+    // Sensor Data Methods
+    // ========================================================================
+
+    /// Save sensor data for an activity.
+    /// Arrays should be parallel to track points.
+    pub async fn save_sensor_data(
+        &self,
+        activity_id: Uuid,
+        sensor_data: &crate::file_parsers::SensorData,
+    ) -> Result<(), AppError> {
+        // Only save if there's actual data
+        if !sensor_data.has_any_data() {
+            return Ok(());
+        }
+
+        sqlx::query(
+            r#"
+            INSERT INTO activity_sensor_data (activity_id, heart_rates, cadences, powers, temperatures)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (activity_id) DO UPDATE
+            SET heart_rates = EXCLUDED.heart_rates,
+                cadences = EXCLUDED.cadences,
+                powers = EXCLUDED.powers,
+                temperatures = EXCLUDED.temperatures
+            "#,
+        )
+        .bind(activity_id)
+        .bind(&sensor_data.heart_rates)
+        .bind(&sensor_data.cadences)
+        .bind(&sensor_data.powers)
+        .bind(&sensor_data.temperatures)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get sensor data for an activity, including calculated distances from track geometry.
+    pub async fn get_sensor_data(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Option<crate::models::ActivitySensorDataResponse>, AppError> {
+        // First get the sensor data arrays
+        let sensor_row: Option<(
+            Option<Vec<Option<i32>>>,
+            Option<Vec<Option<i32>>>,
+            Option<Vec<Option<i32>>>,
+            Option<Vec<Option<f64>>>,
+        )> = sqlx::query_as(
+            r#"
+            SELECT heart_rates, cadences, powers, temperatures
+            FROM activity_sensor_data
+            WHERE activity_id = $1
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some((heart_rates, cadences, powers, temperatures)) = sensor_row else {
+            return Ok(None);
+        };
+
+        // Calculate distances from track geometry
+        // We extract each point and calculate cumulative distance
+        let distances: Vec<f64> = sqlx::query_scalar(
+            r#"
+            WITH points AS (
+                SELECT
+                    (ST_DumpPoints(geo::geometry)).geom AS pt,
+                    (ST_DumpPoints(geo::geometry)).path[1] AS idx
+                FROM tracks
+                WHERE activity_id = $1
+            ),
+            with_prev AS (
+                SELECT
+                    idx,
+                    pt,
+                    LAG(pt) OVER (ORDER BY idx) AS prev_pt
+                FROM points
+            )
+            SELECT
+                COALESCE(
+                    SUM(ST_Distance(pt::geography, prev_pt::geography)) OVER (ORDER BY idx),
+                    0
+                )::float8 AS cum_distance
+            FROM with_prev
+            ORDER BY idx
+            "#,
+        )
+        .bind(activity_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // Check what data we have
+        let has_heart_rate = heart_rates
+            .as_ref()
+            .map(|v| v.iter().any(|x| x.is_some()))
+            .unwrap_or(false);
+        let has_cadence = cadences
+            .as_ref()
+            .map(|v| v.iter().any(|x| x.is_some()))
+            .unwrap_or(false);
+        let has_power = powers
+            .as_ref()
+            .map(|v| v.iter().any(|x| x.is_some()))
+            .unwrap_or(false);
+        let has_temperature = temperatures
+            .as_ref()
+            .map(|v| v.iter().any(|x| x.is_some()))
+            .unwrap_or(false);
+
+        Ok(Some(crate::models::ActivitySensorDataResponse {
+            activity_id,
+            has_heart_rate,
+            has_cadence,
+            has_power,
+            has_temperature,
+            distances,
+            heart_rates: if has_heart_rate { heart_rates } else { None },
+            cadences: if has_cadence { cadences } else { None },
+            powers: if has_power { powers } else { None },
+            temperatures: if has_temperature { temperatures } else { None },
+        }))
+    }
 }

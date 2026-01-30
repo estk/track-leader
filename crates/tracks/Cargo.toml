@@ -27,6 +27,10 @@ chrono = { version = "0.4", features = ["serde"] }
 gpx.workspace = true
 geo.workspace = true
 
+# Activity file parsing (FIT/TCX)
+fitparser = "0.7"
+tcx = "0.9"
+
 # Error handling
 anyhow.workspace = true
 thiserror.workspace = true

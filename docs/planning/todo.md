@@ -1,8 +1,5 @@
 # Todo
 
-- we need to add a heartrate and cadence and power graph
-- we need the ability to process tcx and fit files
-
 ## Filter Implementation
 
 ### Current State
@@ -35,3 +32,31 @@
   - `get_crown_leaderboard_filtered` / `get_distance_leaderboard_filtered` - demographic filters
 - ✅ Reusable `QueryBuilder` module created for dynamic SQL WHERE clauses
 - ✅ Filter enums added to models: `DateRangeFilter`, `VisibilityFilter`, `ActivitySortBy`, `SortOrder`
+
+
+## Deferred Features
+
+These items were planned but deferred for post-launch:
+
+### General
+- Strava import
+- Mobile app (PWA or native)
+
+### Need mobile app
+- Live tracking, based on your privacy prefs (teams, followers etc) you can show your live location to logged in users with the right permissions
+- Allow manual logging of events such as shuttle entry/exit, dig start/end
+
+### Real-Time Updates
+- SSE for leaderboard updates
+- SSE for notification updates
+
+### Perf
+- Virtual scrolling for long lists
+- Leaderboard caching service
+- Rate limiting integration (tower_governor in Cargo.toml)
+
+### Low priority
+- User defined activity metrics that allow them to create and share a custom leaderboard
+- Screen reader testing
+- Sentry error tracking integration
+- Internationalization

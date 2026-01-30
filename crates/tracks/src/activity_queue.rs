@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::{
     achievements_service,
     database::Database,
+    file_parsers::{self, ParsedActivity},
     models::TrackPointData,
     object_store_service::FileType,
     scoring,
@@ -61,12 +62,10 @@ impl ActivityQueue {
     }
 
     pub fn submit(&self, submission: ActivitySubmission) -> anyhow::Result<()> {
-        assert!(matches!(submission.file_type, FileType::Gpx));
-
         let ActivitySubmission {
             user_id: uid,
             activity_id: id,
-            file_type: _,
+            file_type,
             bytes,
             activity_type_id,
             type_boundaries,
@@ -78,13 +77,36 @@ impl ActivityQueue {
         let db = self.db.clone();
         let handle = self.handle.clone();
         self.pool.spawn(move || {
-            let parsed_track = gpx::read(bytes.reader()).unwrap();
+            // Parse the activity file using the unified parser
+            let parsed = match file_parsers::parse_activity_file(file_type, bytes.clone()) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::error!("Failed to parse activity file: {e}");
+                    tx.send(id).unwrap();
+                    return;
+                }
+            };
 
-            // Calculate scores
-            let scores = scoring::score_track(&parsed_track);
+            let ParsedActivity {
+                track_points,
+                sensor_data,
+            } = parsed;
 
-            // Extract track points with elevation and timestamps
-            let track_points = extract_track_points(&parsed_track);
+            // For GPX files, also parse the raw GPX for segment timing extraction
+            // (segment matching currently requires the gpx::Gpx structure)
+            let gpx_data = if file_type == FileType::Gpx || file_type == FileType::Other {
+                // Re-parse as GPX if it's a GPX file (or might be detected as GPX)
+                if FileType::detect_from_bytes(&bytes) == FileType::Gpx {
+                    gpx::read(bytes.reader()).ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // Calculate scores from track points
+            let scores = scoring::score_track_points(&track_points);
 
             handle.block_on(async move {
                 // Save scores
@@ -106,37 +128,46 @@ impl ActivityQueue {
                     false
                 };
 
-                // Find and create segment efforts
-                if track_saved {
-                    let matches = if let (Some(boundaries), Some(types)) =
-                        (&type_boundaries, &segment_types)
-                    {
-                        // Multi-sport activity: find all geometric matches, then filter by type
-                        match db.find_matching_segments_any_type(id).await {
-                            Ok(all_matches) => filter_multi_sport_matches(
-                                all_matches,
-                                &track_points,
-                                boundaries,
-                                types,
-                            ),
-                            Err(e) => {
-                                tracing::error!("Failed to find matching segments: {e}");
-                                vec![]
-                            }
-                        }
-                    } else {
-                        // Single-sport activity: filter by activity_type_id directly
-                        match db.find_matching_segments(id, activity_type_id).await {
-                            Ok(m) => m,
-                            Err(e) => {
-                                tracing::error!("Failed to find matching segments: {e}");
-                                vec![]
-                            }
-                        }
-                    };
+                // Save sensor data if present
+                if sensor_data.has_any_data() {
+                    if let Err(e) = db.save_sensor_data(id, &sensor_data).await {
+                        tracing::error!("Failed to save sensor data: {e}");
+                    }
+                }
 
-                    for segment_match in matches {
-                        process_segment_match(&db, &parsed_track, uid, id, segment_match).await;
+                // Find and create segment efforts (only for GPX files currently)
+                if track_saved {
+                    if let Some(ref gpx) = gpx_data {
+                        let matches = if let (Some(boundaries), Some(types)) =
+                            (&type_boundaries, &segment_types)
+                        {
+                            // Multi-sport activity: find all geometric matches, then filter by type
+                            match db.find_matching_segments_any_type(id).await {
+                                Ok(all_matches) => filter_multi_sport_matches(
+                                    all_matches,
+                                    &track_points,
+                                    boundaries,
+                                    types,
+                                ),
+                                Err(e) => {
+                                    tracing::error!("Failed to find matching segments: {e}");
+                                    vec![]
+                                }
+                            }
+                        } else {
+                            // Single-sport activity: filter by activity_type_id directly
+                            match db.find_matching_segments(id, activity_type_id).await {
+                                Ok(m) => m,
+                                Err(e) => {
+                                    tracing::error!("Failed to find matching segments: {e}");
+                                    vec![]
+                                }
+                            }
+                        };
+
+                        for segment_match in matches {
+                            process_segment_match(&db, gpx, uid, id, segment_match).await;
+                        }
                     }
                 }
 
@@ -267,41 +298,6 @@ fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let c = 2.0 * a.sqrt().asin();
 
     EARTH_RADIUS_METERS * c
-}
-
-/// Extract track points with elevation and timestamps from GPX
-fn extract_track_points(gpx: &gpx::Gpx) -> Vec<TrackPointData> {
-    let mut points = Vec::new();
-
-    for track in &gpx.tracks {
-        for seg in &track.segments {
-            for pt in &seg.points {
-                let lon = pt.point().x();
-                let lat = pt.point().y();
-                let elevation = pt.elevation;
-                let timestamp = pt.time.as_ref().and_then(|t| {
-                    // gpx::Time has a format() method that returns ISO 8601 string
-                    // We need to parse it to OffsetDateTime
-                    t.format().ok().and_then(|s| {
-                        time::OffsetDateTime::parse(
-                            &s,
-                            &time::format_description::well_known::Rfc3339,
-                        )
-                        .ok()
-                    })
-                });
-
-                points.push(TrackPointData {
-                    lat,
-                    lon,
-                    elevation,
-                    timestamp,
-                });
-            }
-        }
-    }
-
-    points
 }
 
 /// Process a single segment match: extract timing and create effort
