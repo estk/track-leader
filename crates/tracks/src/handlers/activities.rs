@@ -56,12 +56,12 @@ pub struct UploadQuery {
     /// Comma-separated list of team IDs to share with (for teams_only visibility)
     #[serde(default)]
     pub team_ids: Option<String>,
-    /// Multi-sport: JSON array of ISO-8601 timestamps marking segment boundaries
+    /// Multi-sport: Comma-separated ISO-8601 timestamps marking segment boundaries
     #[serde(default)]
-    pub type_boundaries: Option<Vec<time::OffsetDateTime>>,
-    /// Multi-sport: JSON array of activity type UUIDs for each segment
+    pub type_boundaries: Option<String>,
+    /// Multi-sport: Comma-separated activity type UUIDs for each segment
     #[serde(default)]
-    pub segment_types: Option<Vec<Uuid>>,
+    pub segment_types: Option<String>,
 }
 
 /// Activity update request.
@@ -86,8 +86,8 @@ pub struct UserActivitiesQuery {}
         ("name" = String, Query, description = "Activity name"),
         ("visibility" = Option<String>, Query, description = "Visibility: public, private, or teams_only"),
         ("team_ids" = Option<String>, Query, description = "Comma-separated team IDs for teams_only visibility"),
-        ("type_boundaries" = Option<Vec<time::OffsetDateTime>>, Query, description = "Multi-sport segment boundary timestamps"),
-        ("segment_types" = Option<Vec<Uuid>>, Query, description = "Multi-sport activity type IDs per segment")
+        ("type_boundaries" = Option<String>, Query, description = "Comma-separated ISO-8601 timestamps for multi-sport segment boundaries"),
+        ("segment_types" = Option<String>, Query, description = "Comma-separated activity type UUIDs for multi-sport segments")
     ),
     request_body(content_type = "multipart/form-data", description = "GPX file upload"),
     responses(
@@ -147,6 +147,26 @@ pub async fn new_activity(
         .store_file(user_id, activity_id, file_type, file_bytes.clone())
         .await?;
 
+    // Parse multi-sport parameters from comma-separated strings
+    let type_boundaries: Option<Vec<time::OffsetDateTime>> =
+        params.type_boundaries.as_ref().map(|s| {
+            s.split(',')
+                .filter_map(|ts| {
+                    time::OffsetDateTime::parse(
+                        ts.trim(),
+                        &time::format_description::well_known::Rfc3339,
+                    )
+                    .ok()
+                })
+                .collect()
+        });
+
+    let segment_types: Option<Vec<Uuid>> = params.segment_types.as_ref().map(|s| {
+        s.split(',')
+            .filter_map(|id| id.trim().parse().ok())
+            .collect()
+    });
+
     let activity = Activity {
         id: Uuid::new_v4(),
         user_id,
@@ -155,9 +175,14 @@ pub async fn new_activity(
         submitted_at: time::UtcDateTime::now().to_offset(time::UtcOffset::UTC),
         object_store_path,
         visibility: params.visibility.unwrap_or_else(|| "public".to_string()),
-        type_boundaries: params.type_boundaries,
-        segment_types: params.segment_types,
+        type_boundaries,
+        segment_types,
     };
+
+    // Save activity to database BEFORE submitting to queue to avoid race condition.
+    // The queue worker inserts scores with activity_id as a foreign key, so the
+    // activity row must exist first.
+    db.save_activity(&activity).await?;
 
     aq.submit(ActivitySubmission {
         user_id,
@@ -169,8 +194,6 @@ pub async fn new_activity(
         segment_types: activity.segment_types.clone(),
     })
     .map_err(AppError::Queue)?;
-
-    db.save_activity(&activity).await?;
 
     // Share with teams if team_ids provided
     if let Some(team_ids_str) = &params.team_ids {

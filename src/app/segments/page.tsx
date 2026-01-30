@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LazySegmentsMap } from "@/components/segments/lazy-segments-map";
+import { getClimbCategoryInfo, formatClimbCategory } from "@/lib/utils";
 
 type ViewMode = "list" | "map";
 
@@ -22,12 +23,6 @@ function formatDistance(meters: number): string {
 function formatElevation(meters: number | null): string {
   if (meters === null) return "N/A";
   return `${Math.round(meters)} m`;
-}
-
-function formatClimbCategory(category: number | null): string | null {
-  if (category === null) return null;
-  if (category === 0) return "HC";
-  return `Cat ${category}`;
 }
 
 function formatGrade(grade: number | null): string {
@@ -573,9 +568,12 @@ function SegmentsContent({
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">{segment.name}</CardTitle>
               <div className="flex gap-2">
-                {formatClimbCategory(segment.climb_category) && (
-                  <Badge variant="outline">
-                    {formatClimbCategory(segment.climb_category)}
+                {getClimbCategoryInfo(segment.climb_category) && (
+                  <Badge
+                    variant="outline"
+                    title={getClimbCategoryInfo(segment.climb_category)?.tooltip}
+                  >
+                    {getClimbCategoryInfo(segment.climb_category)?.label}
                   </Badge>
                 )}
                 <Badge variant="secondary">

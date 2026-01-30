@@ -182,6 +182,7 @@ pub struct SegmentEffort {
     pub segment_id: Uuid,
     pub activity_id: Uuid,
     pub user_id: Uuid,
+    pub user_name: Option<String>,
     #[serde(with = "rfc3339")]
     pub started_at: OffsetDateTime,
     pub elapsed_time_seconds: f64,

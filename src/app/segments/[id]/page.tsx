@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LazyActivityMap } from "@/components/activity/lazy-activity-map";
 import { LazyElevationProfile } from "@/components/activity/lazy-elevation-profile";
 import dynamic from "next/dynamic";
+import { getClimbCategoryInfo } from "@/lib/utils";
 
 const LazyPRHistoryChart = dynamic(
   () => import("./pr-history-chart").then((mod) => mod.PRHistoryChart),
@@ -37,9 +38,8 @@ function formatGrade(grade: number | null): string {
 }
 
 function formatClimbCategory(category: number | null): string {
-  if (category === null) return "N/A";
-  if (category === 0) return "HC";
-  return `Cat ${category}`;
+  const info = getClimbCategoryInfo(category);
+  return info?.label ?? "N/A";
 }
 
 function formatTime(seconds: number): string {
@@ -257,6 +257,7 @@ export default function SegmentDetailPage() {
             <StatItem
               label="Climb Category"
               value={formatClimbCategory(segment.climb_category)}
+              tooltip={getClimbCategoryInfo(segment.climb_category)?.tooltip}
             />
             <StatItem
               label="Attempts"
@@ -315,7 +316,7 @@ export default function SegmentDetailPage() {
                       {index + 1}
                     </span>
                     <span className="truncate">
-                      {isCurrentUser ? "You" : `${effort.user_id.slice(0, 8)}...`}
+                      {isCurrentUser ? "You" : (effort.user_name || `${effort.user_id.slice(0, 8)}...`)}
                       {effort.is_personal_record && (
                         <Badge variant="outline" className="ml-2 text-xs">
                           PR
@@ -392,9 +393,9 @@ export default function SegmentDetailPage() {
   );
 }
 
-function StatItem({ label, value }: { label: string; value: string }) {
+function StatItem({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
   return (
-    <div className="text-center p-4 bg-muted/50 rounded-lg">
+    <div className="text-center p-4 bg-muted/50 rounded-lg" title={tooltip}>
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-sm text-muted-foreground">{label}</p>
     </div>
@@ -456,7 +457,7 @@ function EffortComparisonCard({ myEfforts, efforts, currentUserId }: EffortCompa
               <span className="font-mono font-medium">
                 {formatTime(segmentRecord.elapsed_time_seconds)}
                 <span className="text-muted-foreground ml-2">
-                  by {segmentRecord.user_id.slice(0, 8)}...
+                  by {segmentRecord.user_name || `${segmentRecord.user_id.slice(0, 8)}...`}
                 </span>
               </span>
             </div>

@@ -14,11 +14,48 @@ import { LazyActivityMap } from "@/components/activity/lazy-activity-map";
 import { LazyElevationProfile } from "@/components/activity/lazy-elevation-profile";
 import { Textarea } from "@/components/ui/textarea";
 
+interface ClimbCategoryInfo {
+  label: string;
+  tooltip: string;
+}
+
+function getClimbCategoryInfo(category: number | null): ClimbCategoryInfo | null {
+  if (category === null) return null;
+  switch (category) {
+    case 0:
+      return {
+        label: "HC",
+        tooltip: "Hors Categorie: The most difficult climbs, typically 800m+ elevation gain. Beyond normal categorization.",
+      };
+    case 1:
+      return {
+        label: "Cat 1",
+        tooltip: "Category 1: Very difficult climbs, typically 640-800m gain over 10+ km at 7-9% gradient.",
+      };
+    case 2:
+      return {
+        label: "Cat 2",
+        tooltip: "Category 2: Difficult climbs, typically 320-640m gain over 5-10 km at 6-9% gradient.",
+      };
+    case 3:
+      return {
+        label: "Cat 3",
+        tooltip: "Category 3: Moderate climbs, typically 160-320m gain over 4-5 km at 6-8% gradient.",
+      };
+    case 4:
+      return {
+        label: "Cat 4",
+        tooltip: "Category 4: Easy climbs, typically 80-160m gain over 1-3 km at 3-6% gradient.",
+      };
+    default:
+      return null;
+  }
+}
+
 // Convert climb category number to display string
 function formatClimbCategory(category: number | null): string | null {
-  if (category === null) return null;
-  if (category === 0) return "HC";
-  return `Cat ${category}`;
+  const info = getClimbCategoryInfo(category);
+  return info?.label ?? null;
 }
 
 export default function ActivityDetailPage() {
@@ -422,10 +459,10 @@ export default function ActivityDetailPage() {
                             {segmentPreview.average_grade.toFixed(1)}%
                           </div>
                         )}
-                        {formatClimbCategory(segmentPreview.climb_category) && (
-                          <div>
+                        {getClimbCategoryInfo(segmentPreview.climb_category) && (
+                          <div title={getClimbCategoryInfo(segmentPreview.climb_category)?.tooltip}>
                             <span className="font-medium">Category:</span>{" "}
-                            {formatClimbCategory(segmentPreview.climb_category)}
+                            {getClimbCategoryInfo(segmentPreview.climb_category)?.label}
                           </div>
                         )}
                       </div>

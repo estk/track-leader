@@ -431,51 +431,52 @@ fn calculate_grades(points: &[SegmentPoint]) -> (Option<f64>, Option<f64>) {
 }
 
 /// Calculate climb category based on elevation gain and distance.
-/// Categories: 4 (easiest), 3, 2, 1, 0 (HC/hardest), None (not a climb)
-/// Uses a points system: points = elevation_gain * (distance_km * grade_factor)
+///
+/// Uses the standard Strava formula: points = distance_meters * gradient_percent
+/// This is mathematically equivalent to: elevation_gain_meters * 100
+///
+/// Categories (from easiest to hardest):
+/// - Cat 4: 8,000+ points (roughly 80m+ gain at any gradient meeting minimum)
+/// - Cat 3: 16,000+ points (roughly 160m+ gain)
+/// - Cat 2: 32,000+ points (roughly 320m+ gain)
+/// - Cat 1: 64,000+ points (roughly 640m+ gain)
+/// - HC: 80,000+ points (roughly 800m+ gain, "beyond categorization")
+///
+/// Minimum requirements: 3% gradient and 8,000+ points score.
 fn calculate_climb_category(
     elevation_gain: Option<f64>,
     distance_meters: f64,
     average_grade: Option<f64>,
 ) -> Option<i32> {
-    let gain = elevation_gain?;
+    // Require both elevation gain and grade data to exist
+    let _ = elevation_gain?;
     let grade = average_grade?;
 
-    // Only categorize actual climbs (positive elevation gain and grade)
-    if gain < 20.0 || grade < 1.0 {
+    // Minimum 3% gradient required for categorization
+    if grade < 3.0 {
         return None;
     }
 
-    let distance_km = distance_meters / 1000.0;
+    // Standard Strava formula: distance (meters) * gradient (percentage)
+    // Mathematically equivalent to elevation_gain * 100
+    let points = distance_meters * grade;
 
-    // Grade factor increases difficulty for steeper climbs
-    let grade_factor = if grade < 4.0 {
-        1.0
-    } else if grade < 6.0 {
-        1.5
-    } else if grade < 8.0 {
-        2.0
-    } else if grade < 10.0 {
-        2.5
+    // Minimum score required for any category
+    if points < 8000.0 {
+        return None;
+    }
+
+    // Map points to category using standard thresholds
+    if points >= 80000.0 {
+        Some(0) // HC (Hors Catégorie) - "beyond categorization"
+    } else if points >= 64000.0 {
+        Some(1) // Cat 1 - long, demanding climbs (10+ km at 7-9%)
+    } else if points >= 32000.0 {
+        Some(2) // Cat 2 - significant climbs (5-10 km at 6-9%)
+    } else if points >= 16000.0 {
+        Some(3) // Cat 3 - moderate climbs (4-5 km at 6-8%)
     } else {
-        3.0
-    };
-
-    let points = gain * distance_km * grade_factor / 100.0;
-
-    // Map points to category
-    if points >= 320.0 {
-        Some(0) // HC (Hors Catégorie)
-    } else if points >= 160.0 {
-        Some(1) // Cat 1
-    } else if points >= 80.0 {
-        Some(2) // Cat 2
-    } else if points >= 40.0 {
-        Some(3) // Cat 3
-    } else if points >= 20.0 {
-        Some(4) // Cat 4
-    } else {
-        None // Not categorized
+        Some(4) // Cat 4 - short climbs (1-3 km at 3-6%)
     }
 }
 

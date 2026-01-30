@@ -557,6 +557,7 @@ export type SegmentEffort = {
     start_fraction?: (number) | null;
     started_at: string;
     user_id: string;
+    user_name?: (string) | null;
 };
 
 export type SegmentPoint = {

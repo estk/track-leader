@@ -125,6 +125,7 @@ export interface SegmentEffort {
   segment_id: string;
   activity_id: string;
   user_id: string;
+  user_name: string | null;
   started_at: string;
   elapsed_time_seconds: number;
   moving_time_seconds: number | null;

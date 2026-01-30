@@ -656,25 +656,35 @@ impl Database {
     ) -> Result<SegmentEffort, AppError> {
         let effort = sqlx::query_as(
             r#"
-            INSERT INTO segment_efforts (
-                id, segment_id, activity_id, user_id,
-                started_at, elapsed_time_seconds,
-                moving_time_seconds, average_speed_mps, max_speed_mps,
-                is_personal_record, created_at,
-                start_fraction, end_fraction
+            WITH inserted AS (
+                INSERT INTO segment_efforts (
+                    id, segment_id, activity_id, user_id,
+                    started_at, elapsed_time_seconds,
+                    moving_time_seconds, average_speed_mps, max_speed_mps,
+                    is_personal_record, created_at,
+                    start_fraction, end_fraction
+                )
+                VALUES (
+                    gen_random_uuid(), $1, $2, $3,
+                    $4, $5,
+                    $6, $7, $8,
+                    FALSE, NOW(),
+                    $9, $10
+                )
+                RETURNING id, segment_id, activity_id, user_id,
+                          started_at, elapsed_time_seconds,
+                          moving_time_seconds, average_speed_mps, max_speed_mps,
+                          is_personal_record, created_at,
+                          start_fraction, end_fraction
             )
-            VALUES (
-                gen_random_uuid(), $1, $2, $3,
-                $4, $5,
-                $6, $7, $8,
-                FALSE, NOW(),
-                $9, $10
-            )
-            RETURNING id, segment_id, activity_id, user_id,
-                      started_at, elapsed_time_seconds,
-                      moving_time_seconds, average_speed_mps, max_speed_mps,
-                      is_personal_record, created_at,
-                      start_fraction, end_fraction
+            SELECT i.id, i.segment_id, i.activity_id, i.user_id,
+                   u.name AS user_name,
+                   i.started_at, i.elapsed_time_seconds,
+                   i.moving_time_seconds, i.average_speed_mps, i.max_speed_mps,
+                   i.is_personal_record, i.created_at,
+                   i.start_fraction, i.end_fraction
+            FROM inserted i
+            JOIN users u ON u.id = i.user_id
             "#,
         )
         .bind(segment_id)
@@ -700,14 +710,16 @@ impl Database {
     ) -> Result<Vec<SegmentEffort>, AppError> {
         let efforts: Vec<SegmentEffort> = sqlx::query_as(
             r#"
-            SELECT id, segment_id, activity_id, user_id,
-                   started_at, elapsed_time_seconds,
-                   moving_time_seconds, average_speed_mps, max_speed_mps,
-                   is_personal_record, created_at,
-                   start_fraction, end_fraction
-            FROM segment_efforts
-            WHERE segment_id = $1
-            ORDER BY elapsed_time_seconds ASC
+            SELECT se.id, se.segment_id, se.activity_id, se.user_id,
+                   u.name AS user_name,
+                   se.started_at, se.elapsed_time_seconds,
+                   se.moving_time_seconds, se.average_speed_mps, se.max_speed_mps,
+                   se.is_personal_record, se.created_at,
+                   se.start_fraction, se.end_fraction
+            FROM segment_efforts se
+            JOIN users u ON u.id = se.user_id
+            WHERE se.segment_id = $1
+            ORDER BY se.elapsed_time_seconds ASC
             LIMIT $2
             "#,
         )
@@ -726,14 +738,16 @@ impl Database {
     ) -> Result<Vec<SegmentEffort>, AppError> {
         let efforts: Vec<SegmentEffort> = sqlx::query_as(
             r#"
-            SELECT id, segment_id, activity_id, user_id,
-                   started_at, elapsed_time_seconds,
-                   moving_time_seconds, average_speed_mps, max_speed_mps,
-                   is_personal_record, created_at,
-                   start_fraction, end_fraction
-            FROM segment_efforts
-            WHERE segment_id = $1 AND user_id = $2
-            ORDER BY elapsed_time_seconds ASC
+            SELECT se.id, se.segment_id, se.activity_id, se.user_id,
+                   u.name AS user_name,
+                   se.started_at, se.elapsed_time_seconds,
+                   se.moving_time_seconds, se.average_speed_mps, se.max_speed_mps,
+                   se.is_personal_record, se.created_at,
+                   se.start_fraction, se.end_fraction
+            FROM segment_efforts se
+            JOIN users u ON u.id = se.user_id
+            WHERE se.segment_id = $1 AND se.user_id = $2
+            ORDER BY se.elapsed_time_seconds ASC
             "#,
         )
         .bind(segment_id)
