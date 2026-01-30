@@ -60,6 +60,22 @@ async fn main() -> anyhow::Result<()> {
         social_result.comments.len()
     );
 
+    // Seed team scenario (100 more users with teams and sharing)
+    tracing::info!("Creating team test scenario...");
+    let team_result = ScenarioBuilder::team_test()
+        .with_seed(67890)
+        .build(&pool, &mut rng)
+        .await?;
+
+    tracing::info!(
+        "Team scenario: {} users, {} teams, {} memberships, {} activity-team shares, {} segment-team shares",
+        team_result.users.len(),
+        team_result.teams.len(),
+        team_result.team_memberships.len(),
+        team_result.activity_teams.len(),
+        team_result.segment_teams.len()
+    );
+
     tracing::info!("Done! Test data seeded successfully.");
 
     Ok(())

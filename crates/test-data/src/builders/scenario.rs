@@ -15,6 +15,10 @@ use crate::generators::{
     effort::{EffortGenConfig, EffortGenerator, GeneratedEffort},
     segment::{GeneratedSegment, SegmentGenerator},
     social::{GeneratedComment, GeneratedFollow, GeneratedKudos, SocialGenConfig, SocialGenerator},
+    team::{
+        GeneratedActivityTeam, GeneratedSegmentTeam, GeneratedTeam, GeneratedTeamMembership,
+        TeamGenConfig, TeamGenerator,
+    },
     user::{GeneratedUser, UserGenConfig, UserGenerator},
 };
 use crate::profiles::{AthleteProfile, CyclistProfile, HikerProfile, RunnerProfile};
@@ -31,6 +35,14 @@ pub struct ScenarioResult {
     pub follows: Vec<GeneratedFollow>,
     pub kudos: Vec<GeneratedKudos>,
     pub comments: Vec<GeneratedComment>,
+    /// Teams generated in this scenario.
+    pub teams: Vec<GeneratedTeam>,
+    /// Team memberships generated in this scenario.
+    pub team_memberships: Vec<GeneratedTeamMembership>,
+    /// Activity-team associations generated in this scenario.
+    pub activity_teams: Vec<GeneratedActivityTeam>,
+    /// Segment-team associations generated in this scenario.
+    pub segment_teams: Vec<GeneratedSegmentTeam>,
     /// Metrics from scenario generation (populated if metrics tracking enabled).
     pub metrics: Option<ScenarioMetrics>,
 }
@@ -94,6 +106,10 @@ pub struct ScenarioBuilder {
     generate_social: bool,
     social_config: SocialGenConfig,
 
+    // Team configuration
+    team_count: usize,
+    team_config: TeamGenConfig,
+
     // Misc
     seed: u32,
     track_metrics: bool,
@@ -146,6 +162,8 @@ impl ScenarioBuilder {
             effort_coverage: EffortCoverage::default(),
             generate_social: true,
             social_config: SocialGenConfig::default(),
+            team_count: 0, // No teams by default
+            team_config: TeamGenConfig::default(),
             seed: 42,
             track_metrics: false,
         }
@@ -260,6 +278,18 @@ impl ScenarioBuilder {
     /// Sets the social generation configuration.
     pub fn with_social_config(mut self, config: SocialGenConfig) -> Self {
         self.social_config = config;
+        self
+    }
+
+    /// Sets the number of teams to generate.
+    pub fn with_teams(mut self, count: usize) -> Self {
+        self.team_count = count;
+        self
+    }
+
+    /// Sets the team generation configuration.
+    pub fn with_team_config(mut self, config: TeamGenConfig) -> Self {
+        self.team_config = config;
         self
     }
 
@@ -467,6 +497,35 @@ impl ScenarioBuilder {
             (Vec::new(), Vec::new(), Vec::new())
         };
 
+        // Generate teams if configured
+        let (teams, team_memberships, activity_teams, segment_teams) = if self.team_count > 0 {
+            let team_gen = TeamGenerator::with_config(self.team_config.clone());
+            let base_time = OffsetDateTime::now_utc();
+
+            let teams = team_gen.generate_teams(self.team_count, &user_ids, base_time, rng);
+            let memberships = team_gen.generate_memberships(&teams, &user_ids, rng);
+
+            // Build activity_id -> user_id map
+            let activity_user_map: std::collections::HashMap<Uuid, Uuid> =
+                activities.iter().map(|a| (a.id, a.user_id)).collect();
+
+            let activity_ids: Vec<Uuid> = activities.iter().map(|a| a.id).collect();
+            let activity_teams = team_gen.generate_activity_teams(
+                &activity_ids,
+                &activity_user_map,
+                &teams,
+                &memberships,
+                rng,
+            );
+
+            let segment_ids: Vec<Uuid> = segments.iter().map(|s| s.id).collect();
+            let segment_teams = team_gen.generate_segment_teams(&segment_ids, &teams, rng);
+
+            (teams, memberships, activity_teams, segment_teams)
+        } else {
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new())
+        };
+
         // Collect metrics if tracking enabled
         let metrics = start_time.map(|start| {
             let total_track_points: usize = activities.iter().map(|a| a.track_points.len()).sum();
@@ -489,6 +548,10 @@ impl ScenarioBuilder {
             follows,
             kudos,
             comments,
+            teams,
+            team_memberships,
+            activity_teams,
+            segment_teams,
             metrics,
         }
     }
@@ -529,6 +592,16 @@ impl ScenarioBuilder {
         }
         if !result.comments.is_empty() {
             seeder.seed_comments(&result.comments).await?;
+        }
+
+        // Seed teams (after users, since teams reference users)
+        if !result.teams.is_empty() {
+            seeder.seed_teams(&result.teams).await?;
+            seeder
+                .seed_team_memberships(&result.team_memberships)
+                .await?;
+            seeder.seed_activity_teams(&result.activity_teams).await?;
+            seeder.seed_segment_teams(&result.segment_teams).await?;
         }
 
         // Update seeding time in metrics
@@ -632,6 +705,33 @@ impl ScenarioBuilder {
                 avg_comments_per_activity: 3.0,
                 ..Default::default()
             })
+    }
+
+    /// Creates a scenario for testing team features.
+    ///
+    /// - 100 users with team memberships
+    /// - 15 teams with varied configurations
+    /// - Activities shared to multiple teams (avg 2.5 teams per activity)
+    /// - Segments shared to teams
+    pub fn team_test() -> Self {
+        Self::new()
+            .with_users(100)
+            .with_region(Region::BOULDER)
+            .with_activity_type_id(builtin_types::RUN)
+            .with_track_distance(5000.0)
+            .with_activities_per_user(2..=4)
+            .with_segment(0.2, 0.6, "Team Challenge Segment")
+            .with_segment(0.5, 0.9, "Team Sprint Segment")
+            .with_efforts_per_user(1..=2)
+            .with_teams(15)
+            .with_team_config(TeamGenConfig {
+                avg_members_per_team: 12.0,
+                avg_teams_per_activity: 2.5, // Ensures 2+ team sharing
+                activity_share_fraction: 0.6,
+                segment_share_fraction: 0.4,
+                ..Default::default()
+            })
+            .with_social(false)
     }
 
     /// Creates a scenario for testing segment overlap detection.

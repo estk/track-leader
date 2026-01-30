@@ -5,8 +5,9 @@ use thiserror::Error;
 use tracing::info;
 
 use crate::generators::{
-    GeneratedActivity, GeneratedComment, GeneratedEffort, GeneratedFollow, GeneratedKudos,
-    GeneratedSegment, GeneratedUser,
+    GeneratedActivity, GeneratedActivityTeam, GeneratedComment, GeneratedEffort, GeneratedFollow,
+    GeneratedKudos, GeneratedSegment, GeneratedSegmentTeam, GeneratedTeam, GeneratedTeamMembership,
+    GeneratedUser,
 };
 use tracks::models::{AchievementType, Gender};
 
@@ -472,6 +473,159 @@ impl Seeder {
         Ok(())
     }
 
+    /// Seeds teams into the database.
+    pub async fn seed_teams(&self, teams: &[GeneratedTeam]) -> Result<(), SeedError> {
+        info!("Seeding {} teams...", teams.len());
+
+        for team in teams {
+            sqlx::query(
+                r#"
+                INSERT INTO teams (id, name, description, visibility, join_policy, owner_id, created_at)
+                VALUES ($1, $2, $3, $4::team_visibility, $5::team_join_policy, $6, $7)
+                ON CONFLICT (id) DO NOTHING
+                "#,
+            )
+            .bind(team.id)
+            .bind(&team.name)
+            .bind(&team.description)
+            .bind(team.visibility.as_str())
+            .bind(team.join_policy.as_str())
+            .bind(team.owner_id)
+            .bind(team.created_at)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        info!("Seeded {} teams", teams.len());
+        Ok(())
+    }
+
+    /// Seeds team memberships into the database.
+    pub async fn seed_team_memberships(
+        &self,
+        memberships: &[GeneratedTeamMembership],
+    ) -> Result<(), SeedError> {
+        info!("Seeding {} team memberships...", memberships.len());
+
+        for chunk in memberships.chunks(self.batch_size) {
+            for membership in chunk {
+                sqlx::query(
+                    r#"
+                    INSERT INTO team_memberships (team_id, user_id, role, invited_by, joined_at)
+                    VALUES ($1, $2, $3::team_role, $4, $5)
+                    ON CONFLICT (team_id, user_id) DO NOTHING
+                    "#,
+                )
+                .bind(membership.team_id)
+                .bind(membership.user_id)
+                .bind(membership.role.as_str())
+                .bind(membership.invited_by)
+                .bind(membership.joined_at)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
+
+        // Update denormalized member counts
+        sqlx::query(
+            r#"
+            UPDATE teams SET member_count = (
+                SELECT COUNT(*) FROM team_memberships WHERE team_id = teams.id
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        info!("Seeded {} team memberships", memberships.len());
+        Ok(())
+    }
+
+    /// Seeds activity-team associations into the database.
+    pub async fn seed_activity_teams(
+        &self,
+        activity_teams: &[GeneratedActivityTeam],
+    ) -> Result<(), SeedError> {
+        info!(
+            "Seeding {} activity-team associations...",
+            activity_teams.len()
+        );
+
+        for chunk in activity_teams.chunks(self.batch_size) {
+            for at in chunk {
+                sqlx::query(
+                    r#"
+                    INSERT INTO activity_teams (activity_id, team_id, shared_at, shared_by)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (activity_id, team_id) DO NOTHING
+                    "#,
+                )
+                .bind(at.activity_id)
+                .bind(at.team_id)
+                .bind(at.shared_at)
+                .bind(at.shared_by)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
+
+        // Update denormalized activity counts
+        sqlx::query(
+            r#"
+            UPDATE teams SET activity_count = (
+                SELECT COUNT(*) FROM activity_teams WHERE team_id = teams.id
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        info!("Seeded {} activity-team associations", activity_teams.len());
+        Ok(())
+    }
+
+    /// Seeds segment-team associations into the database.
+    pub async fn seed_segment_teams(
+        &self,
+        segment_teams: &[GeneratedSegmentTeam],
+    ) -> Result<(), SeedError> {
+        info!(
+            "Seeding {} segment-team associations...",
+            segment_teams.len()
+        );
+
+        for chunk in segment_teams.chunks(self.batch_size) {
+            for st in chunk {
+                sqlx::query(
+                    r#"
+                    INSERT INTO segment_teams (segment_id, team_id, shared_at)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (segment_id, team_id) DO NOTHING
+                    "#,
+                )
+                .bind(st.segment_id)
+                .bind(st.team_id)
+                .bind(st.shared_at)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
+
+        // Update denormalized segment counts
+        sqlx::query(
+            r#"
+            UPDATE teams SET segment_count = (
+                SELECT COUNT(*) FROM segment_teams WHERE team_id = teams.id
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        info!("Seeded {} segment-team associations", segment_teams.len());
+        Ok(())
+    }
+
     /// Clears all seeded test data.
     ///
     /// **WARNING**: This deletes all data from the tables. Use with caution.
@@ -487,6 +641,13 @@ impl Seeder {
             .execute(&self.pool)
             .await?;
         sqlx::query("DELETE FROM segment_efforts")
+            .execute(&self.pool)
+            .await?;
+        // Team-related junction tables (before segments/activities they reference)
+        sqlx::query("DELETE FROM segment_teams")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM activity_teams")
             .execute(&self.pool)
             .await?;
         sqlx::query("DELETE FROM segments")
@@ -507,6 +668,17 @@ impl Seeder {
         sqlx::query("DELETE FROM notifications")
             .execute(&self.pool)
             .await?;
+        // Team tables (before users since teams reference users)
+        sqlx::query("DELETE FROM team_invitations")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM team_join_requests")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM team_memberships")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM teams").execute(&self.pool).await?;
         sqlx::query("DELETE FROM users").execute(&self.pool).await?;
 
         info!("All data cleared");

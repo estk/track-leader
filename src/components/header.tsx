@@ -45,9 +45,11 @@ export function Header() {
           <Link href="/activities/daily" className="text-muted-foreground hover:text-foreground">
             Daily
           </Link>
-          <Link href="/activities" className="text-muted-foreground hover:text-foreground">
-            Activities
-          </Link>
+          {user && (
+            <Link href="/activities" className="text-muted-foreground hover:text-foreground">
+              My Activities
+            </Link>
+          )}
           <Link href="/segments" className="text-muted-foreground hover:text-foreground">
             Segments
           </Link>
@@ -146,13 +148,15 @@ export function Header() {
             >
               Daily
             </Link>
-            <Link
-              href="/activities"
-              className="text-muted-foreground hover:text-foreground py-2"
-              onClick={closeMobileMenu}
-            >
-              Activities
-            </Link>
+            {user && (
+              <Link
+                href="/activities"
+                className="text-muted-foreground hover:text-foreground py-2"
+                onClick={closeMobileMenu}
+              >
+                My Activities
+              </Link>
+            )}
             <Link
               href="/segments"
               className="text-muted-foreground hover:text-foreground py-2"
