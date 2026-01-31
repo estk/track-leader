@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TeamWithMembership, TeamRole } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 interface TeamCardProps {
   team: TeamWithMembership;
@@ -62,8 +61,13 @@ function TeamAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | nul
 }
 
 export function TeamCard({ team }: TeamCardProps) {
+  const router = useRouter();
+
   return (
-    <Card className="hover:shadow-md transition-shadow group">
+    <Card
+      className="hover:shadow-md transition-shadow cursor-pointer"
+      onClick={() => router.push(`/teams/${team.id}`)}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-start gap-3">
           <TeamAvatar name={team.name} avatarUrl={team.avatar_url} />
@@ -88,21 +92,10 @@ export function TeamCard({ team }: TeamCardProps) {
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-4 text-sm text-muted-foreground">
-            <span>{team.member_count} members</span>
-            <span>{team.activity_count} activities</span>
-            <span>{team.segment_count} segments</span>
-          </div>
-          <Link href={`/teams/${team.id}`}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              View
-            </Button>
-          </Link>
+        <div className="flex gap-4 text-sm text-muted-foreground">
+          <span>{team.member_count} members</span>
+          <span>{team.activity_count} activities</span>
+          <span>{team.segment_count} segments</span>
         </div>
       </CardContent>
     </Card>

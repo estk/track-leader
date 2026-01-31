@@ -21,9 +21,10 @@ import { Label } from "@/components/ui/label";
 import { RoleBadge } from "@/components/teams/role-badge";
 import { FeedCard } from "@/components/feed/feed-card";
 import { LazyDailyActivitiesMap } from "@/components/activity/lazy-daily-activities-map";
+import { LazyTeamHeatmap } from "@/components/maps/lazy-team-heatmap";
 import { cn } from "@/lib/utils";
 
-type TabType = "activities" | "segments" | "members";
+type TabType = "daily-map" | "heat-map" | "activities" | "segments" | "members";
 
 function formatDistance(meters: number): string {
   if (meters >= 1000) {
@@ -90,7 +91,7 @@ export default function TeamDetailPage() {
   const [loading, setLoading] = useState(true);
   const [contentLoading, setContentLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<TabType>("activities");
+  const [activeTab, setActiveTab] = useState<TabType>("daily-map");
 
   // Fetch team data
   useEffect(() => {
@@ -111,6 +112,12 @@ export default function TeamDetailPage() {
   // Fetch tab content
   useEffect(() => {
     if (!team?.is_member) return;
+
+    // Map tabs handle their own loading
+    if (activeTab === "daily-map" || activeTab === "heat-map") {
+      setContentLoading(false);
+      return;
+    }
 
     setContentLoading(true);
 
@@ -222,7 +229,19 @@ export default function TeamDetailPage() {
       {team.is_member ? (
         <>
           {/* Tab Navigation */}
-          <div className="flex border-b">
+          <div className="flex border-b overflow-x-auto">
+            <TabButton
+              active={activeTab === "daily-map"}
+              onClick={() => setActiveTab("daily-map")}
+            >
+              Daily Map
+            </TabButton>
+            <TabButton
+              active={activeTab === "heat-map"}
+              onClick={() => setActiveTab("heat-map")}
+            >
+              Heat Map
+            </TabButton>
             <TabButton
               active={activeTab === "activities"}
               onClick={() => setActiveTab("activities")}
@@ -254,8 +273,10 @@ export default function TeamDetailPage() {
             </div>
           ) : (
             <>
+              {activeTab === "daily-map" && <DailyMapTab teamId={teamId} />}
+              {activeTab === "heat-map" && <HeatMapTab teamId={teamId} />}
               {activeTab === "activities" && (
-                <ActivitiesTab activities={activities} teamId={teamId} />
+                <ActivitiesTab activities={activities} />
               )}
               {activeTab === "segments" && (
                 <SegmentsTab segments={segments} router={router} />
@@ -292,23 +313,25 @@ function TabButton({
 }: {
   active: boolean;
   onClick: () => void;
-  count: number;
+  count?: number;
   children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2",
+        "px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap",
         active
           ? "border-primary text-primary"
           : "border-transparent text-muted-foreground hover:text-foreground"
       )}
     >
       {children}
-      <Badge variant="secondary" className="text-xs">
-        {count}
-      </Badge>
+      {count !== undefined && (
+        <Badge variant="secondary" className="text-xs">
+          {count}
+        </Badge>
+      )}
     </button>
   );
 }
@@ -356,13 +379,7 @@ function getTodayDateString(): string {
   return today.toISOString().split("T")[0];
 }
 
-function ActivitiesTab({
-  activities,
-  teamId,
-}: {
-  activities: FeedActivity[];
-  teamId: string;
-}) {
+function DailyMapTab({ teamId }: { teamId: string }) {
   const [dailyDate, setDailyDate] = useState(getTodayDateString());
   const [dailyActivities, setDailyActivities] = useState<FeedActivity[]>([]);
   const [dailyLoading, setDailyLoading] = useState(true);
@@ -414,92 +431,104 @@ function ActivitiesTab({
   );
 
   return (
-    <div className="space-y-6">
-      {/* Daily Map Section */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Daily Team Map</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Date picker controls */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="daily-date-picker">Date</Label>
-              <Input
-                id="daily-date-picker"
-                type="date"
-                value={dailyDate}
-                onChange={(e) => setDailyDate(e.target.value)}
-                className="w-full sm:w-auto"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePreviousDay}
-                title="Previous day"
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNextDay}
-                title="Next day"
-              >
-                Next
-              </Button>
-              {!isToday && (
-                <Button variant="outline" size="sm" onClick={handleToday}>
-                  Today
-                </Button>
-              )}
-            </div>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">Daily Team Map</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Date picker controls */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="daily-date-picker">Date</Label>
+            <Input
+              id="daily-date-picker"
+              type="date"
+              value={dailyDate}
+              onChange={(e) => setDailyDate(e.target.value)}
+              className="w-full sm:w-auto"
+            />
           </div>
 
-          <p className="text-sm text-muted-foreground">{displayDate}</p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePreviousDay}
+              title="Previous day"
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextDay}
+              title="Next day"
+            >
+              Next
+            </Button>
+            {!isToday && (
+              <Button variant="outline" size="sm" onClick={handleToday}>
+                Today
+              </Button>
+            )}
+          </div>
+        </div>
 
-          {/* Map */}
-          {dailyLoading ? (
-            <Skeleton className="h-[300px] w-full rounded-lg" />
-          ) : dailyActivities.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground border rounded-lg">
-              No team activities on this date.
-            </div>
-          ) : (
-            <div>
-              <LazyDailyActivitiesMap activities={dailyActivities} />
-              <p className="text-sm text-muted-foreground mt-2">
-                {dailyActivities.length}{" "}
-                {dailyActivities.length === 1 ? "activity" : "activities"} on
-                this date
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        <p className="text-sm text-muted-foreground">{displayDate}</p>
 
-      {/* All Activities Section */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4">All Team Activities</h3>
-        {activities.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">
-                No activities shared with this team yet.
-              </p>
-            </CardContent>
-          </Card>
+        {/* Map */}
+        {dailyLoading ? (
+          <Skeleton className="h-[300px] w-full rounded-lg" />
+        ) : dailyActivities.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground border rounded-lg">
+            No team activities on this date.
+          </div>
         ) : (
-          <div className="space-y-4">
-            {activities.map((activity) => (
-              <FeedCard key={activity.id} activity={activity} />
-            ))}
+          <div>
+            <LazyDailyActivitiesMap activities={dailyActivities} />
+            <p className="text-sm text-muted-foreground mt-2">
+              {dailyActivities.length}{" "}
+              {dailyActivities.length === 1 ? "activity" : "activities"} on this
+              date
+            </p>
           </div>
         )}
-      </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeatMapTab({ teamId }: { teamId: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg">Team Heat Map</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <LazyTeamHeatmap teamId={teamId} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActivitiesTab({ activities }: { activities: FeedActivity[] }) {
+  if (activities.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <p className="text-muted-foreground">
+            No activities shared with this team yet.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {activities.map((activity) => (
+        <FeedCard key={activity.id} activity={activity} />
+      ))}
     </div>
   );
 }
