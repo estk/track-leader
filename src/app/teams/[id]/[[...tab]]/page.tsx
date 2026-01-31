@@ -242,6 +242,15 @@ export default function TeamDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Featured Leaderboard - show if configured and user is member */}
+      {team.is_member && team.featured_leaderboard && (
+        <FeaturedLeaderboard
+          teamId={teamId}
+          leaderboardType={team.featured_leaderboard}
+          currentUserId={user?.id}
+        />
+      )}
+
       {/* Content - only show if member */}
       {team.is_member ? (
         <>
@@ -870,5 +879,139 @@ function TeamLeaderboardList({
         );
       })}
     </div>
+  );
+}
+
+const LEADERBOARD_TITLES: Record<string, string> = {
+  crowns: "Crown Leaders",
+  distance: "Distance Leaders",
+  dig_time: "Dig Time Leaders (Weekly)",
+  dig_percentage: "Dig Percentage Leaders",
+  average_speed: "Speed Leaders",
+};
+
+const LEADERBOARD_ICONS: Record<string, React.ReactNode> = {
+  crowns: <Crown className="h-5 w-5 text-amber-500" />,
+  distance: <MapPin className="h-5 w-5 text-blue-500" />,
+  dig_time: <Shovel className="h-5 w-5 text-orange-500" />,
+  dig_percentage: <Percent className="h-5 w-5 text-green-500" />,
+  average_speed: <Gauge className="h-5 w-5 text-purple-500" />,
+};
+
+function FeaturedLeaderboard({
+  teamId,
+  leaderboardType,
+  currentUserId,
+}: {
+  teamId: string;
+  leaderboardType: LeaderboardType;
+  currentUserId?: string;
+}) {
+  const [entries, setEntries] = useState<TeamLeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    api
+      .getTeamLeaderboard(teamId, leaderboardType)
+      .then(setEntries)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [teamId, leaderboardType]);
+
+  const title = LEADERBOARD_TITLES[leaderboardType] || "Leaderboard";
+  const icon = LEADERBOARD_ICONS[leaderboardType];
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          {icon}
+          <CardTitle className="text-lg">{title}</CardTitle>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Top performers in your team
+        </p>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <div className="p-4 text-destructive bg-destructive/10 rounded-md">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="py-6 text-center text-muted-foreground">
+            No data available yet.
+          </div>
+        ) : (
+          <div className="divide-y border rounded-md">
+            {entries.slice(0, 5).map((entry) => {
+              const isCurrentUser = currentUserId === entry.user_id;
+              return (
+                <div
+                  key={entry.user_id}
+                  className={cn(
+                    "flex items-center gap-4 p-3",
+                    isCurrentUser && "bg-primary/5"
+                  )}
+                >
+                  <div className="w-8 flex justify-center">
+                    <RankBadge rank={entry.rank} size="sm" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Link
+                      href={`/profile/${entry.user_id}`}
+                      className="font-medium hover:underline truncate block"
+                    >
+                      {entry.user_name}
+                    </Link>
+                  </div>
+                  <div className="text-right font-medium">
+                    {leaderboardType === "crowns" && (
+                      <span className="flex items-center gap-1">
+                        <Crown className="h-4 w-4 text-amber-500" />
+                        {(entry as CrownCountEntry).total_crowns}
+                      </span>
+                    )}
+                    {leaderboardType === "distance" && (
+                      <span>{formatDistance((entry as DistanceLeaderEntry).total_distance_meters)}</span>
+                    )}
+                    {leaderboardType === "dig_time" && (
+                      <span>{formatDuration((entry as DigTimeLeaderEntry).total_dig_time_seconds)}</span>
+                    )}
+                    {leaderboardType === "dig_percentage" && (
+                      <span>{((entry as DigPercentageLeaderEntry).dig_percentage * 100).toFixed(1)}%</span>
+                    )}
+                    {leaderboardType === "average_speed" && (
+                      <span>{formatSpeed((entry as AverageSpeedLeaderEntry).average_speed_mps)}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {entries.length > 5 && (
+          <div className="mt-3 text-center">
+            <Link
+              href={`/teams/${teamId}/leaderboard`}
+              className="text-sm text-primary hover:underline"
+            >
+              View full leaderboard →
+            </Link>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
