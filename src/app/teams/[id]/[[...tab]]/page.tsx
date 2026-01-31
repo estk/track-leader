@@ -34,6 +34,15 @@ import { Crown, MapPin, Shovel, Percent, Gauge } from "lucide-react";
 
 type TabType = "daily-map" | "heat-map" | "activities" | "segments" | "members" | "leaderboard";
 
+const VALID_TABS: TabType[] = ["daily-map", "heat-map", "activities", "segments", "members", "leaderboard"];
+
+function parseTab(tabParam: string[] | undefined): TabType {
+  if (!tabParam || tabParam.length === 0) return "daily-map";
+  const tab = tabParam[0];
+  if (VALID_TABS.includes(tab as TabType)) return tab as TabType;
+  return "daily-map";
+}
+
 function formatDistance(meters: number): string {
   if (meters >= 1000) {
     return `${(meters / 1000).toFixed(2)} km`;
@@ -90,6 +99,7 @@ export default function TeamDetailPage() {
   const router = useRouter();
   const params = useParams();
   const teamId = params.id as string;
+  const activeTab = parseTab(params.tab as string[] | undefined);
   const { user, loading: authLoading } = useAuth();
 
   const [team, setTeam] = useState<TeamWithMembership | null>(null);
@@ -99,7 +109,6 @@ export default function TeamDetailPage() {
   const [loading, setLoading] = useState(true);
   const [contentLoading, setContentLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<TabType>("daily-map");
 
   // Fetch team data
   useEffect(() => {
@@ -238,45 +247,45 @@ export default function TeamDetailPage() {
         <>
           {/* Tab Navigation */}
           <div className="flex border-b overflow-x-auto">
-            <TabButton
+            <TabLink
+              href={`/teams/${teamId}`}
               active={activeTab === "daily-map"}
-              onClick={() => setActiveTab("daily-map")}
             >
               Daily Map
-            </TabButton>
-            <TabButton
+            </TabLink>
+            <TabLink
+              href={`/teams/${teamId}/heat-map`}
               active={activeTab === "heat-map"}
-              onClick={() => setActiveTab("heat-map")}
             >
               Heat Map
-            </TabButton>
-            <TabButton
+            </TabLink>
+            <TabLink
+              href={`/teams/${teamId}/activities`}
               active={activeTab === "activities"}
-              onClick={() => setActiveTab("activities")}
               count={team.activity_count}
             >
               Activities
-            </TabButton>
-            <TabButton
+            </TabLink>
+            <TabLink
+              href={`/teams/${teamId}/segments`}
               active={activeTab === "segments"}
-              onClick={() => setActiveTab("segments")}
               count={team.segment_count}
             >
               Segments
-            </TabButton>
-            <TabButton
+            </TabLink>
+            <TabLink
+              href={`/teams/${teamId}/members`}
               active={activeTab === "members"}
-              onClick={() => setActiveTab("members")}
               count={team.member_count}
             >
               Members
-            </TabButton>
-            <TabButton
+            </TabLink>
+            <TabLink
+              href={`/teams/${teamId}/leaderboard`}
               active={activeTab === "leaderboard"}
-              onClick={() => setActiveTab("leaderboard")}
             >
               Leaderboard
-            </TabButton>
+            </TabLink>
           </div>
 
           {/* Tab Content */}
@@ -322,20 +331,20 @@ export default function TeamDetailPage() {
   );
 }
 
-function TabButton({
+function TabLink({
+  href,
   active,
-  onClick,
   count,
   children,
 }: {
+  href: string;
   active: boolean;
-  onClick: () => void;
   count?: number;
   children: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <Link
+      href={href}
       className={cn(
         "px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap",
         active
@@ -349,7 +358,7 @@ function TabButton({
           {count}
         </Badge>
       )}
-    </button>
+    </Link>
   );
 }
 
