@@ -132,11 +132,18 @@ impl Seeder {
             return Err(SeedError::NoTrackPoints);
         }
 
+        // Get started_at from first track point timestamp, or fall back to submitted_at
+        let started_at = activity
+            .track_points
+            .first()
+            .and_then(|p| p.timestamp)
+            .unwrap_or(activity.submitted_at);
+
         // Insert activity record
         sqlx::query(
             r#"
-            INSERT INTO activities (id, user_id, activity_type_id, name, object_store_path, submitted_at, visibility)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO activities (id, user_id, activity_type_id, name, object_store_path, started_at, submitted_at, visibility)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO NOTHING
             "#,
         )
@@ -145,6 +152,7 @@ impl Seeder {
         .bind(activity.activity_type_id)
         .bind(&activity.name)
         .bind(format!("generated/{}.gpx", activity.id))
+        .bind(started_at)
         .bind(activity.submitted_at)
         .bind(activity.visibility.as_str())
         .execute(&self.pool)
