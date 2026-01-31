@@ -856,11 +856,22 @@ pub async fn get_activity_sensor_data(
         }
     }
 
-    // Get sensor data
-    let sensor_data = db
-        .get_sensor_data(id)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    // Get sensor data - return empty response if no sensor data exists
+    let sensor_data = db.get_sensor_data(id).await?;
 
-    Ok(Json(sensor_data))
+    match sensor_data {
+        Some(data) => Ok(Json(data)),
+        None => Ok(Json(crate::models::ActivitySensorDataResponse {
+            activity_id: id,
+            has_heart_rate: false,
+            has_cadence: false,
+            has_power: false,
+            has_temperature: false,
+            distances: vec![],
+            heart_rates: None,
+            cadences: None,
+            powers: None,
+            temperatures: None,
+        })),
+    }
 }
