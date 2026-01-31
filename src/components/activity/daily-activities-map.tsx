@@ -226,7 +226,7 @@ export function DailyActivitiesMap({ activities }: DailyActivitiesMapProps) {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-[500px] w-full rounded-lg" />
+        <Skeleton className="h-[750px] w-full rounded-lg" />
         <p className="text-sm text-muted-foreground text-center">
           Loading activity tracks...
         </p>
@@ -254,7 +254,7 @@ export function DailyActivitiesMap({ activities }: DailyActivitiesMapProps) {
     <div className="space-y-2">
       <div
         ref={mapContainer}
-        className="w-full h-[500px] rounded-lg overflow-hidden"
+        className="w-full h-[750px] rounded-lg overflow-hidden"
       />
       {activities.length > MAX_ACTIVITIES_TO_FETCH && (
         <p className="text-sm text-muted-foreground text-center">

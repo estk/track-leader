@@ -9,7 +9,7 @@ const DailyActivitiesMap = dynamic(
   {
     loading: () => (
       <div className="space-y-4">
-        <Skeleton className="h-[500px] w-full rounded-lg" />
+        <Skeleton className="h-[750px] w-full rounded-lg" />
         <p className="text-sm text-muted-foreground text-center">
           Loading map...
         </p>

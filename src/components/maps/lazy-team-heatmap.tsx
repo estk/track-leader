@@ -12,7 +12,7 @@ const TeamHeatmap = dynamic(
           <Skeleton className="h-7 w-40" />
           <Skeleton className="h-10 w-[150px]" />
         </div>
-        <Skeleton className="h-[500px] w-full rounded-lg" />
+        <Skeleton className="h-[750px] w-full rounded-lg" />
         <p className="text-sm text-muted-foreground text-center">
           Loading map...
         </p>

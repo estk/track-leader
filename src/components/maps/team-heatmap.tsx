@@ -25,7 +25,15 @@ interface ActivityWithTrack {
 }
 
 const MAX_ACTIVITIES = 50;
-const POINT_SAMPLE_INTERVAL = 5; // Sample every Nth point for good visibility
+
+// Adaptive sampling based on total point count for performance
+function getSampleInterval(totalPoints: number): number {
+  if (totalPoints < 5000) return 1;
+  if (totalPoints < 10000) return 2;
+  if (totalPoints < 20000) return 3;
+  if (totalPoints < 40000) return 4;
+  return 5;
+}
 
 const DATE_RANGE_OPTIONS: { value: DateRange; label: string }[] = [
   { value: "7", label: "Last 7 days" },
@@ -107,11 +115,16 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
 
   // Extract and sample heatmap points from all tracks
   const heatmapPoints = useMemo(() => {
-    const points: [number, number][] = [];
+    // Calculate total points to determine sampling interval
+    const totalPoints = activitiesWithTracks.reduce(
+      (sum, { track }) => sum + track.points.length,
+      0
+    );
+    const sampleInterval = getSampleInterval(totalPoints);
 
+    const points: [number, number][] = [];
     activitiesWithTracks.forEach(({ track }) => {
-      // Sample every Nth point for performance
-      for (let i = 0; i < track.points.length; i += POINT_SAMPLE_INTERVAL) {
+      for (let i = 0; i < track.points.length; i += sampleInterval) {
         const p = track.points[i];
         points.push([p.lon, p.lat]);
       }
@@ -301,7 +314,7 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
 
       {loading ? (
         <div className="space-y-4">
-          <Skeleton className="h-[500px] w-full rounded-lg" />
+          <Skeleton className="h-[750px] w-full rounded-lg" />
           <p className="text-sm text-muted-foreground text-center">
             Loading activity tracks...
           </p>
@@ -314,7 +327,7 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
         <div className="space-y-2">
           <div
             ref={mapContainer}
-            className="w-full h-[500px] rounded-lg overflow-hidden"
+            className="w-full h-[750px] rounded-lg overflow-hidden"
           />
           <p className="text-sm text-muted-foreground text-center">
             Showing {activitiesWithTracks.length} activit{activitiesWithTracks.length === 1 ? "y" : "ies"}

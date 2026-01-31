@@ -478,7 +478,7 @@ function DailyMapTab({ teamId }: { teamId: string }) {
 
         {/* Map */}
         {dailyLoading ? (
-          <Skeleton className="h-[500px] w-full rounded-lg" />
+          <Skeleton className="h-[750px] w-full rounded-lg" />
         ) : dailyActivities.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground border rounded-lg">
             No team activities on this date.
