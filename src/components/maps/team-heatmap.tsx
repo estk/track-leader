@@ -25,7 +25,7 @@ interface ActivityWithTrack {
 }
 
 const MAX_ACTIVITIES = 50;
-const POINT_SAMPLE_INTERVAL = 5; // Sample every Nth point for performance
+const POINT_SAMPLE_INTERVAL = 20; // Sample every Nth point - sparse enough that single tracks show as cool colors
 
 const DATE_RANGE_OPTIONS: { value: DateRange; label: string }[] = [
   { value: "7", label: "Last 7 days" },
@@ -204,49 +204,52 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
       });
 
       // Add heatmap layer with color gradient: blue -> green -> yellow -> orange -> red
+      // Tuned for activity tracks - single tracks show as cool colors, overlapping tracks show warmer
       map.current.addLayer({
         id: "heatmap-layer",
         type: "heatmap",
         source: "heatmap-data",
         paint: {
-          // Increase the heatmap weight based on frequency
-          "heatmap-weight": 1,
-          // Increase the heatmap color weight by zoom level
+          // Very low weight per point - only overlapping tracks from multiple activities show warm
+          "heatmap-weight": 0.3,
+          // Low intensity - requires many overlapping points for saturation
           "heatmap-intensity": [
             "interpolate",
             ["linear"],
             ["zoom"],
-            0, 1,
-            15, 3,
+            0, 0.2,
+            10, 0.4,
+            15, 0.7,
           ],
-          // Color gradient from blue (low) to red (high)
+          // Color gradient - shifted so single tracks appear blue/cyan
           "heatmap-color": [
             "interpolate",
             ["linear"],
             ["heatmap-density"],
-            0, "rgba(0, 0, 255, 0)",       // transparent blue (low density)
-            0.2, "rgba(0, 0, 255, 0.5)",   // blue
-            0.4, "rgba(0, 255, 0, 0.6)",   // green
-            0.6, "rgba(255, 255, 0, 0.7)", // yellow
-            0.8, "rgba(255, 165, 0, 0.8)", // orange
-            1, "rgba(255, 0, 0, 0.9)",     // red (high density)
+            0, "rgba(0, 0, 255, 0)",       // transparent (no density)
+            0.15, "rgba(65, 105, 225, 0.4)", // royal blue (single track)
+            0.35, "rgba(0, 191, 255, 0.5)", // deep sky blue (low overlap)
+            0.5, "rgba(0, 255, 127, 0.6)", // spring green (medium)
+            0.65, "rgba(255, 255, 0, 0.7)", // yellow (medium-high)
+            0.8, "rgba(255, 140, 0, 0.8)", // dark orange (high)
+            1, "rgba(255, 0, 0, 0.9)",     // red (many overlapping tracks)
           ],
-          // Adjust the heatmap radius by zoom level
+          // Small radius - tracks appear as thin lines rather than blobs
           "heatmap-radius": [
             "interpolate",
             ["linear"],
             ["zoom"],
-            0, 2,
-            10, 15,
-            15, 25,
+            0, 1,
+            10, 5,
+            15, 10,
           ],
-          // Transition from heatmap to circle layer at higher zoom
+          // Fade out at high zoom
           "heatmap-opacity": [
             "interpolate",
             ["linear"],
             ["zoom"],
             14, 1,
-            15, 0.5,
+            17, 0.3,
           ],
         },
       });
@@ -297,7 +300,7 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
 
       {loading ? (
         <div className="space-y-4">
-          <Skeleton className="h-[400px] w-full rounded-lg" />
+          <Skeleton className="h-[500px] w-full rounded-lg" />
           <p className="text-sm text-muted-foreground text-center">
             Loading activity tracks...
           </p>
@@ -310,7 +313,7 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
         <div className="space-y-2">
           <div
             ref={mapContainer}
-            className="w-full h-[400px] rounded-lg overflow-hidden"
+            className="w-full h-[500px] rounded-lg overflow-hidden"
           />
           <p className="text-sm text-muted-foreground text-center">
             Showing {activitiesWithTracks.length} activit{activitiesWithTracks.length === 1 ? "y" : "ies"}
