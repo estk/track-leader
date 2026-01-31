@@ -61,3 +61,6 @@ uploads
 test-results/
 playwright-report/
 playwright/.cache/
+# Auth state files (contain tokens, but keep .gitkeep)
+playwright/.auth/*
+!playwright/.auth/.gitkeep
