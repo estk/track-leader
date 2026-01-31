@@ -690,6 +690,13 @@ class ApiClient {
       throw new Error(error.error || `Request failed with status ${response.status}`);
     }
 
+    // Handle empty responses (204 No Content, or responses without JSON body)
+    const contentType = response.headers.get('content-type');
+    const contentLength = response.headers.get('content-length');
+    if (response.status === 204 || contentLength === '0' || !contentType?.includes('application/json')) {
+      return undefined as T;
+    }
+
     return response.json();
   }
 
