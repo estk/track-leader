@@ -37,7 +37,7 @@ export default async function Home() {
         </h1>
         <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
           Create segments, compete on your terms, and join a community of trail
-          enthusiasts. Track Leader puts you in control of how you compete.
+          enthusiasts. TRACKS.RS puts you in control of how you compete.
         </p>
         <div className="mt-10 flex items-center justify-center gap-4">
           <a

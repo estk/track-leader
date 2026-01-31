@@ -8,7 +8,7 @@ const faqs = [
   {
     question: "What file formats are supported?",
     answer:
-      "Track Leader currently supports GPX files, which can be exported from most GPS devices and fitness apps including Garmin, Strava, and Apple Watch.",
+      "TRACKS.RS currently supports GPX files, which can be exported from most GPS devices and fitness apps including Garmin, Strava, and Apple Watch.",
   },
   {
     question: "How are segments matched to activities?",
@@ -36,9 +36,9 @@ const faqs = [
       "Open any of your activities, click 'Create Segment', then click on the elevation profile to select start and end points. Give it a name and submit. The segment will be available for everyone to compete on.",
   },
   {
-    question: "Is Track Leader free?",
+    question: "Is TRACKS.RS free?",
     answer:
-      "Yes, Track Leader is completely free to use. We believe in open competition and community-driven leaderboards without paywalls.",
+      "Yes, TRACKS.RS is completely free to use. We believe in open competition and community-driven leaderboards without paywalls.",
   },
   {
     question: "How accurate is segment timing?",
@@ -57,7 +57,7 @@ export function FAQ() {
           Frequently Asked Questions
         </h2>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-          Everything you need to know about Track Leader.
+          Everything you need to know about TRACKS.RS.
         </p>
       </div>
       <div className="max-w-3xl mx-auto">

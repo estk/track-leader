@@ -25,10 +25,11 @@ export function Header() {
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <Link
           href="/"
-          className="text-xl font-bold text-primary"
-          aria-label="Track Leader - Home"
+          className="font-[family-name:var(--font-orbitron)] font-black tracking-tight"
+          aria-label="TRACKS.RS - Home"
         >
-          Track Leader
+          <span className="text-xl text-foreground">TRACKS</span>
+          <span className="text-sm text-primary align-super font-bold">.RS</span>
         </Link>
 
         {/* Desktop nav */}

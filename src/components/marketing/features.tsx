@@ -68,7 +68,7 @@ export function Features() {
           Everything You Need to Compete
         </h2>
         <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-          Track Leader gives you the tools to create, compete, and connect with
+          TRACKS.RS gives you the tools to create, compete, and connect with
           trail athletes worldwide.
         </p>
       </div>
