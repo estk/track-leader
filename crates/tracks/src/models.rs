@@ -62,6 +62,10 @@ pub struct Activity {
     pub activity_type_id: Uuid,
     pub name: String,
     pub object_store_path: String,
+    /// When the activity actually occurred (from GPX track data)
+    #[serde(with = "rfc3339")]
+    pub started_at: OffsetDateTime,
+    /// When the activity was uploaded to the system
     #[serde(with = "rfc3339")]
     pub submitted_at: OffsetDateTime,
     pub visibility: String,

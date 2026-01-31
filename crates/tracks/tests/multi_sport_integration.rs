@@ -99,13 +99,15 @@ async fn cleanup_test_data(pool: &PgPool, user_id: Uuid) {
 
 /// Helper to create a simple single-sport activity.
 async fn create_single_sport_activity(db: &Database, user_id: Uuid) -> Activity {
+    let now = OffsetDateTime::now_utc();
     let activity = Activity {
         id: Uuid::new_v4(),
         user_id,
         activity_type_id: builtin_types::RUN,
         name: "Morning Run".to_string(),
         object_store_path: format!("test/{}.gpx", Uuid::new_v4()),
-        submitted_at: OffsetDateTime::now_utc(),
+        started_at: now,
+        submitted_at: now,
         visibility: Visibility::Public.as_str().to_string(),
         type_boundaries: None,
         segment_types: None,
@@ -123,13 +125,15 @@ async fn create_multi_sport_activity(
     boundaries: Vec<OffsetDateTime>,
     segment_types: Vec<Uuid>,
 ) -> Activity {
+    let now = OffsetDateTime::now_utc();
     let activity = Activity {
         id: Uuid::new_v4(),
         user_id,
         activity_type_id: segment_types[0], // Primary type is first segment
         name: "Multi-Sport Adventure".to_string(),
         object_store_path: format!("test/{}.gpx", Uuid::new_v4()),
-        submitted_at: OffsetDateTime::now_utc(),
+        started_at: now,
+        submitted_at: now,
         visibility: Visibility::Public.as_str().to_string(),
         type_boundaries: Some(boundaries),
         segment_types: Some(segment_types),
@@ -265,13 +269,15 @@ async fn test_single_sport_activity_with_builtin_types() {
     ];
 
     for (type_id, type_name) in types_to_test {
+        let now = OffsetDateTime::now_utc();
         let activity = Activity {
             id: Uuid::new_v4(),
             user_id,
             activity_type_id: type_id,
             name: format!("{type_name} activity"),
             object_store_path: format!("test/{}.gpx", Uuid::new_v4()),
-            submitted_at: OffsetDateTime::now_utc(),
+            started_at: now,
+            submitted_at: now,
             visibility: Visibility::Public.as_str().to_string(),
             type_boundaries: None,
             segment_types: None,
@@ -409,13 +415,15 @@ async fn test_create_custom_activity_type() {
     assert_eq!(custom_type.created_by, Some(user_id));
 
     // Verify we can use it in an activity
+    let now = OffsetDateTime::now_utc();
     let activity = Activity {
         id: Uuid::new_v4(),
         user_id,
         activity_type_id: custom_type.id,
         name: "Custom Type Activity".to_string(),
         object_store_path: format!("test/{}.gpx", Uuid::new_v4()),
-        submitted_at: OffsetDateTime::now_utc(),
+        started_at: now,
+        submitted_at: now,
         visibility: Visibility::Public.as_str().to_string(),
         type_boundaries: None,
         segment_types: None,
@@ -783,13 +791,15 @@ async fn test_activity_with_empty_arrays() {
 
     // Edge case: what happens with empty arrays?
     // This shouldn't happen in practice but let's verify behavior
+    let now = OffsetDateTime::now_utc();
     let activity = Activity {
         id: Uuid::new_v4(),
         user_id,
         activity_type_id: builtin_types::RUN,
         name: "Empty Arrays Test".to_string(),
         object_store_path: format!("test/{}.gpx", Uuid::new_v4()),
-        submitted_at: OffsetDateTime::now_utc(),
+        started_at: now,
+        submitted_at: now,
         visibility: Visibility::Public.as_str().to_string(),
         type_boundaries: Some(vec![]), // Empty but present
         segment_types: Some(vec![]),   // Empty but present

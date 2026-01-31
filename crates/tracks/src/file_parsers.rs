@@ -58,6 +58,13 @@ pub struct ParsedActivity {
     pub sensor_data: SensorData,
 }
 
+impl ParsedActivity {
+    /// Get the timestamp when the activity started (first track point with a timestamp)
+    pub fn started_at(&self) -> Option<OffsetDateTime> {
+        self.track_points.iter().find_map(|pt| pt.timestamp)
+    }
+}
+
 /// Error type for parsing failures
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {

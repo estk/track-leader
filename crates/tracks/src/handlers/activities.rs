@@ -17,6 +17,7 @@ use crate::{
     auth::{AuthUser, OptionalAuthUser},
     database::Database,
     errors::AppError,
+    file_parsers::parse_activity_file,
     models::{Activity, ActivitySortBy, DateRangeFilter, FeedActivity, VisibilityFilter},
     object_store_service::{FileType, ObjectStoreService},
 };
@@ -209,12 +210,20 @@ pub async fn new_activity(
             .collect()
     });
 
+    // Parse the activity file to extract the start time from track data
+    let now = time::OffsetDateTime::now_utc();
+    let started_at = parse_activity_file(file_type, file_bytes.clone())
+        .ok()
+        .and_then(|parsed| parsed.started_at())
+        .unwrap_or(now);
+
     let activity = Activity {
         id: Uuid::new_v4(),
         user_id,
         name,
         activity_type_id,
-        submitted_at: time::UtcDateTime::now().to_offset(time::UtcOffset::UTC),
+        started_at,
+        submitted_at: now,
         object_store_path,
         visibility: params.visibility.unwrap_or_else(|| "public".to_string()),
         type_boundaries,

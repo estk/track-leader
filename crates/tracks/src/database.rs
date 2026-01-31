@@ -37,9 +37,9 @@ impl Database {
         sqlx::query(
             r#"
             INSERT INTO activities (id, user_id, activity_type_id, name,
-                                    object_store_path, submitted_at, visibility,
+                                    object_store_path, started_at, submitted_at, visibility,
                                     type_boundaries, segment_types)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
         )
         .bind(activity.id)
@@ -47,6 +47,7 @@ impl Database {
         .bind(activity.activity_type_id)
         .bind(&activity.name)
         .bind(&activity.object_store_path)
+        .bind(activity.started_at)
         .bind(activity.submitted_at)
         .bind(&activity.visibility)
         .bind(&activity.type_boundaries)
@@ -194,7 +195,7 @@ impl Database {
         let activity = sqlx::query_as(
             r#"
             SELECT id, user_id, activity_type_id, name, object_store_path,
-                   submitted_at, visibility, type_boundaries, segment_types
+                   started_at, submitted_at, visibility, type_boundaries, segment_types
             FROM activities
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -297,7 +298,7 @@ impl Database {
         let query = format!(
             r#"
             SELECT a.id, a.user_id, a.activity_type_id, a.name, a.object_store_path,
-                   a.submitted_at, a.visibility, a.type_boundaries, a.segment_types
+                   a.started_at, a.submitted_at, a.visibility, a.type_boundaries, a.segment_types
             FROM activities a
             LEFT JOIN scores s ON s.activity_id = a.id
             {where_clause}
@@ -355,7 +356,7 @@ impl Database {
                 visibility = COALESCE($4, visibility)
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING id, user_id, activity_type_id, name, object_store_path,
-                      submitted_at, visibility, type_boundaries, segment_types
+                      started_at, submitted_at, visibility, type_boundaries, segment_types
             "#,
         )
         .bind(id)
@@ -3254,10 +3255,10 @@ impl Database {
                     FROM activities a
                     JOIN users u ON a.user_id = u.id
                     LEFT JOIN scores s ON a.id = s.activity_id
-                    WHERE DATE(a.submitted_at) = $1
+                    WHERE DATE(COALESCE(a.started_at, a.submitted_at)) = $1
                     AND a.user_id = $2
                     AND a.deleted_at IS NULL
-                    ORDER BY a.submitted_at DESC
+                    ORDER BY COALESCE(a.started_at, a.submitted_at) DESC
                     LIMIT $3 OFFSET $4
                     "#,
                 )
@@ -3288,7 +3289,7 @@ impl Database {
                     FROM activities a
                     JOIN users u ON a.user_id = u.id
                     LEFT JOIN scores s ON a.id = s.activity_id
-                    WHERE DATE(a.submitted_at) = $1
+                    WHERE DATE(COALESCE(a.started_at, a.submitted_at)) = $1
                     AND a.deleted_at IS NULL
                     AND (
                         a.visibility = 'public'
@@ -3299,7 +3300,7 @@ impl Database {
                             WHERE at.activity_id = a.id AND tm.user_id = $2
                         ))
                     )
-                    ORDER BY a.submitted_at DESC
+                    ORDER BY COALESCE(a.started_at, a.submitted_at) DESC
                     LIMIT $3 OFFSET $4
                     "#,
                 )
@@ -3330,10 +3331,10 @@ impl Database {
                     FROM activities a
                     JOIN users u ON a.user_id = u.id
                     LEFT JOIN scores s ON a.id = s.activity_id
-                    WHERE DATE(a.submitted_at) = $1
+                    WHERE DATE(COALESCE(a.started_at, a.submitted_at)) = $1
                     AND a.visibility = 'public'
                     AND a.deleted_at IS NULL
-                    ORDER BY a.submitted_at DESC
+                    ORDER BY COALESCE(a.started_at, a.submitted_at) DESC
                     LIMIT $2 OFFSET $3
                     "#,
                 )
@@ -4655,9 +4656,9 @@ impl Database {
             JOIN users u ON a.user_id = u.id
             LEFT JOIN scores s ON a.id = s.activity_id
             WHERE at.team_id = $1
-            AND DATE(a.submitted_at) = $2
+            AND DATE(COALESCE(a.started_at, a.submitted_at)) = $2
             AND a.deleted_at IS NULL
-            ORDER BY a.submitted_at DESC
+            ORDER BY COALESCE(a.started_at, a.submitted_at) DESC
             LIMIT $3 OFFSET $4
             "#,
         )
