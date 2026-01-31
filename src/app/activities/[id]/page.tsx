@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName, DigTimeSummary, DigSegment, SensorData } from "@/lib/api";
@@ -13,7 +13,36 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LazyActivityMap } from "@/components/activity/lazy-activity-map";
 import { LazyElevationProfile } from "@/components/activity/lazy-elevation-profile";
+import { MultiRangeSegment } from "@/components/activity/elevation-profile";
 import { Textarea } from "@/components/ui/textarea";
+
+// Convert type_boundaries array format [year, ordinal_day, hour, min, sec, nano...] to Date
+function typeBoundaryToDate(boundary: number[]): Date | null {
+  if (!boundary || boundary.length < 5) return null;
+  const [year, ordinalDay, hour, minute, second] = boundary;
+  // Create date from year and ordinal day
+  const date = new Date(Date.UTC(year, 0, ordinalDay, hour, minute, second));
+  return date;
+}
+
+// Find the point index closest to a given timestamp
+function findPointIndexByTime(points: TrackPoint[], targetDate: Date): number {
+  const targetTime = targetDate.getTime();
+  let closestIndex = 0;
+  let closestDiff = Infinity;
+
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    if (!point.time) continue;
+    const pointTime = new Date(point.time).getTime();
+    const diff = Math.abs(pointTime - targetTime);
+    if (diff < closestDiff) {
+      closestDiff = diff;
+      closestIndex = i;
+    }
+  }
+  return closestIndex;
+}
 
 interface ClimbCategoryInfo {
   label: string;
@@ -97,6 +126,59 @@ export default function ActivityDetailPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const activityId = params.id as string;
+
+  // Build multi-sport segments from activity type_boundaries and segment_types
+  const multiRangeSegments = useMemo((): MultiRangeSegment[] => {
+    if (!activity?.type_boundaries || !activity?.segment_types || !trackData?.points) {
+      return [];
+    }
+
+    const segmentTypes = activity.segment_types;
+
+    if (activity.type_boundaries.length === 0 || segmentTypes.length === 0) {
+      return [];
+    }
+
+    // Verify we have the expected number of segment types (boundaries - 1)
+    const expectedSegments = activity.type_boundaries.length - 1;
+    if (segmentTypes.length < expectedSegments) {
+      console.warn(`Multi-sport data mismatch: ${activity.type_boundaries.length} boundaries but only ${segmentTypes.length} segment types`);
+    }
+
+    // type_boundaries can be either number[][] (from Rust OffsetDateTime) or string[] (ISO8601)
+    // Handle both formats
+    const boundaryIndices = activity.type_boundaries.map((b, idx) => {
+      let date: Date | null = null;
+      if (Array.isArray(b)) {
+        // Rust OffsetDateTime format: [year, ordinal_day, hour, min, sec, ...]
+        date = typeBoundaryToDate(b as unknown as number[]);
+      } else if (typeof b === 'string') {
+        // ISO8601 string format
+        date = new Date(b);
+      }
+      if (!date || isNaN(date.getTime())) {
+        console.warn(`Failed to parse boundary ${idx}:`, b);
+        return 0;
+      }
+      const pointIdx = findPointIndexByTime(trackData.points, date);
+      return pointIdx;
+    });
+
+    // Build segments: boundaries define the edges, segment_types define the type of each segment
+    // boundaries = [start, b1, b2, ..., end] -> n+1 boundaries for n segments
+    const segments: MultiRangeSegment[] = [];
+    for (let i = 0; i < boundaryIndices.length - 1; i++) {
+      segments.push({
+        startIndex: boundaryIndices[i],
+        endIndex: boundaryIndices[i + 1],
+        activityTypeId: segmentTypes[i] || activity.activity_type_id,
+      });
+    }
+
+    return segments;
+  }, [activity, trackData]);
+
+  const isMultiSport = multiRangeSegments.length > 1;
 
   useEffect(() => {
     // Wait for auth to finish loading before making requests
@@ -655,6 +737,8 @@ export default function ActivityDetailPage() {
             selectionStart={segmentStart}
             selectionEnd={segmentEnd}
             onPointClick={handleSegmentPointClick}
+            multiRangeMode={isMultiSport}
+            segments={multiRangeSegments}
           />
         </CardContent>
       </Card>

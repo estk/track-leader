@@ -79,10 +79,11 @@ export interface Activity {
   activity_type_id: string;
   name: string;
   object_store_path: string;
-  submitted_at: string;
+  started_at: string;       // When the activity actually occurred (from GPX track data)
+  submitted_at: string;     // When the activity was uploaded to the system
   visibility: ActivityVisibility;
   // Multi-sport support
-  type_boundaries: string[] | null;  // ISO8601 timestamps
+  type_boundaries: (string | number[])[] | null;  // ISO8601 timestamps or Rust OffsetDateTime arrays
   segment_types: string[] | null;     // Activity type UUIDs
 }
 

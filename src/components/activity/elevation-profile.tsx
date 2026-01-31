@@ -368,15 +368,17 @@ export function ElevationProfile({
             fill="url(#elevationGradient)"
             strokeWidth={2}
           />
-          {/* Multi-range segment backgrounds - subtle tint over the elevation area */}
+          {/* Multi-range segment backgrounds - colored tint over the elevation area */}
           {segmentDistances?.map((seg, idx) => (
             <ReferenceArea
               key={`segment-${idx}`}
               x1={seg.startDistance}
               x2={seg.endDistance}
               fill={seg.color}
-              fillOpacity={0.15}
-              stroke="none"
+              fillOpacity={0.3}
+              stroke={seg.color}
+              strokeOpacity={0.6}
+              strokeWidth={1}
             />
           ))}
           {/* Multi-range boundary lines */}

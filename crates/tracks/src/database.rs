@@ -2726,23 +2726,22 @@ impl Database {
         // Start at index 3 since $1 and $2 are used for LIMIT and OFFSET
         let mut qb = QueryBuilder::with_start_index(3);
 
-        // Time scope filter
+        // Time scope filter on scores.created_at
         match scope {
             LeaderboardScope::AllTime => {}
             LeaderboardScope::Year => {
-                qb.add_condition("se.started_at >= NOW() - INTERVAL '1 year'");
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '1 year'");
             }
             LeaderboardScope::Month => {
-                qb.add_condition("se.started_at >= NOW() - INTERVAL '1 month'");
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '1 month'");
             }
             LeaderboardScope::Week => {
-                qb.add_condition("se.started_at >= NOW() - INTERVAL '7 days'");
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '7 days'");
             }
         }
 
-        // Only include segment efforts with valid speed
-        qb.add_condition("se.average_speed_mps IS NOT NULL");
-        qb.add_condition("se.average_speed_mps > 0");
+        // Only include activities with valid duration
+        qb.add_condition("sc.duration > 0");
 
         // Gender filter
         match gender {
@@ -2794,23 +2793,24 @@ impl Database {
 
         // Join with team_memberships if team filter is applied
         let team_join = if team_id.is_some() {
-            "JOIN team_memberships tm ON tm.user_id = se.user_id"
+            "JOIN team_memberships tm ON tm.user_id = sc.user_id"
         } else {
             ""
         };
 
+        // Calculate average speed as total_distance / total_duration (weighted average)
         let query = format!(
             r#"
             WITH speed_totals AS (
                 SELECT
-                    se.user_id,
-                    AVG(se.average_speed_mps) as average_speed_mps,
+                    sc.user_id,
+                    SUM(sc.distance) / NULLIF(SUM(sc.duration), 0) as average_speed_mps,
                     COUNT(*) as activity_count
-                FROM segment_efforts se
-                JOIN users u ON u.id = se.user_id
+                FROM scores sc
+                JOIN users u ON u.id = sc.user_id
                 {team_join}
                 {where_clause}
-                GROUP BY se.user_id
+                GROUP BY sc.user_id
             )
             SELECT
                 st.user_id,
@@ -2820,6 +2820,7 @@ impl Database {
                 ROW_NUMBER() OVER (ORDER BY st.average_speed_mps DESC) as rank
             FROM speed_totals st
             JOIN users u ON u.id = st.user_id
+            WHERE st.average_speed_mps IS NOT NULL
             ORDER BY rank
             LIMIT $1 OFFSET $2
             "#

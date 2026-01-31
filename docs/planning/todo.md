@@ -1,6 +1,6 @@
 # Todo
 
-## Filter Implementation
+- Simplify activity types when there are two adjacent activitys of the same type
 
 ### Current State
 
