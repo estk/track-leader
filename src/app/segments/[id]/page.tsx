@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LazyActivityMap } from "@/components/activity/lazy-activity-map";
-import { ElevationProfile } from "@/components/activity/elevation-profile";
+import { LazyElevationProfile } from "@/components/activity/lazy-elevation-profile";
 import dynamic from "next/dynamic";
 import { getClimbCategoryInfo } from "@/lib/utils";
 
@@ -229,7 +229,7 @@ export default function SegmentDetailPage() {
             <CardTitle>Elevation Profile</CardTitle>
           </CardHeader>
           <CardContent>
-            <ElevationProfile
+            <LazyElevationProfile
               points={convertedTrackData.points}
               onHover={setHighlightIndex}
             />

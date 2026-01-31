@@ -2826,10 +2826,9 @@ impl Database {
             "#
         );
 
-        let mut query_builder =
-            sqlx::query_as::<_, crate::models::AverageSpeedLeaderEntry>(&query)
-                .bind(limit)
-                .bind(offset);
+        let mut query_builder = sqlx::query_as::<_, crate::models::AverageSpeedLeaderEntry>(&query)
+            .bind(limit)
+            .bind(offset);
 
         // Bind optional parameters in the order they were added
         if let Some(c) = country {
@@ -4674,7 +4673,10 @@ impl Database {
     }
 
     /// Get team names for an activity (for teams_only visibility display).
-    pub async fn get_activity_team_names(&self, activity_id: Uuid) -> Result<Vec<String>, AppError> {
+    pub async fn get_activity_team_names(
+        &self,
+        activity_id: Uuid,
+    ) -> Result<Vec<String>, AppError> {
         let names: Vec<(String,)> = sqlx::query_as(
             r#"
             SELECT t.name
@@ -4792,8 +4794,7 @@ impl Database {
 
         if stopped_segments.len() != stopped_segment_ids.len() {
             return Err(AppError::InvalidInput(
-                "Some stopped segment IDs are invalid or don't belong to this activity"
-                    .to_string(),
+                "Some stopped segment IDs are invalid or don't belong to this activity".to_string(),
             ));
         }
 

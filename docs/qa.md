@@ -137,5 +137,41 @@ Comprehensive browser testing of all site features. **All issues resolved.**
 
 ## Recommendations
 
-1. **Priority 1:** Consider adding error tracking/logging for production monitoring
-2. **Priority 2:** Investigate why lazy-loading ElevationProfile causes webpack issues (low priority, workaround in place)
+1. ~~**Priority 1:** Consider adding error tracking/logging for production monitoring~~ **IMPLEMENTED**
+2. ~~**Priority 2:** Investigate why lazy-loading ElevationProfile causes webpack issues~~ **FIXED**
+
+## Implemented Improvements (2026-01-31)
+
+### Error Tracking/Logging
+
+**Backend:**
+- Added request ID middleware to Axum (`crates/tracks/src/request_id.rs`)
+- Each request gets a UUID (or uses client-provided `X-Request-ID`)
+- Request ID included in all tracing spans for correlation
+- Request ID returned in `X-Request-ID` response header
+
+**Frontend:**
+- Updated `src/app/error.tsx` with structured JSON error logging
+- Created `src/app/global-error.tsx` for root-level error catching
+- Enhanced `src/lib/api.ts` to log API errors with:
+  - Request ID from response headers
+  - Request method, path, status code
+  - Response timing
+  - Structured JSON format for log aggregators
+
+### Lazy-Loading Fix
+
+**Root Cause:** Recharts v3.x uses ES6 modules as primary entry point. Next.js webpack treats dynamically imported chunks differently, causing ES6/CommonJS interop failures.
+
+**Solution:**
+- Added `transpilePackages: ['recharts']` to `next.config.js`
+- Forces Next.js to transpile recharts ES6 modules for webpack compatibility
+- Reverted segment page to use `LazyElevationProfile` (proper lazy loading now works)
+
+### Verification
+
+To verify these changes work:
+
+1. **Request ID:** Check any API response for `X-Request-ID` header
+2. **Error Logging:** Trigger an API error (e.g., 404) and check browser console for `[API_ERROR]` JSON
+3. **Lazy Loading:** Navigate to `/segments/[id]` - page loads without crash, elevation profile appears after initial load

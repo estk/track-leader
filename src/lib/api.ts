@@ -715,13 +715,27 @@ class ApiClient {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
 
+    const startTime = performance.now();
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers,
     });
+    const duration = performance.now() - startTime;
+    const requestId = response.headers.get('x-request-id');
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      // Log structured API error for monitoring
+      console.error('[API_ERROR]', JSON.stringify({
+        type: 'api_error',
+        timestamp: new Date().toISOString(),
+        request_id: requestId,
+        method: options.method || 'GET',
+        path,
+        status: response.status,
+        duration_ms: Math.round(duration),
+        error: error.error || 'Unknown error',
+      }));
       throw new Error(error.error || `Request failed with status ${response.status}`);
     }
 

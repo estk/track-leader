@@ -8,6 +8,7 @@ pub mod handlers;
 pub mod models;
 pub mod object_store_service;
 pub mod query_builder;
+pub mod request_id;
 pub mod scoring;
 pub mod segment_matching;
 pub mod types;
@@ -15,6 +16,7 @@ pub mod types;
 use axum::{
     Extension, Router,
     http::{HeaderValue, Method, header},
+    middleware,
     routing::{get, post},
 };
 use sqlx::PgPool;
@@ -23,6 +25,8 @@ use tower_http::{
     cors::{Any, CorsLayer},
     set_header::SetResponseHeaderLayer,
 };
+
+use crate::request_id::request_id_middleware;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -35,25 +39,24 @@ use crate::{
         create_dig_segments, create_segment, create_team, delete_activity, delete_comment,
         delete_dig_segment, delete_team, discover_teams, download_gpx_file, follow_user,
         get_activities_by_date, get_activity, get_activity_segments, get_activity_sensor_data,
-        get_activity_teams, get_activity_track, get_activity_type, get_comments, get_countries,
-        get_average_speed_leaderboard, get_crown_leaderboard, get_dig_percentage_leaderboard,
-        get_dig_segments, get_dig_time, get_dig_time_leaderboard, get_distance_leaderboard, get_feed,
-        get_filtered_leaderboard, get_follow_status, get_followers, get_following, get_invitation,
-        get_join_requests, get_kudos_givers, get_kudos_status, get_leaderboard_position,
-        get_my_achievements, get_my_demographics, get_my_segment_efforts, get_nearby_segments,
-        get_notifications, get_segment, get_segment_achievements, get_segment_leaderboard,
-        get_segment_teams, get_segment_track, get_starred_segment_efforts, get_starred_segments,
-        get_stats, get_stopped_segments, get_team, get_team_activities, get_team_activities_by_date,
-        get_team_leaderboard,
-        get_team_invitations, get_team_segments, get_user_achievements, get_user_activities,
-        get_user_profile, give_kudos, health_check, invite_to_team, is_segment_starred, join_team,
-        leave_team, list_activity_types, list_my_teams, list_segments, list_team_members,
-        mark_all_notifications_read, mark_notification_read, new_activity, new_user,
-        preview_segment, remove_kudos, remove_team_member, reprocess_segment,
-        resolve_activity_type, review_join_request, revoke_invitation, share_activity_with_teams,
-        share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team,
-        unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics,
-        update_team,
+        get_activity_teams, get_activity_track, get_activity_type, get_average_speed_leaderboard,
+        get_comments, get_countries, get_crown_leaderboard, get_dig_percentage_leaderboard,
+        get_dig_segments, get_dig_time, get_dig_time_leaderboard, get_distance_leaderboard,
+        get_feed, get_filtered_leaderboard, get_follow_status, get_followers, get_following,
+        get_invitation, get_join_requests, get_kudos_givers, get_kudos_status,
+        get_leaderboard_position, get_my_achievements, get_my_demographics, get_my_segment_efforts,
+        get_nearby_segments, get_notifications, get_segment, get_segment_achievements,
+        get_segment_leaderboard, get_segment_teams, get_segment_track, get_starred_segment_efforts,
+        get_starred_segments, get_stats, get_stopped_segments, get_team, get_team_activities,
+        get_team_activities_by_date, get_team_invitations, get_team_leaderboard, get_team_segments,
+        get_user_achievements, get_user_activities, get_user_profile, give_kudos, health_check,
+        invite_to_team, is_segment_starred, join_team, leave_team, list_activity_types,
+        list_my_teams, list_segments, list_team_members, mark_all_notifications_read,
+        mark_notification_read, new_activity, new_user, preview_segment, remove_kudos,
+        remove_team_member, reprocess_segment, resolve_activity_type, review_join_request,
+        revoke_invitation, share_activity_with_teams, share_segment_with_teams, star_segment,
+        unfollow_user, unshare_activity_from_team, unshare_segment_from_team, unstar_segment,
+        update_activity, update_my_demographics, update_team,
     },
     object_store_service::ObjectStoreService,
 };
@@ -403,7 +406,10 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             "/activities/{activity_id}/dig-segments/{segment_id}",
             axum::routing::delete(delete_dig_segment),
         )
-        .route("/activities/{id}/sensor-data", get(get_activity_sensor_data))
+        .route(
+            "/activities/{id}/sensor-data",
+            get(get_activity_sensor_data),
+        )
         .route("/users/{id}/activities", get(get_user_activities))
         // User demographics routes
         .route(
@@ -559,6 +565,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .layer(Extension(aq))
         .layer(cors)
         .layer(CompressionLayer::new())
+        .layer(middleware::from_fn(request_id_middleware))
         // Security headers
         .layer(SetResponseHeaderLayer::overriding(
             header::X_CONTENT_TYPE_OPTIONS,
@@ -587,7 +594,10 @@ pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> a
     // Recover orphaned activities (uploaded but not processed due to restart)
     match db.find_orphaned_activities().await {
         Ok(orphaned) if !orphaned.is_empty() => {
-            tracing::info!(count = orphaned.len(), "Found orphaned activities, reprocessing");
+            tracing::info!(
+                count = orphaned.len(),
+                "Found orphaned activities, reprocessing"
+            );
             for activity in orphaned {
                 if let Err(e) = aq.reprocess_orphaned(activity, &store).await {
                     tracing::error!("Failed to reprocess orphaned activity: {e}");

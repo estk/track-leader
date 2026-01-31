@@ -6,6 +6,8 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 const nextConfig = {
   // Enable standalone output for Docker deployment
   output: "standalone",
+  // Transpile recharts to fix ES6 module loading in dynamic imports
+  transpilePackages: ["recharts"],
 
   async rewrites() {
     // BACKEND_URL takes precedence (for Docker), otherwise use BACKEND_PORT with localhost

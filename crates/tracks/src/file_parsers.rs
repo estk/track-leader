@@ -80,7 +80,10 @@ pub enum ParseError {
 
 /// Parse an activity file based on its detected type.
 /// For FileType::Other, attempts to detect the format from the bytes.
-pub fn parse_activity_file(file_type: FileType, bytes: Bytes) -> Result<ParsedActivity, ParseError> {
+pub fn parse_activity_file(
+    file_type: FileType,
+    bytes: Bytes,
+) -> Result<ParsedActivity, ParseError> {
     // If type is Other, try to detect from bytes
     let actual_type = if file_type == FileType::Other {
         FileType::detect_from_bytes(&bytes)
@@ -203,10 +206,7 @@ pub fn parse_tcx(bytes: Bytes) -> Result<ParsedActivity, ParseError> {
                         });
 
                         // Extract sensor data
-                        let hr = trackpoint
-                            .heart_rate
-                            .as_ref()
-                            .map(|h| h.value as i32);
+                        let hr = trackpoint.heart_rate.as_ref().map(|h| h.value as i32);
                         let cad = trackpoint.cadence.map(|c| c as i32);
 
                         sensor_data.heart_rates.push(hr);

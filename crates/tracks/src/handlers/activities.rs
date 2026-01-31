@@ -841,7 +841,10 @@ pub async fn get_activity_sensor_data(
     let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
 
     // Check visibility - public activities are visible to all, private only to owner
-    let is_owner = user.as_ref().map(|u| u.sub == activity.user_id).unwrap_or(false);
+    let is_owner = user
+        .as_ref()
+        .map(|u| u.sub == activity.user_id)
+        .unwrap_or(false);
 
     if activity.visibility != "public" && !is_owner {
         // Check if user has team access
