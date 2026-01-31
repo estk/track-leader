@@ -11,6 +11,8 @@ COPY crates/tracks/Cargo.toml crates/tracks/Cargo.lock ./crates/tracks/
 RUN mkdir -p crates/tracks/src && echo "fn main() {}" > crates/tracks/src/main.rs
 
 # Build dependencies (this will be cached)
+# SQLX_OFFLINE enables compile-time query checking without a live database
+ENV SQLX_OFFLINE=true
 RUN cargo build --release -p tracks
 
 # Remove dummy main.rs and copy actual source
@@ -31,6 +33,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

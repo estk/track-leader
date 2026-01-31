@@ -1,0 +1,101 @@
+# Production Docker Compose for Supabase + VPS deployment
+# Usage: docker compose -f docker-compose.supabase.yml up -d
+#
+# Prerequisites:
+#   1. Run scripts/supabase-setup.sql in Supabase SQL Editor
+#   2. Create .env.production with your secrets
+#   3. Domain pointing to your VPS IP
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: crates/tracks/Dockerfile
+    container_name: tracks_backend
+    environment:
+      # Supabase connection string (from Supabase dashboard > Settings > Database)
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      OBJECT_STORE_PATH: /app/uploads
+      PORT: 3001
+      RUST_LOG: ${RUST_LOG:-info}
+      PASETO_KEY: ${PASETO_KEY:?PASETO_KEY is required}
+      # Connection pool - keep low for Supabase free tier (max ~60 connections)
+      DATABASE_MAX_CONNECTIONS: ${DATABASE_MAX_CONNECTIONS:-10}
+      DATABASE_MIN_CONNECTIONS: ${DATABASE_MIN_CONNECTIONS:-2}
+    volumes:
+      - uploads_data:/app/uploads
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        # Build-time env vars for Next.js
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    container_name: tracks_frontend
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:3001
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: tracks_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    restart: always
+    networks:
+      - internal
+
+volumes:
+  uploads_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  internal:
+    name: tracks_network

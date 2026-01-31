@@ -1,0 +1,43 @@
+# Caddyfile - Automatic HTTPS reverse proxy for Track Leader
+#
+# Replace {$DOMAIN} with your actual domain or set DOMAIN env var.
+# Caddy automatically obtains and renews Let's Encrypt certificates.
+
+{$DOMAIN:localhost} {
+    # API routes -> Rust backend
+    handle /api/* {
+        reverse_proxy backend:3001
+    }
+
+    # Health check endpoint (useful for load balancers)
+    handle /health {
+        reverse_proxy backend:3001
+    }
+
+    # Everything else -> Next.js frontend
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    # Compression
+    encode gzip zstd
+
+    # Security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+        # XSS protection
+        X-Content-Type-Options "nosniff"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server identification
+        -Server
+    }
+
+    # Logging
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}
