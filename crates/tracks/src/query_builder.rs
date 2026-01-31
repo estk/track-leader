@@ -34,6 +34,15 @@ impl QueryBuilder {
         }
     }
 
+    /// Creates a new query builder with a custom starting parameter index.
+    /// Use this when earlier parameters are reserved (e.g., for LIMIT/OFFSET).
+    pub fn with_start_index(start_idx: usize) -> Self {
+        Self {
+            conditions: Vec::new(),
+            param_idx: start_idx,
+        }
+    }
+
     /// Adds a static condition (no parameter binding).
     pub fn add_condition(&mut self, condition: impl Into<String>) -> &mut Self {
         self.conditions.push(condition.into());

@@ -2154,7 +2154,8 @@ impl Database {
         activity_type_id: Option<Uuid>,
         team_id: Option<Uuid>,
     ) -> Result<Vec<CrownCountEntry>, AppError> {
-        let mut qb = QueryBuilder::new();
+        // Start at index 3 since $1 and $2 are used for LIMIT and OFFSET
+        let mut qb = QueryBuilder::with_start_index(3);
 
         // Base condition: only active crowns
         qb.add_condition("a.lost_at IS NULL");
@@ -2300,7 +2301,8 @@ impl Database {
         country: Option<&str>,
         team_id: Option<Uuid>,
     ) -> Result<Vec<DistanceLeaderEntry>, AppError> {
-        let mut qb = QueryBuilder::new();
+        // Start at index 3 since $1 and $2 are used for LIMIT and OFFSET
+        let mut qb = QueryBuilder::with_start_index(3);
 
         // Time scope filter on scores.created_at
         match scope {
@@ -2432,7 +2434,8 @@ impl Database {
         country: Option<&str>,
         team_id: Option<Uuid>,
     ) -> Result<Vec<crate::models::DigTimeLeaderEntry>, AppError> {
-        let mut qb = QueryBuilder::new();
+        // Start at index 3 since $1 and $2 are used for LIMIT and OFFSET
+        let mut qb = QueryBuilder::with_start_index(3);
 
         // Dig time is always weekly (last 7 days)
         qb.add_condition("ads.created_at >= NOW() - INTERVAL '7 days'");
@@ -2559,7 +2562,8 @@ impl Database {
     ) -> Result<Vec<crate::models::DigPercentageLeaderEntry>, AppError> {
         use crate::models::builtin_types;
 
-        let mut qb = QueryBuilder::new();
+        // Start at index 3 since $1 and $2 are used for LIMIT and OFFSET
+        let mut qb = QueryBuilder::with_start_index(3);
 
         // Time scope filter
         match scope {
@@ -2718,7 +2722,8 @@ impl Database {
         country: Option<&str>,
         team_id: Option<Uuid>,
     ) -> Result<Vec<crate::models::AverageSpeedLeaderEntry>, AppError> {
-        let mut qb = QueryBuilder::new();
+        // Start at index 3 since $1 and $2 are used for LIMIT and OFFSET
+        let mut qb = QueryBuilder::with_start_index(3);
 
         // Time scope filter
         match scope {
