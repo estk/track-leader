@@ -36,13 +36,15 @@ use crate::{
         delete_dig_segment, delete_team, discover_teams, download_gpx_file, follow_user,
         get_activities_by_date, get_activity, get_activity_segments, get_activity_sensor_data,
         get_activity_teams, get_activity_track, get_activity_type, get_comments, get_countries,
-        get_crown_leaderboard, get_dig_segments, get_dig_time, get_distance_leaderboard, get_feed,
+        get_average_speed_leaderboard, get_crown_leaderboard, get_dig_percentage_leaderboard,
+        get_dig_segments, get_dig_time, get_dig_time_leaderboard, get_distance_leaderboard, get_feed,
         get_filtered_leaderboard, get_follow_status, get_followers, get_following, get_invitation,
         get_join_requests, get_kudos_givers, get_kudos_status, get_leaderboard_position,
         get_my_achievements, get_my_demographics, get_my_segment_efforts, get_nearby_segments,
         get_notifications, get_segment, get_segment_achievements, get_segment_leaderboard,
         get_segment_teams, get_segment_track, get_starred_segment_efforts, get_starred_segments,
         get_stats, get_stopped_segments, get_team, get_team_activities, get_team_activities_by_date,
+        get_team_leaderboard,
         get_team_invitations, get_team_segments, get_user_achievements, get_user_activities,
         get_user_profile, give_kudos, health_check, invite_to_team, is_segment_starred, join_team,
         leave_team, list_activity_types, list_my_teams, list_segments, list_team_members,
@@ -135,6 +137,9 @@ use crate::{
         // Global leaderboards
         handlers::get_crown_leaderboard,
         handlers::get_distance_leaderboard,
+        handlers::get_dig_time_leaderboard,
+        handlers::get_dig_percentage_leaderboard,
+        handlers::get_average_speed_leaderboard,
         handlers::get_countries,
         // Social
         handlers::follow_user,
@@ -189,6 +194,7 @@ use crate::{
         handlers::get_team_activities,
         handlers::get_team_activities_by_date,
         handlers::get_team_segments,
+        handlers::get_team_leaderboard,
     ),
     components(
         schemas(
@@ -240,6 +246,10 @@ use crate::{
             // Global leaderboards
             models::CrownCountEntry,
             models::DistanceLeaderEntry,
+            models::LeaderboardType,
+            models::DigTimeLeaderEntry,
+            models::DigPercentageLeaderEntry,
+            models::AverageSpeedLeaderEntry,
             // Social types
             models::Follow,
             models::NotificationType,
@@ -320,6 +330,8 @@ use crate::{
             handlers::ReviewJoinRequestRequest,
             handlers::TeamContentQuery,
             handlers::TeamActivitiesByDateQuery,
+            handlers::TeamLeaderboardQuery,
+            handlers::TeamLeaderboardResponse,
         )
     ),
     security(
@@ -440,6 +452,15 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         // Global leaderboards
         .route("/leaderboards/crowns", get(get_crown_leaderboard))
         .route("/leaderboards/distance", get(get_distance_leaderboard))
+        .route("/leaderboards/dig-time", get(get_dig_time_leaderboard))
+        .route(
+            "/leaderboards/dig-percentage",
+            get(get_dig_percentage_leaderboard),
+        )
+        .route(
+            "/leaderboards/average-speed",
+            get(get_average_speed_leaderboard),
+        )
         .route("/leaderboards/countries", get(get_countries))
         // Social routes (follows)
         .route("/users/{id}/profile", get(get_user_profile))
@@ -506,6 +527,10 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             get(get_team_activities_by_date),
         )
         .route("/teams/{id}/segments", get(get_team_segments))
+        .route(
+            "/teams/{id}/leaderboard/{leaderboard_type}",
+            get(get_team_leaderboard),
+        )
         // Invitation acceptance (public route, token-based)
         .route("/invitations/{token}", get(get_invitation))
         .route("/invitations/{token}/accept", post(accept_invitation))

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { api, TeamWithMembership, TeamVisibility, TeamJoinPolicy } from "@/lib/api";
+import { api, TeamWithMembership, TeamVisibility, TeamJoinPolicy, LeaderboardType } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,6 +77,7 @@ export default function TeamSettingsPage() {
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<TeamVisibility>("private");
   const [joinPolicy, setJoinPolicy] = useState<TeamJoinPolicy>("invitation");
+  const [featuredLeaderboard, setFeaturedLeaderboard] = useState<LeaderboardType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -98,6 +99,7 @@ export default function TeamSettingsPage() {
         setDescription(t.description || "");
         setVisibility(t.visibility);
         setJoinPolicy(t.join_policy);
+        setFeaturedLeaderboard(t.featured_leaderboard || null);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -146,6 +148,7 @@ export default function TeamSettingsPage() {
         description: description.trim() || undefined,
         visibility,
         join_policy: joinPolicy,
+        featured_leaderboard: featuredLeaderboard || undefined,
       });
       setSuccess("Team settings saved successfully");
     } catch (err) {
@@ -219,6 +222,33 @@ export default function TeamSettingsPage() {
                   disabled={saving}
                 />
               </div>
+
+              {canDelete && (
+                <div className="space-y-2">
+                  <Label htmlFor="featured-leaderboard">Featured Leaderboard</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Choose a leaderboard to display prominently on the team page
+                  </p>
+                  <select
+                    id="featured-leaderboard"
+                    value={featuredLeaderboard || ""}
+                    onChange={(e) =>
+                      setFeaturedLeaderboard(
+                        e.target.value ? (e.target.value as LeaderboardType) : null
+                      )
+                    }
+                    disabled={saving}
+                    className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                  >
+                    <option value="">None</option>
+                    <option value="crowns">Crowns</option>
+                    <option value="distance">Distance</option>
+                    <option value="dig_time">Dig Time</option>
+                    <option value="dig_percentage">Dig Percentage</option>
+                    <option value="average_speed">Average Speed</option>
+                  </select>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <Label>Visibility</Label>

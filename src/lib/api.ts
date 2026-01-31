@@ -412,6 +412,34 @@ export interface DistanceLeaderEntry {
   rank: number;
 }
 
+// Leaderboard type enum
+export type LeaderboardType = 'crowns' | 'distance' | 'dig_time' | 'dig_percentage' | 'average_speed';
+
+export interface DigTimeLeaderEntry {
+  user_id: string;
+  user_name: string;
+  total_dig_time_seconds: number;
+  dig_segment_count: number;
+  rank: number;
+}
+
+export interface DigPercentageLeaderEntry {
+  user_id: string;
+  user_name: string;
+  dig_percentage: number;
+  total_dig_time_seconds: number;
+  total_activity_duration_seconds: number;
+  rank: number;
+}
+
+export interface AverageSpeedLeaderEntry {
+  user_id: string;
+  user_name: string;
+  average_speed_mps: number;
+  activity_count: number;
+  rank: number;
+}
+
 // Social types (follows, notifications)
 export interface UserProfile {
   id: string;
@@ -547,6 +575,7 @@ export interface Team {
   member_count: number;
   activity_count: number;
   segment_count: number;
+  featured_leaderboard: LeaderboardType | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -562,6 +591,7 @@ export interface TeamWithMembership {
   member_count: number;
   activity_count: number;
   segment_count: number;
+  featured_leaderboard: LeaderboardType | null;
   created_at: string;
   updated_at: string | null;
   user_role: TeamRole | null;
@@ -644,6 +674,7 @@ export interface UpdateTeamRequest {
   avatar_url?: string;
   visibility?: TeamVisibility;
   join_policy?: TeamJoinPolicy;
+  featured_leaderboard?: LeaderboardType;
 }
 
 class ApiClient {
@@ -1077,6 +1108,67 @@ class ApiClient {
     const queryString = params.toString();
     const path = `/leaderboards/distance${queryString ? `?${queryString}` : ''}`;
     return this.request<DistanceLeaderEntry[]>(path);
+  }
+
+  async getDigTimeLeaderboard(filters?: GlobalLeaderboardFilters): Promise<DigTimeLeaderEntry[]> {
+    const params = new URLSearchParams();
+    if (filters?.gender) params.set('gender', filters.gender);
+    if (filters?.ageGroup) params.set('age_group', filters.ageGroup);
+    if (filters?.weightClass) params.set('weight_class', filters.weightClass);
+    if (filters?.country) params.set('country', filters.country);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
+    const queryString = params.toString();
+    const path = `/leaderboards/dig-time${queryString ? `?${queryString}` : ''}`;
+    return this.request<DigTimeLeaderEntry[]>(path);
+  }
+
+  async getDigPercentageLeaderboard(filters?: GlobalLeaderboardFilters): Promise<DigPercentageLeaderEntry[]> {
+    const params = new URLSearchParams();
+    if (filters?.scope) params.set('scope', filters.scope);
+    if (filters?.gender) params.set('gender', filters.gender);
+    if (filters?.ageGroup) params.set('age_group', filters.ageGroup);
+    if (filters?.weightClass) params.set('weight_class', filters.weightClass);
+    if (filters?.country) params.set('country', filters.country);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
+    const queryString = params.toString();
+    const path = `/leaderboards/dig-percentage${queryString ? `?${queryString}` : ''}`;
+    return this.request<DigPercentageLeaderEntry[]>(path);
+  }
+
+  async getAverageSpeedLeaderboard(filters?: GlobalLeaderboardFilters): Promise<AverageSpeedLeaderEntry[]> {
+    const params = new URLSearchParams();
+    if (filters?.scope) params.set('scope', filters.scope);
+    if (filters?.gender) params.set('gender', filters.gender);
+    if (filters?.ageGroup) params.set('age_group', filters.ageGroup);
+    if (filters?.weightClass) params.set('weight_class', filters.weightClass);
+    if (filters?.country) params.set('country', filters.country);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
+    const queryString = params.toString();
+    const path = `/leaderboards/average-speed${queryString ? `?${queryString}` : ''}`;
+    return this.request<AverageSpeedLeaderEntry[]>(path);
+  }
+
+  // Team leaderboard endpoint
+  async getTeamLeaderboard(
+    teamId: string,
+    leaderboardType: LeaderboardType,
+    filters?: GlobalLeaderboardFilters
+  ): Promise<CrownCountEntry[] | DistanceLeaderEntry[] | DigTimeLeaderEntry[] | DigPercentageLeaderEntry[] | AverageSpeedLeaderEntry[]> {
+    const params = new URLSearchParams();
+    if (filters?.scope) params.set('scope', filters.scope);
+    if (filters?.gender) params.set('gender', filters.gender);
+    if (filters?.ageGroup) params.set('age_group', filters.ageGroup);
+    if (filters?.weightClass) params.set('weight_class', filters.weightClass);
+    if (filters?.country) params.set('country', filters.country);
+    if (filters?.activityTypeId) params.set('activity_type_id', filters.activityTypeId);
+    if (filters?.limit !== undefined) params.set('limit', filters.limit.toString());
+    if (filters?.offset !== undefined) params.set('offset', filters.offset.toString());
+    const queryString = params.toString();
+    const path = `/teams/${teamId}/leaderboard/${leaderboardType}${queryString ? `?${queryString}` : ''}`;
+    return this.request(path);
   }
 
   // Social endpoints (follows)

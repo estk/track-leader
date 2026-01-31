@@ -183,6 +183,7 @@ pub async fn update_team(
             req.avatar_url.as_deref(),
             req.visibility,
             req.join_policy,
+            req.featured_leaderboard,
         )
         .await?
         .ok_or(AppError::NotFound)?;
@@ -1208,4 +1209,159 @@ pub async fn get_team_activities_by_date(
         .get_team_activities_by_date(team_id, query.date, query.limit, query.offset)
         .await?;
     Ok(Json(activities))
+}
+
+// ============================================================================
+// Team Leaderboard Handlers
+// ============================================================================
+
+/// Query parameters for team leaderboards.
+#[derive(Debug, Deserialize, utoipa::IntoParams, ToSchema)]
+pub struct TeamLeaderboardQuery {
+    /// Maximum number of entries to return
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    /// Number of entries to skip
+    #[serde(default)]
+    pub offset: i64,
+    /// Time scope for filtering (default: all_time)
+    #[serde(default)]
+    pub scope: crate::models::LeaderboardScope,
+    /// Gender filter
+    #[serde(default)]
+    pub gender: crate::models::GenderFilter,
+    /// Age group filter
+    #[serde(default)]
+    pub age_group: crate::models::AgeGroup,
+    /// Weight class filter
+    #[serde(default)]
+    pub weight_class: crate::models::WeightClass,
+    /// Country filter (ISO country code)
+    pub country: Option<String>,
+    /// Filter crowns by activity type (only for crown leaderboard)
+    pub activity_type_id: Option<Uuid>,
+}
+
+/// Team leaderboard response enum to handle different leaderboard types.
+#[derive(Debug, serde::Serialize, ToSchema)]
+#[serde(untagged)]
+pub enum TeamLeaderboardResponse {
+    Crowns(Vec<crate::models::CrownCountEntry>),
+    Distance(Vec<crate::models::DistanceLeaderEntry>),
+    DigTime(Vec<crate::models::DigTimeLeaderEntry>),
+    DigPercentage(Vec<crate::models::DigPercentageLeaderEntry>),
+    AverageSpeed(Vec<crate::models::AverageSpeedLeaderEntry>),
+}
+
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/leaderboard/{leaderboard_type}",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID"),
+        ("leaderboard_type" = String, Path, description = "Leaderboard type: crowns, distance, dig_time, dig_percentage, average_speed"),
+        TeamLeaderboardQuery
+    ),
+    responses(
+        (status = 200, description = "Team leaderboard", body = TeamLeaderboardResponse),
+        (status = 400, description = "Invalid leaderboard type"),
+        (status = 404, description = "Team not found or not a member"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+/// Get a team-scoped leaderboard.
+pub async fn get_team_leaderboard(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path((team_id, leaderboard_type)): Path<(Uuid, String)>,
+    Query(query): Query<TeamLeaderboardQuery>,
+) -> Result<Json<TeamLeaderboardResponse>, AppError> {
+    // Verify user is a member
+    db.get_team_membership(team_id, claims.sub)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let leaderboard_type: crate::models::LeaderboardType = leaderboard_type
+        .parse()
+        .map_err(|_| AppError::InvalidInput("Invalid leaderboard type".to_string()))?;
+
+    let response = match leaderboard_type {
+        crate::models::LeaderboardType::Crowns => {
+            let entries = db
+                .get_crown_leaderboard_filtered(
+                    query.limit,
+                    query.offset,
+                    query.scope,
+                    query.gender,
+                    query.age_group,
+                    query.weight_class,
+                    query.country.as_deref(),
+                    query.activity_type_id,
+                    Some(team_id),
+                )
+                .await?;
+            TeamLeaderboardResponse::Crowns(entries)
+        }
+        crate::models::LeaderboardType::Distance => {
+            let entries = db
+                .get_distance_leaderboard_filtered(
+                    query.limit,
+                    query.offset,
+                    query.scope,
+                    query.gender,
+                    query.age_group,
+                    query.weight_class,
+                    query.country.as_deref(),
+                    Some(team_id),
+                )
+                .await?;
+            TeamLeaderboardResponse::Distance(entries)
+        }
+        crate::models::LeaderboardType::DigTime => {
+            let entries = db
+                .get_dig_time_leaderboard_filtered(
+                    query.limit,
+                    query.offset,
+                    query.gender,
+                    query.age_group,
+                    query.weight_class,
+                    query.country.as_deref(),
+                    Some(team_id),
+                )
+                .await?;
+            TeamLeaderboardResponse::DigTime(entries)
+        }
+        crate::models::LeaderboardType::DigPercentage => {
+            let entries = db
+                .get_dig_percentage_leaderboard_filtered(
+                    query.limit,
+                    query.offset,
+                    query.scope,
+                    query.gender,
+                    query.age_group,
+                    query.weight_class,
+                    query.country.as_deref(),
+                    Some(team_id),
+                )
+                .await?;
+            TeamLeaderboardResponse::DigPercentage(entries)
+        }
+        crate::models::LeaderboardType::AverageSpeed => {
+            let entries = db
+                .get_average_speed_leaderboard_filtered(
+                    query.limit,
+                    query.offset,
+                    query.scope,
+                    query.gender,
+                    query.age_group,
+                    query.weight_class,
+                    query.country.as_deref(),
+                    Some(team_id),
+                )
+                .await?;
+            TeamLeaderboardResponse::AverageSpeed(entries)
+        }
+    };
+
+    Ok(Json(response))
 }

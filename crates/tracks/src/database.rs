@@ -2152,6 +2152,7 @@ impl Database {
         weight_class: WeightClass,
         country: Option<&str>,
         activity_type_id: Option<Uuid>,
+        team_id: Option<Uuid>,
     ) -> Result<Vec<CrownCountEntry>, AppError> {
         let mut qb = QueryBuilder::new();
 
@@ -2215,7 +2216,19 @@ impl Database {
             qb.add_param_condition("s.activity_type_id = ");
         }
 
+        // Team filter
+        if team_id.is_some() {
+            qb.add_param_condition("tm.team_id = ");
+        }
+
         let where_clause = qb.build_where_clause();
+
+        // Join with team_memberships if team filter is applied
+        let team_join = if team_id.is_some() {
+            "JOIN team_memberships tm ON tm.user_id = a.user_id"
+        } else {
+            ""
+        };
 
         let query = format!(
             r#"
@@ -2229,6 +2242,7 @@ impl Database {
                 JOIN users u ON u.id = a.user_id
                 JOIN segments s ON s.id = a.segment_id
                 LEFT JOIN segment_efforts se ON se.id = a.effort_id
+                {team_join}
                 {where_clause}
                 GROUP BY a.user_id
             )
@@ -2257,6 +2271,9 @@ impl Database {
         if let Some(type_id) = activity_type_id {
             query_builder = query_builder.bind(type_id);
         }
+        if let Some(tid) = team_id {
+            query_builder = query_builder.bind(tid);
+        }
 
         let entries = query_builder.fetch_all(&self.pool).await?;
         Ok(entries)
@@ -2270,6 +2287,7 @@ impl Database {
     /// - age_group: Filter users by age (calculated from birth_year)
     /// - weight_class: Filter users by weight
     /// - country: Filter users by country
+    /// - team_id: Filter to team members only
     #[allow(clippy::too_many_arguments)]
     pub async fn get_distance_leaderboard_filtered(
         &self,
@@ -2280,6 +2298,7 @@ impl Database {
         age_group: AgeGroup,
         weight_class: WeightClass,
         country: Option<&str>,
+        team_id: Option<Uuid>,
     ) -> Result<Vec<DistanceLeaderEntry>, AppError> {
         let mut qb = QueryBuilder::new();
 
@@ -2334,10 +2353,22 @@ impl Database {
             qb.add_param_condition("u.country = ");
         }
 
+        // Team filter
+        if team_id.is_some() {
+            qb.add_param_condition("tm.team_id = ");
+        }
+
         let where_clause = if qb.is_empty() {
             String::new()
         } else {
             format!("WHERE {}", qb.build_where())
+        };
+
+        // Join with team_memberships if team filter is applied
+        let team_join = if team_id.is_some() {
+            "JOIN team_memberships tm ON tm.user_id = sc.user_id"
+        } else {
+            ""
         };
 
         let query = format!(
@@ -2349,6 +2380,7 @@ impl Database {
                     COUNT(*) as activity_count
                 FROM scores sc
                 JOIN users u ON u.id = sc.user_id
+                {team_join}
                 {where_clause}
                 GROUP BY sc.user_id
             )
@@ -2369,9 +2401,435 @@ impl Database {
             .bind(limit)
             .bind(offset);
 
-        // Bind optional country parameter
+        // Bind optional parameters in the order they were added
         if let Some(c) = country {
             query_builder = query_builder.bind(c);
+        }
+        if let Some(tid) = team_id {
+            query_builder = query_builder.bind(tid);
+        }
+
+        let entries = query_builder.fetch_all(&self.pool).await?;
+        Ok(entries)
+    }
+
+    /// Get filtered dig time leaderboard (total dig seconds in last 7 days).
+    ///
+    /// Filters:
+    /// - gender: Filter users by gender
+    /// - age_group: Filter users by age (calculated from birth_year)
+    /// - weight_class: Filter users by weight
+    /// - country: Filter users by country
+    /// - team_id: Filter to team members only
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_dig_time_leaderboard_filtered(
+        &self,
+        limit: i64,
+        offset: i64,
+        gender: GenderFilter,
+        age_group: AgeGroup,
+        weight_class: WeightClass,
+        country: Option<&str>,
+        team_id: Option<Uuid>,
+    ) -> Result<Vec<crate::models::DigTimeLeaderEntry>, AppError> {
+        let mut qb = QueryBuilder::new();
+
+        // Dig time is always weekly (last 7 days)
+        qb.add_condition("ads.created_at >= NOW() - INTERVAL '7 days'");
+
+        // Gender filter
+        match gender {
+            GenderFilter::All => {}
+            GenderFilter::Male => {
+                qb.add_condition("u.gender = 'male'");
+            }
+            GenderFilter::Female => {
+                qb.add_condition("u.gender = 'female'");
+            }
+        }
+
+        // Age group filter (calculate age from birth_year)
+        if let Some((min_age, max_age)) = age_group.age_range() {
+            let current_year = time::OffsetDateTime::now_utc().year();
+            let max_birth_year = current_year - min_age;
+            qb.add_condition(format!("u.birth_year <= {max_birth_year}"));
+            if let Some(max) = max_age {
+                let min_birth_year = current_year - max;
+                qb.add_condition(format!("u.birth_year >= {min_birth_year}"));
+            }
+        }
+
+        // Weight class filter
+        if let Some((min_kg, max_kg)) = weight_class.weight_range() {
+            if let Some(min) = min_kg {
+                qb.add_condition(format!("u.weight_kg >= {min}"));
+            }
+            if let Some(max) = max_kg {
+                qb.add_condition(format!("u.weight_kg <= {max}"));
+            }
+        }
+
+        // Country filter
+        if country.is_some() {
+            qb.add_param_condition("u.country = ");
+        }
+
+        // Team filter
+        if team_id.is_some() {
+            qb.add_param_condition("tm.team_id = ");
+        }
+
+        let where_clause = if qb.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", qb.build_where())
+        };
+
+        // Join with team_memberships if team filter is applied
+        let team_join = if team_id.is_some() {
+            "JOIN team_memberships tm ON tm.user_id = a.user_id"
+        } else {
+            ""
+        };
+
+        let query = format!(
+            r#"
+            WITH dig_totals AS (
+                SELECT
+                    a.user_id,
+                    SUM(ads.duration_seconds) as total_dig_time_seconds,
+                    COUNT(*) as dig_segment_count
+                FROM activity_dig_segments ads
+                JOIN activities a ON a.id = ads.activity_id
+                JOIN users u ON u.id = a.user_id
+                {team_join}
+                {where_clause}
+                GROUP BY a.user_id
+            )
+            SELECT
+                dt.user_id,
+                u.name as user_name,
+                dt.total_dig_time_seconds,
+                dt.dig_segment_count,
+                ROW_NUMBER() OVER (ORDER BY dt.total_dig_time_seconds DESC) as rank
+            FROM dig_totals dt
+            JOIN users u ON u.id = dt.user_id
+            ORDER BY rank
+            LIMIT $1 OFFSET $2
+            "#
+        );
+
+        let mut query_builder = sqlx::query_as::<_, crate::models::DigTimeLeaderEntry>(&query)
+            .bind(limit)
+            .bind(offset);
+
+        // Bind optional parameters in the order they were added
+        if let Some(c) = country {
+            query_builder = query_builder.bind(c);
+        }
+        if let Some(tid) = team_id {
+            query_builder = query_builder.bind(tid);
+        }
+
+        let entries = query_builder.fetch_all(&self.pool).await?;
+        Ok(entries)
+    }
+
+    /// Get filtered dig percentage leaderboard (dig_time / ride_activity_time).
+    /// Only includes MTB, eMTB, Road, and Gravel activities.
+    ///
+    /// Filters:
+    /// - scope: Time period for calculating percentages
+    /// - gender: Filter users by gender
+    /// - age_group: Filter users by age (calculated from birth_year)
+    /// - weight_class: Filter users by weight
+    /// - country: Filter users by country
+    /// - team_id: Filter to team members only
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_dig_percentage_leaderboard_filtered(
+        &self,
+        limit: i64,
+        offset: i64,
+        scope: LeaderboardScope,
+        gender: GenderFilter,
+        age_group: AgeGroup,
+        weight_class: WeightClass,
+        country: Option<&str>,
+        team_id: Option<Uuid>,
+    ) -> Result<Vec<crate::models::DigPercentageLeaderEntry>, AppError> {
+        use crate::models::builtin_types;
+
+        let mut qb = QueryBuilder::new();
+
+        // Time scope filter
+        match scope {
+            LeaderboardScope::AllTime => {}
+            LeaderboardScope::Year => {
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '1 year'");
+            }
+            LeaderboardScope::Month => {
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '1 month'");
+            }
+            LeaderboardScope::Week => {
+                qb.add_condition("sc.created_at >= NOW() - INTERVAL '7 days'");
+            }
+        }
+
+        // Only include ride activity types
+        let ride_type_ids = format!(
+            "a.activity_type_id IN ('{}', '{}', '{}', '{}')",
+            builtin_types::MTB,
+            builtin_types::EMTB,
+            builtin_types::ROAD,
+            builtin_types::GRAVEL
+        );
+        qb.add_condition(&ride_type_ids);
+
+        // Gender filter
+        match gender {
+            GenderFilter::All => {}
+            GenderFilter::Male => {
+                qb.add_condition("u.gender = 'male'");
+            }
+            GenderFilter::Female => {
+                qb.add_condition("u.gender = 'female'");
+            }
+        }
+
+        // Age group filter
+        if let Some((min_age, max_age)) = age_group.age_range() {
+            let current_year = time::OffsetDateTime::now_utc().year();
+            let max_birth_year = current_year - min_age;
+            qb.add_condition(format!("u.birth_year <= {max_birth_year}"));
+            if let Some(max) = max_age {
+                let min_birth_year = current_year - max;
+                qb.add_condition(format!("u.birth_year >= {min_birth_year}"));
+            }
+        }
+
+        // Weight class filter
+        if let Some((min_kg, max_kg)) = weight_class.weight_range() {
+            if let Some(min) = min_kg {
+                qb.add_condition(format!("u.weight_kg >= {min}"));
+            }
+            if let Some(max) = max_kg {
+                qb.add_condition(format!("u.weight_kg <= {max}"));
+            }
+        }
+
+        // Country filter
+        if country.is_some() {
+            qb.add_param_condition("u.country = ");
+        }
+
+        // Team filter
+        if team_id.is_some() {
+            qb.add_param_condition("tm.team_id = ");
+        }
+
+        let where_clause = if qb.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", qb.build_where())
+        };
+
+        // Join with team_memberships if team filter is applied
+        let team_join = if team_id.is_some() {
+            "JOIN team_memberships tm ON tm.user_id = a.user_id"
+        } else {
+            ""
+        };
+
+        let query = format!(
+            r#"
+            WITH user_totals AS (
+                SELECT
+                    a.user_id,
+                    COALESCE(SUM(ads.duration_seconds), 0) as total_dig_time_seconds,
+                    COALESCE(SUM(sc.duration), 0) as total_activity_duration_seconds
+                FROM activities a
+                JOIN scores sc ON sc.activity_id = a.id
+                JOIN users u ON u.id = a.user_id
+                LEFT JOIN activity_dig_segments ads ON ads.activity_id = a.id
+                {team_join}
+                {where_clause}
+                GROUP BY a.user_id
+                HAVING SUM(sc.duration) > 0
+            )
+            SELECT
+                ut.user_id,
+                u.name as user_name,
+                CASE
+                    WHEN ut.total_activity_duration_seconds > 0
+                    THEN (ut.total_dig_time_seconds / ut.total_activity_duration_seconds) * 100.0
+                    ELSE 0.0
+                END as dig_percentage,
+                ut.total_dig_time_seconds,
+                ut.total_activity_duration_seconds,
+                ROW_NUMBER() OVER (ORDER BY
+                    CASE
+                        WHEN ut.total_activity_duration_seconds > 0
+                        THEN (ut.total_dig_time_seconds / ut.total_activity_duration_seconds)
+                        ELSE 0.0
+                    END DESC
+                ) as rank
+            FROM user_totals ut
+            JOIN users u ON u.id = ut.user_id
+            ORDER BY rank
+            LIMIT $1 OFFSET $2
+            "#
+        );
+
+        let mut query_builder =
+            sqlx::query_as::<_, crate::models::DigPercentageLeaderEntry>(&query)
+                .bind(limit)
+                .bind(offset);
+
+        // Bind optional parameters in the order they were added
+        if let Some(c) = country {
+            query_builder = query_builder.bind(c);
+        }
+        if let Some(tid) = team_id {
+            query_builder = query_builder.bind(tid);
+        }
+
+        let entries = query_builder.fetch_all(&self.pool).await?;
+        Ok(entries)
+    }
+
+    /// Get filtered average speed leaderboard (mean average_speed_mps across ride activities).
+    ///
+    /// Filters:
+    /// - scope: Time period for calculating averages
+    /// - gender: Filter users by gender
+    /// - age_group: Filter users by age (calculated from birth_year)
+    /// - weight_class: Filter users by weight
+    /// - country: Filter users by country
+    /// - team_id: Filter to team members only
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_average_speed_leaderboard_filtered(
+        &self,
+        limit: i64,
+        offset: i64,
+        scope: LeaderboardScope,
+        gender: GenderFilter,
+        age_group: AgeGroup,
+        weight_class: WeightClass,
+        country: Option<&str>,
+        team_id: Option<Uuid>,
+    ) -> Result<Vec<crate::models::AverageSpeedLeaderEntry>, AppError> {
+        let mut qb = QueryBuilder::new();
+
+        // Time scope filter
+        match scope {
+            LeaderboardScope::AllTime => {}
+            LeaderboardScope::Year => {
+                qb.add_condition("se.started_at >= NOW() - INTERVAL '1 year'");
+            }
+            LeaderboardScope::Month => {
+                qb.add_condition("se.started_at >= NOW() - INTERVAL '1 month'");
+            }
+            LeaderboardScope::Week => {
+                qb.add_condition("se.started_at >= NOW() - INTERVAL '7 days'");
+            }
+        }
+
+        // Only include segment efforts with valid speed
+        qb.add_condition("se.average_speed_mps IS NOT NULL");
+        qb.add_condition("se.average_speed_mps > 0");
+
+        // Gender filter
+        match gender {
+            GenderFilter::All => {}
+            GenderFilter::Male => {
+                qb.add_condition("u.gender = 'male'");
+            }
+            GenderFilter::Female => {
+                qb.add_condition("u.gender = 'female'");
+            }
+        }
+
+        // Age group filter
+        if let Some((min_age, max_age)) = age_group.age_range() {
+            let current_year = time::OffsetDateTime::now_utc().year();
+            let max_birth_year = current_year - min_age;
+            qb.add_condition(format!("u.birth_year <= {max_birth_year}"));
+            if let Some(max) = max_age {
+                let min_birth_year = current_year - max;
+                qb.add_condition(format!("u.birth_year >= {min_birth_year}"));
+            }
+        }
+
+        // Weight class filter
+        if let Some((min_kg, max_kg)) = weight_class.weight_range() {
+            if let Some(min) = min_kg {
+                qb.add_condition(format!("u.weight_kg >= {min}"));
+            }
+            if let Some(max) = max_kg {
+                qb.add_condition(format!("u.weight_kg <= {max}"));
+            }
+        }
+
+        // Country filter
+        if country.is_some() {
+            qb.add_param_condition("u.country = ");
+        }
+
+        // Team filter
+        if team_id.is_some() {
+            qb.add_param_condition("tm.team_id = ");
+        }
+
+        let where_clause = if qb.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", qb.build_where())
+        };
+
+        // Join with team_memberships if team filter is applied
+        let team_join = if team_id.is_some() {
+            "JOIN team_memberships tm ON tm.user_id = se.user_id"
+        } else {
+            ""
+        };
+
+        let query = format!(
+            r#"
+            WITH speed_totals AS (
+                SELECT
+                    se.user_id,
+                    AVG(se.average_speed_mps) as average_speed_mps,
+                    COUNT(*) as activity_count
+                FROM segment_efforts se
+                JOIN users u ON u.id = se.user_id
+                {team_join}
+                {where_clause}
+                GROUP BY se.user_id
+            )
+            SELECT
+                st.user_id,
+                u.name as user_name,
+                st.average_speed_mps,
+                st.activity_count,
+                ROW_NUMBER() OVER (ORDER BY st.average_speed_mps DESC) as rank
+            FROM speed_totals st
+            JOIN users u ON u.id = st.user_id
+            ORDER BY rank
+            LIMIT $1 OFFSET $2
+            "#
+        );
+
+        let mut query_builder =
+            sqlx::query_as::<_, crate::models::AverageSpeedLeaderEntry>(&query)
+                .bind(limit)
+                .bind(offset);
+
+        // Bind optional parameters in the order they were added
+        if let Some(c) = country {
+            query_builder = query_builder.bind(c);
+        }
+        if let Some(tid) = team_id {
+            query_builder = query_builder.bind(tid);
         }
 
         let entries = query_builder.fetch_all(&self.pool).await?;
@@ -3256,7 +3714,8 @@ impl Database {
             INSERT INTO teams (name, description, avatar_url, visibility, join_policy, owner_id, member_count, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, 1, NOW())
             RETURNING id, name, description, avatar_url, visibility, join_policy, owner_id,
-                      member_count, activity_count, segment_count, created_at, updated_at
+                      member_count, activity_count, segment_count, featured_leaderboard,
+                      created_at, updated_at
             "#,
         )
         .bind(name)
@@ -3288,7 +3747,8 @@ impl Database {
         let team: Option<Team> = sqlx::query_as(
             r#"
             SELECT id, name, description, avatar_url, visibility, join_policy, owner_id,
-                   member_count, activity_count, segment_count, created_at, updated_at
+                   member_count, activity_count, segment_count, featured_leaderboard,
+                   created_at, updated_at
             FROM teams
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -3318,6 +3778,7 @@ impl Database {
             member_count: i32,
             activity_count: i32,
             segment_count: i32,
+            featured_leaderboard: Option<crate::models::LeaderboardType>,
             created_at: time::OffsetDateTime,
             updated_at: Option<time::OffsetDateTime>,
             owner_name: String,
@@ -3327,7 +3788,8 @@ impl Database {
         let row: Option<TeamRow> = sqlx::query_as(
             r#"
             SELECT t.id, t.name, t.description, t.avatar_url, t.visibility, t.join_policy, t.owner_id,
-                   t.member_count, t.activity_count, t.segment_count, t.created_at, t.updated_at,
+                   t.member_count, t.activity_count, t.segment_count, t.featured_leaderboard,
+                   t.created_at, t.updated_at,
                    u.name as owner_name,
                    tm.role as user_role
             FROM teams t
@@ -3353,6 +3815,7 @@ impl Database {
                 member_count: r.member_count,
                 activity_count: r.activity_count,
                 segment_count: r.segment_count,
+                featured_leaderboard: r.featured_leaderboard,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
             },
@@ -3371,6 +3834,7 @@ impl Database {
         avatar_url: Option<&str>,
         visibility: Option<TeamVisibility>,
         join_policy: Option<crate::models::TeamJoinPolicy>,
+        featured_leaderboard: Option<crate::models::LeaderboardType>,
     ) -> Result<Option<Team>, AppError> {
         let team: Option<Team> = sqlx::query_as(
             r#"
@@ -3380,10 +3844,12 @@ impl Database {
                 avatar_url = COALESCE($4, avatar_url),
                 visibility = COALESCE($5, visibility),
                 join_policy = COALESCE($6, join_policy),
+                featured_leaderboard = COALESCE($7, featured_leaderboard),
                 updated_at = NOW()
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING id, name, description, avatar_url, visibility, join_policy, owner_id,
-                      member_count, activity_count, segment_count, created_at, updated_at
+                      member_count, activity_count, segment_count, featured_leaderboard,
+                      created_at, updated_at
             "#,
         )
         .bind(id)
@@ -3392,6 +3858,7 @@ impl Database {
         .bind(avatar_url)
         .bind(visibility)
         .bind(join_policy)
+        .bind(featured_leaderboard)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -3429,6 +3896,7 @@ impl Database {
             member_count: i32,
             activity_count: i32,
             segment_count: i32,
+            featured_leaderboard: Option<crate::models::LeaderboardType>,
             created_at: time::OffsetDateTime,
             updated_at: Option<time::OffsetDateTime>,
             owner_name: String,
@@ -3438,7 +3906,8 @@ impl Database {
         let rows: Vec<TeamRow> = sqlx::query_as(
             r#"
             SELECT t.id, t.name, t.description, t.avatar_url, t.visibility, t.join_policy, t.owner_id,
-                   t.member_count, t.activity_count, t.segment_count, t.created_at, t.updated_at,
+                   t.member_count, t.activity_count, t.segment_count, t.featured_leaderboard,
+                   t.created_at, t.updated_at,
                    u.name as owner_name,
                    tm.role as user_role
             FROM teams t
@@ -3466,6 +3935,7 @@ impl Database {
                     member_count: r.member_count,
                     activity_count: r.activity_count,
                     segment_count: r.segment_count,
+                    featured_leaderboard: r.featured_leaderboard,
                     created_at: r.created_at,
                     updated_at: r.updated_at,
                 },

@@ -6,6 +6,9 @@ import {
   api,
   CrownCountEntry,
   DistanceLeaderEntry,
+  DigTimeLeaderEntry,
+  DigPercentageLeaderEntry,
+  AverageSpeedLeaderEntry,
   GlobalLeaderboardFilters,
   LeaderboardScope,
   GenderFilter,
@@ -20,9 +23,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RankBadge } from "@/components/leaderboard/crown-badge";
-import { Crown, MapPin, Filter, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Crown, MapPin, Filter, ChevronDown, ChevronUp, X, Shovel, Percent, Gauge } from "lucide-react";
 
-type LeaderboardTab = "crowns" | "distance";
+type LeaderboardTab = "crowns" | "distance" | "dig_time" | "dig_percentage" | "average_speed";
 
 const PAGE_SIZE = 20;
 
@@ -92,11 +95,17 @@ export default function LeaderboardsPage() {
   const [activeTab, setActiveTab] = useState<LeaderboardTab>("crowns");
   const [crownEntries, setCrownEntries] = useState<CrownCountEntry[]>([]);
   const [distanceEntries, setDistanceEntries] = useState<DistanceLeaderEntry[]>([]);
+  const [digTimeEntries, setDigTimeEntries] = useState<DigTimeLeaderEntry[]>([]);
+  const [digPercentageEntries, setDigPercentageEntries] = useState<DigPercentageLeaderEntry[]>([]);
+  const [averageSpeedEntries, setAverageSpeedEntries] = useState<AverageSpeedLeaderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [hasMoreCrowns, setHasMoreCrowns] = useState(true);
   const [hasMoreDistance, setHasMoreDistance] = useState(true);
+  const [hasMoreDigTime, setHasMoreDigTime] = useState(true);
+  const [hasMoreDigPercentage, setHasMoreDigPercentage] = useState(true);
+  const [hasMoreAverageSpeed, setHasMoreAverageSpeed] = useState(true);
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
@@ -148,25 +157,44 @@ export default function LeaderboardsPage() {
 
     const apiFilters = buildApiFilters(0);
 
-    if (activeTab === "crowns") {
-      api
-        .getCrownLeaderboard(apiFilters)
-        .then((entries) => {
+    const loadFn = async () => {
+      switch (activeTab) {
+        case "crowns": {
+          const entries = await api.getCrownLeaderboard(apiFilters);
           setCrownEntries(entries);
           setHasMoreCrowns(entries.length === PAGE_SIZE);
-        })
-        .catch((err) => setError(err.message))
-        .finally(() => setLoading(false));
-    } else {
-      api
-        .getDistanceLeaderboard(apiFilters)
-        .then((entries) => {
+          break;
+        }
+        case "distance": {
+          const entries = await api.getDistanceLeaderboard(apiFilters);
           setDistanceEntries(entries);
           setHasMoreDistance(entries.length === PAGE_SIZE);
-        })
-        .catch((err) => setError(err.message))
-        .finally(() => setLoading(false));
-    }
+          break;
+        }
+        case "dig_time": {
+          const entries = await api.getDigTimeLeaderboard(apiFilters);
+          setDigTimeEntries(entries);
+          setHasMoreDigTime(entries.length === PAGE_SIZE);
+          break;
+        }
+        case "dig_percentage": {
+          const entries = await api.getDigPercentageLeaderboard(apiFilters);
+          setDigPercentageEntries(entries);
+          setHasMoreDigPercentage(entries.length === PAGE_SIZE);
+          break;
+        }
+        case "average_speed": {
+          const entries = await api.getAverageSpeedLeaderboard(apiFilters);
+          setAverageSpeedEntries(entries);
+          setHasMoreAverageSpeed(entries.length === PAGE_SIZE);
+          break;
+        }
+      }
+    };
+
+    loadFn()
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, [activeTab, filters, buildApiFilters]);
 
   const loadMoreCrowns = async () => {
@@ -197,6 +225,48 @@ export default function LeaderboardsPage() {
     }
   };
 
+  const loadMoreDigTime = async () => {
+    setLoadingMore(true);
+    try {
+      const apiFilters = buildApiFilters(digTimeEntries.length);
+      const newEntries = await api.getDigTimeLeaderboard(apiFilters);
+      setDigTimeEntries((prev) => [...prev, ...newEntries]);
+      setHasMoreDigTime(newEntries.length === PAGE_SIZE);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load more");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMoreDigPercentage = async () => {
+    setLoadingMore(true);
+    try {
+      const apiFilters = buildApiFilters(digPercentageEntries.length);
+      const newEntries = await api.getDigPercentageLeaderboard(apiFilters);
+      setDigPercentageEntries((prev) => [...prev, ...newEntries]);
+      setHasMoreDigPercentage(newEntries.length === PAGE_SIZE);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load more");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMoreAverageSpeed = async () => {
+    setLoadingMore(true);
+    try {
+      const apiFilters = buildApiFilters(averageSpeedEntries.length);
+      const newEntries = await api.getAverageSpeedLeaderboard(apiFilters);
+      setAverageSpeedEntries((prev) => [...prev, ...newEntries]);
+      setHasMoreAverageSpeed(newEntries.length === PAGE_SIZE);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load more");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   const updateFilter = (key: keyof FilterState, value: string | null) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
@@ -212,7 +282,7 @@ export default function LeaderboardsPage() {
       </div>
 
       {/* Tab buttons */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant={activeTab === "crowns" ? "default" : "outline"}
           onClick={() => setActiveTab("crowns")}
@@ -228,6 +298,30 @@ export default function LeaderboardsPage() {
         >
           <MapPin className="h-4 w-4" />
           Distance
+        </Button>
+        <Button
+          variant={activeTab === "dig_time" ? "default" : "outline"}
+          onClick={() => setActiveTab("dig_time")}
+          className="gap-2"
+        >
+          <Shovel className="h-4 w-4" />
+          Dig Time
+        </Button>
+        <Button
+          variant={activeTab === "dig_percentage" ? "default" : "outline"}
+          onClick={() => setActiveTab("dig_percentage")}
+          className="gap-2"
+        >
+          <Percent className="h-4 w-4" />
+          Dig %
+        </Button>
+        <Button
+          variant={activeTab === "average_speed" ? "default" : "outline"}
+          onClick={() => setActiveTab("average_speed")}
+          className="gap-2"
+        >
+          <Gauge className="h-4 w-4" />
+          Avg Speed
         </Button>
       </div>
 
@@ -410,13 +504,37 @@ export default function LeaderboardsPage() {
           onLoadMore={loadMoreCrowns}
           activityTypeFilter={filters.activityTypeId}
         />
-      ) : (
+      ) : activeTab === "distance" ? (
         <DistanceLeaderboard
           entries={distanceEntries}
           currentUserId={user?.id}
           hasMore={hasMoreDistance}
           loadingMore={loadingMore}
           onLoadMore={loadMoreDistance}
+        />
+      ) : activeTab === "dig_time" ? (
+        <DigTimeLeaderboard
+          entries={digTimeEntries}
+          currentUserId={user?.id}
+          hasMore={hasMoreDigTime}
+          loadingMore={loadingMore}
+          onLoadMore={loadMoreDigTime}
+        />
+      ) : activeTab === "dig_percentage" ? (
+        <DigPercentageLeaderboard
+          entries={digPercentageEntries}
+          currentUserId={user?.id}
+          hasMore={hasMoreDigPercentage}
+          loadingMore={loadingMore}
+          onLoadMore={loadMoreDigPercentage}
+        />
+      ) : (
+        <AverageSpeedLeaderboard
+          entries={averageSpeedEntries}
+          currentUserId={user?.id}
+          hasMore={hasMoreAverageSpeed}
+          loadingMore={loadingMore}
+          onLoadMore={loadMoreAverageSpeed}
         />
       )}
     </div>
@@ -638,6 +756,371 @@ function DistanceLeaderboard({
                 <div className="sm:hidden col-span-2 flex items-center justify-between text-sm">
                   <span className="font-medium">
                     {formatDistance(entry.total_distance_meters)}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {entry.activity_count} {entry.activity_count === 1 ? "activity" : "activities"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {hasMore && (
+          <div className="p-4 border-t">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Loading..." : "Load more"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function formatSpeed(mps: number): string {
+  const kph = mps * 3.6;
+  return `${kph.toFixed(1)} km/h`;
+}
+
+interface DigTimeLeaderboardProps {
+  entries: DigTimeLeaderEntry[];
+  currentUserId: string | undefined;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}
+
+function DigTimeLeaderboard({
+  entries,
+  currentUserId,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: DigTimeLeaderboardProps) {
+  if (entries.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Shovel className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">No dig time data found</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            No dig segments have been recorded in the past 7 days.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Dig Time Leaderboard</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Athletes ranked by total dig time in the past 7 days
+        </p>
+      </CardHeader>
+      <CardContent className="p-0">
+        {/* Header row */}
+        <div className="hidden sm:grid sm:grid-cols-[3rem_1fr_7rem_6rem] gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b">
+          <div>Rank</div>
+          <div>Athlete</div>
+          <div className="text-right">Dig Time</div>
+          <div className="text-right">Segments</div>
+        </div>
+
+        <div className="divide-y">
+          {entries.map((entry) => {
+            const isCurrentUser = currentUserId === entry.user_id;
+            return (
+              <div
+                key={entry.user_id}
+                className={`grid grid-cols-[3rem_1fr] sm:grid-cols-[3rem_1fr_7rem_6rem] gap-4 px-4 py-3 items-center ${
+                  isCurrentUser ? "bg-primary/5 border-l-2 border-l-primary" : ""
+                }`}
+              >
+                {/* Rank */}
+                <div className="flex justify-center">
+                  <RankBadge rank={entry.rank} size="sm" />
+                </div>
+
+                {/* User name */}
+                <div className="truncate">
+                  <Link
+                    href={`/profile/${entry.user_id}`}
+                    className="font-medium truncate hover:underline"
+                  >
+                    {entry.user_name}
+                  </Link>
+                  {isCurrentUser && (
+                    <span className="text-xs text-muted-foreground ml-2">(you)</span>
+                  )}
+                </div>
+
+                {/* Dig Time */}
+                <div className="hidden sm:block text-right font-medium">
+                  {formatDuration(entry.total_dig_time_seconds)}
+                </div>
+
+                {/* Segment count */}
+                <div className="hidden sm:block text-right text-muted-foreground">
+                  {entry.dig_segment_count} {entry.dig_segment_count === 1 ? "segment" : "segments"}
+                </div>
+
+                {/* Mobile-only stats row */}
+                <div className="sm:hidden col-span-2 flex items-center justify-between text-sm">
+                  <span className="font-medium">
+                    {formatDuration(entry.total_dig_time_seconds)}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {entry.dig_segment_count} {entry.dig_segment_count === 1 ? "segment" : "segments"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {hasMore && (
+          <div className="p-4 border-t">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Loading..." : "Load more"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface DigPercentageLeaderboardProps {
+  entries: DigPercentageLeaderEntry[];
+  currentUserId: string | undefined;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}
+
+function DigPercentageLeaderboard({
+  entries,
+  currentUserId,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: DigPercentageLeaderboardProps) {
+  if (entries.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Percent className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">No dig percentage data found</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            No ride activities with dig segments found.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Dig Percentage Leaderboard</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Athletes ranked by dig time as percentage of total ride time
+        </p>
+      </CardHeader>
+      <CardContent className="p-0">
+        {/* Header row */}
+        <div className="hidden sm:grid sm:grid-cols-[3rem_1fr_5rem_6rem_6rem] gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b">
+          <div>Rank</div>
+          <div>Athlete</div>
+          <div className="text-right">Dig %</div>
+          <div className="text-right">Dig Time</div>
+          <div className="text-right">Total Time</div>
+        </div>
+
+        <div className="divide-y">
+          {entries.map((entry) => {
+            const isCurrentUser = currentUserId === entry.user_id;
+            return (
+              <div
+                key={entry.user_id}
+                className={`grid grid-cols-[3rem_1fr] sm:grid-cols-[3rem_1fr_5rem_6rem_6rem] gap-4 px-4 py-3 items-center ${
+                  isCurrentUser ? "bg-primary/5 border-l-2 border-l-primary" : ""
+                }`}
+              >
+                {/* Rank */}
+                <div className="flex justify-center">
+                  <RankBadge rank={entry.rank} size="sm" />
+                </div>
+
+                {/* User name */}
+                <div className="truncate">
+                  <Link
+                    href={`/profile/${entry.user_id}`}
+                    className="font-medium truncate hover:underline"
+                  >
+                    {entry.user_name}
+                  </Link>
+                  {isCurrentUser && (
+                    <span className="text-xs text-muted-foreground ml-2">(you)</span>
+                  )}
+                </div>
+
+                {/* Dig Percentage */}
+                <div className="hidden sm:block text-right font-medium">
+                  {(entry.dig_percentage * 100).toFixed(1)}%
+                </div>
+
+                {/* Dig Time */}
+                <div className="hidden sm:block text-right text-muted-foreground">
+                  {formatDuration(entry.total_dig_time_seconds)}
+                </div>
+
+                {/* Total Time */}
+                <div className="hidden sm:block text-right text-muted-foreground">
+                  {formatDuration(entry.total_activity_duration_seconds)}
+                </div>
+
+                {/* Mobile-only stats row */}
+                <div className="sm:hidden col-span-2 flex items-center justify-between text-sm">
+                  <span className="font-medium">
+                    {(entry.dig_percentage * 100).toFixed(1)}%
+                  </span>
+                  <span className="text-muted-foreground">
+                    {formatDuration(entry.total_dig_time_seconds)} / {formatDuration(entry.total_activity_duration_seconds)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {hasMore && (
+          <div className="p-4 border-t">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Loading..." : "Load more"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface AverageSpeedLeaderboardProps {
+  entries: AverageSpeedLeaderEntry[];
+  currentUserId: string | undefined;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}
+
+function AverageSpeedLeaderboard({
+  entries,
+  currentUserId,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: AverageSpeedLeaderboardProps) {
+  if (entries.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Gauge className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">No speed data found</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            No ride activities with speed data found.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Average Speed Leaderboard</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Athletes ranked by mean average speed across all ride activities
+        </p>
+      </CardHeader>
+      <CardContent className="p-0">
+        {/* Header row */}
+        <div className="hidden sm:grid sm:grid-cols-[3rem_1fr_7rem_6rem] gap-4 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide border-b">
+          <div>Rank</div>
+          <div>Athlete</div>
+          <div className="text-right">Avg Speed</div>
+          <div className="text-right">Activities</div>
+        </div>
+
+        <div className="divide-y">
+          {entries.map((entry) => {
+            const isCurrentUser = currentUserId === entry.user_id;
+            return (
+              <div
+                key={entry.user_id}
+                className={`grid grid-cols-[3rem_1fr] sm:grid-cols-[3rem_1fr_7rem_6rem] gap-4 px-4 py-3 items-center ${
+                  isCurrentUser ? "bg-primary/5 border-l-2 border-l-primary" : ""
+                }`}
+              >
+                {/* Rank */}
+                <div className="flex justify-center">
+                  <RankBadge rank={entry.rank} size="sm" />
+                </div>
+
+                {/* User name */}
+                <div className="truncate">
+                  <Link
+                    href={`/profile/${entry.user_id}`}
+                    className="font-medium truncate hover:underline"
+                  >
+                    {entry.user_name}
+                  </Link>
+                  {isCurrentUser && (
+                    <span className="text-xs text-muted-foreground ml-2">(you)</span>
+                  )}
+                </div>
+
+                {/* Average Speed */}
+                <div className="hidden sm:block text-right font-medium">
+                  {formatSpeed(entry.average_speed_mps)}
+                </div>
+
+                {/* Activity count */}
+                <div className="hidden sm:block text-right text-muted-foreground">
+                  {entry.activity_count} {entry.activity_count === 1 ? "activity" : "activities"}
+                </div>
+
+                {/* Mobile-only stats row */}
+                <div className="sm:hidden col-span-2 flex items-center justify-between text-sm">
+                  <span className="font-medium">
+                    {formatSpeed(entry.average_speed_mps)}
                   </span>
                   <span className="text-muted-foreground">
                     {entry.activity_count} {entry.activity_count === 1 ? "activity" : "activities"}

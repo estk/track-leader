@@ -44,8 +44,11 @@ pub use demographics::{
     update_my_demographics,
 };
 pub use leaderboards::{
-    __path_get_countries, __path_get_crown_leaderboard, __path_get_distance_leaderboard,
-    GlobalLeaderboardQuery, get_countries, get_crown_leaderboard, get_distance_leaderboard,
+    __path_get_average_speed_leaderboard, __path_get_countries, __path_get_crown_leaderboard,
+    __path_get_dig_percentage_leaderboard, __path_get_dig_time_leaderboard,
+    __path_get_distance_leaderboard, GlobalLeaderboardQuery, get_average_speed_leaderboard,
+    get_countries, get_crown_leaderboard, get_dig_percentage_leaderboard, get_dig_time_leaderboard,
+    get_distance_leaderboard,
 };
 pub use segments::{
     __path_create_segment, __path_get_filtered_leaderboard, __path_get_leaderboard_position,
@@ -79,17 +82,18 @@ pub use teams::{
     __path_discover_teams, __path_get_activity_teams, __path_get_invitation,
     __path_get_join_requests, __path_get_segment_teams, __path_get_team,
     __path_get_team_activities, __path_get_team_activities_by_date, __path_get_team_invitations,
-    __path_get_team_segments, __path_invite_to_team, __path_join_team, __path_leave_team,
-    __path_list_my_teams, __path_list_team_members, __path_remove_team_member,
+    __path_get_team_leaderboard, __path_get_team_segments, __path_invite_to_team, __path_join_team,
+    __path_leave_team, __path_list_my_teams, __path_list_team_members, __path_remove_team_member,
     __path_review_join_request, __path_revoke_invitation, __path_share_activity_with_teams,
     __path_share_segment_with_teams, __path_unshare_activity_from_team,
     __path_unshare_segment_from_team, __path_update_team, DiscoverTeamsQuery,
-    ReviewJoinRequestRequest, TeamActivitiesByDateQuery, TeamContentQuery, accept_invitation,
-    change_member_role, create_team, delete_team, discover_teams, get_activity_teams,
-    get_invitation, get_join_requests, get_segment_teams, get_team, get_team_activities,
-    get_team_activities_by_date, get_team_invitations, get_team_segments, invite_to_team, join_team,
-    leave_team, list_my_teams, list_team_members, remove_team_member, review_join_request,
-    revoke_invitation, share_activity_with_teams, share_segment_with_teams,
-    unshare_activity_from_team, unshare_segment_from_team, update_team,
+    ReviewJoinRequestRequest, TeamActivitiesByDateQuery, TeamContentQuery, TeamLeaderboardQuery,
+    TeamLeaderboardResponse, accept_invitation, change_member_role, create_team, delete_team,
+    discover_teams, get_activity_teams, get_invitation, get_join_requests, get_segment_teams,
+    get_team, get_team_activities, get_team_activities_by_date, get_team_invitations,
+    get_team_leaderboard, get_team_segments, invite_to_team, join_team, leave_team, list_my_teams,
+    list_team_members, remove_team_member, review_join_request, revoke_invitation,
+    share_activity_with_teams, share_segment_with_teams, unshare_activity_from_team,
+    unshare_segment_from_team, update_team,
 };
 pub use users::{__path_all_users, __path_new_user, NewUserQuery, all_users, new_user};

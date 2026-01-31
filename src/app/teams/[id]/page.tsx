@@ -10,6 +10,12 @@ import {
   FeedActivity,
   Segment,
   getActivityTypeName,
+  LeaderboardType,
+  CrownCountEntry,
+  DistanceLeaderEntry,
+  DigTimeLeaderEntry,
+  DigPercentageLeaderEntry,
+  AverageSpeedLeaderEntry,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,9 +28,11 @@ import { RoleBadge } from "@/components/teams/role-badge";
 import { FeedCard } from "@/components/feed/feed-card";
 import { LazyDailyActivitiesMap } from "@/components/activity/lazy-daily-activities-map";
 import { LazyTeamHeatmap } from "@/components/maps/lazy-team-heatmap";
+import { RankBadge } from "@/components/leaderboard/crown-badge";
 import { cn } from "@/lib/utils";
+import { Crown, MapPin, Shovel, Percent, Gauge } from "lucide-react";
 
-type TabType = "daily-map" | "heat-map" | "activities" | "segments" | "members";
+type TabType = "daily-map" | "heat-map" | "activities" | "segments" | "members" | "leaderboard";
 
 function formatDistance(meters: number): string {
   if (meters >= 1000) {
@@ -263,6 +271,12 @@ export default function TeamDetailPage() {
             >
               Members
             </TabButton>
+            <TabButton
+              active={activeTab === "leaderboard"}
+              onClick={() => setActiveTab("leaderboard")}
+            >
+              Leaderboard
+            </TabButton>
           </div>
 
           {/* Tab Content */}
@@ -288,6 +302,9 @@ export default function TeamDetailPage() {
                   canManage={canManage}
                   teamId={teamId}
                 />
+              )}
+              {activeTab === "leaderboard" && (
+                <LeaderboardTab teamId={teamId} currentUserId={user?.id} />
               )}
             </>
           )}
@@ -679,5 +696,170 @@ function MemberActions({
     >
       {removing ? "Removing..." : "Remove"}
     </Button>
+  );
+}
+
+type TeamLeaderboardType = "crowns" | "distance" | "dig_time" | "dig_percentage" | "average_speed";
+
+const LEADERBOARD_OPTIONS: { value: TeamLeaderboardType; label: string; icon: React.ReactNode }[] = [
+  { value: "crowns", label: "Crowns", icon: <Crown className="h-4 w-4" /> },
+  { value: "distance", label: "Distance", icon: <MapPin className="h-4 w-4" /> },
+  { value: "dig_time", label: "Dig Time", icon: <Shovel className="h-4 w-4" /> },
+  { value: "dig_percentage", label: "Dig %", icon: <Percent className="h-4 w-4" /> },
+  { value: "average_speed", label: "Avg Speed", icon: <Gauge className="h-4 w-4" /> },
+];
+
+type TeamLeaderboardEntry =
+  | CrownCountEntry
+  | DistanceLeaderEntry
+  | DigTimeLeaderEntry
+  | DigPercentageLeaderEntry
+  | AverageSpeedLeaderEntry;
+
+function LeaderboardTab({
+  teamId,
+  currentUserId,
+}: {
+  teamId: string;
+  currentUserId?: string;
+}) {
+  const [selectedType, setSelectedType] = useState<TeamLeaderboardType>("crowns");
+  const [entries, setEntries] = useState<TeamLeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    setError("");
+    api
+      .getTeamLeaderboard(teamId, selectedType)
+      .then(setEntries)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [teamId, selectedType]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg">Team Leaderboard</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Rankings among team members only
+        </p>
+      </CardHeader>
+      <CardContent>
+        {/* Leaderboard type selector */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {LEADERBOARD_OPTIONS.map((opt) => (
+            <Button
+              key={opt.value}
+              variant={selectedType === opt.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedType(opt.value)}
+              className="gap-2"
+            >
+              {opt.icon}
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+
+        {error && (
+          <div className="p-4 text-destructive bg-destructive/10 rounded-md mb-4">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            No data available for this leaderboard.
+          </div>
+        ) : (
+          <TeamLeaderboardList
+            entries={entries}
+            type={selectedType}
+            currentUserId={currentUserId}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function formatSpeed(mps: number): string {
+  const kph = mps * 3.6;
+  return `${kph.toFixed(1)} km/h`;
+}
+
+function TeamLeaderboardList({
+  entries,
+  type,
+  currentUserId,
+}: {
+  entries: TeamLeaderboardEntry[];
+  type: TeamLeaderboardType;
+  currentUserId?: string;
+}) {
+  return (
+    <div className="divide-y border rounded-md">
+      {entries.map((entry) => {
+        const isCurrentUser = currentUserId === entry.user_id;
+        return (
+          <div
+            key={entry.user_id}
+            className={cn(
+              "flex items-center gap-4 p-3",
+              isCurrentUser && "bg-primary/5"
+            )}
+          >
+            <div className="w-8 flex justify-center">
+              <RankBadge rank={entry.rank} size="sm" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <Link
+                href={`/profile/${entry.user_id}`}
+                className="font-medium hover:underline truncate block"
+              >
+                {entry.user_name}
+              </Link>
+            </div>
+            <div className="text-right font-medium">
+              {type === "crowns" && (
+                <span className="flex items-center gap-1">
+                  <Crown className="h-4 w-4 text-amber-500" />
+                  {(entry as CrownCountEntry).total_crowns}
+                </span>
+              )}
+              {type === "distance" && (
+                <span>{formatDistance((entry as DistanceLeaderEntry).total_distance_meters)}</span>
+              )}
+              {type === "dig_time" && (
+                <span>{formatDuration((entry as DigTimeLeaderEntry).total_dig_time_seconds)}</span>
+              )}
+              {type === "dig_percentage" && (
+                <span>{((entry as DigPercentageLeaderEntry).dig_percentage * 100).toFixed(1)}%</span>
+              )}
+              {type === "average_speed" && (
+                <span>{formatSpeed((entry as AverageSpeedLeaderEntry).average_speed_mps)}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

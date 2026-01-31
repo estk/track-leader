@@ -9,8 +9,8 @@ use crate::{
     database::Database,
     errors::AppError,
     models::{
-        AgeGroup, CountryStats, CrownCountEntry, DistanceLeaderEntry, GenderFilter,
-        LeaderboardScope, WeightClass,
+        AgeGroup, AverageSpeedLeaderEntry, CountryStats, CrownCountEntry, DigPercentageLeaderEntry,
+        DigTimeLeaderEntry, DistanceLeaderEntry, GenderFilter, LeaderboardScope, WeightClass,
     },
 };
 
@@ -67,6 +67,7 @@ pub async fn get_crown_leaderboard(
             query.weight_class,
             query.country.as_deref(),
             query.activity_type_id,
+            None, // No team filter for global leaderboard
         )
         .await?;
     Ok(Json(entries))
@@ -95,6 +96,93 @@ pub async fn get_distance_leaderboard(
             query.age_group,
             query.weight_class,
             query.country.as_deref(),
+            None, // No team filter for global leaderboard
+        )
+        .await?;
+    Ok(Json(entries))
+}
+
+/// Get global dig time leaderboard (total dig seconds in last 7 days).
+#[utoipa::path(
+    get,
+    path = "/leaderboard/dig-time",
+    tag = "leaderboard",
+    params(GlobalLeaderboardQuery),
+    responses(
+        (status = 200, description = "Dig time leaderboard", body = Vec<DigTimeLeaderEntry>)
+    )
+)]
+pub async fn get_dig_time_leaderboard(
+    Extension(db): Extension<Database>,
+    Query(query): Query<GlobalLeaderboardQuery>,
+) -> Result<Json<Vec<DigTimeLeaderEntry>>, AppError> {
+    let entries = db
+        .get_dig_time_leaderboard_filtered(
+            query.limit,
+            query.offset,
+            query.gender,
+            query.age_group,
+            query.weight_class,
+            query.country.as_deref(),
+            None, // No team filter for global leaderboard
+        )
+        .await?;
+    Ok(Json(entries))
+}
+
+/// Get global dig percentage leaderboard (dig_time / ride_activity_time).
+#[utoipa::path(
+    get,
+    path = "/leaderboard/dig-percentage",
+    tag = "leaderboard",
+    params(GlobalLeaderboardQuery),
+    responses(
+        (status = 200, description = "Dig percentage leaderboard", body = Vec<DigPercentageLeaderEntry>)
+    )
+)]
+pub async fn get_dig_percentage_leaderboard(
+    Extension(db): Extension<Database>,
+    Query(query): Query<GlobalLeaderboardQuery>,
+) -> Result<Json<Vec<DigPercentageLeaderEntry>>, AppError> {
+    let entries = db
+        .get_dig_percentage_leaderboard_filtered(
+            query.limit,
+            query.offset,
+            query.scope,
+            query.gender,
+            query.age_group,
+            query.weight_class,
+            query.country.as_deref(),
+            None, // No team filter for global leaderboard
+        )
+        .await?;
+    Ok(Json(entries))
+}
+
+/// Get global average speed leaderboard.
+#[utoipa::path(
+    get,
+    path = "/leaderboard/average-speed",
+    tag = "leaderboard",
+    params(GlobalLeaderboardQuery),
+    responses(
+        (status = 200, description = "Average speed leaderboard", body = Vec<AverageSpeedLeaderEntry>)
+    )
+)]
+pub async fn get_average_speed_leaderboard(
+    Extension(db): Extension<Database>,
+    Query(query): Query<GlobalLeaderboardQuery>,
+) -> Result<Json<Vec<AverageSpeedLeaderEntry>>, AppError> {
+    let entries = db
+        .get_average_speed_leaderboard_filtered(
+            query.limit,
+            query.offset,
+            query.scope,
+            query.gender,
+            query.age_group,
+            query.weight_class,
+            query.country.as_deref(),
+            None, // No team filter for global leaderboard
         )
         .await?;
     Ok(Json(entries))

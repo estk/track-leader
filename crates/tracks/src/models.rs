@@ -779,6 +779,79 @@ pub struct DistanceLeaderEntry {
     pub rank: i64,
 }
 
+/// Type of leaderboard for team featured leaderboard selection
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type, Default, ToSchema,
+)]
+#[sqlx(type_name = "leaderboard_type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum LeaderboardType {
+    #[default]
+    Crowns,
+    Distance,
+    DigTime,
+    DigPercentage,
+    AverageSpeed,
+}
+
+impl LeaderboardType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LeaderboardType::Crowns => "crowns",
+            LeaderboardType::Distance => "distance",
+            LeaderboardType::DigTime => "dig_time",
+            LeaderboardType::DigPercentage => "dig_percentage",
+            LeaderboardType::AverageSpeed => "average_speed",
+        }
+    }
+}
+
+impl std::str::FromStr for LeaderboardType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "crowns" => Ok(LeaderboardType::Crowns),
+            "distance" => Ok(LeaderboardType::Distance),
+            "dig_time" => Ok(LeaderboardType::DigTime),
+            "dig_percentage" => Ok(LeaderboardType::DigPercentage),
+            "average_speed" => Ok(LeaderboardType::AverageSpeed),
+            _ => Err(format!("unknown leaderboard type: {s}")),
+        }
+    }
+}
+
+/// Entry in dig time leaderboard (total dig seconds in last 7 days)
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct DigTimeLeaderEntry {
+    pub user_id: Uuid,
+    pub user_name: String,
+    pub total_dig_time_seconds: f64,
+    pub dig_segment_count: i64,
+    pub rank: i64,
+}
+
+/// Entry in dig percentage leaderboard (dig_time / ride_activity_time)
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct DigPercentageLeaderEntry {
+    pub user_id: Uuid,
+    pub user_name: String,
+    pub dig_percentage: f64,
+    pub total_dig_time_seconds: f64,
+    pub total_activity_duration_seconds: f64,
+    pub rank: i64,
+}
+
+/// Entry in average speed leaderboard (mean average_speed_mps across ride activities)
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct AverageSpeedLeaderEntry {
+    pub user_id: Uuid,
+    pub user_name: String,
+    pub average_speed_mps: f64,
+    pub activity_count: i64,
+    pub rank: i64,
+}
+
 // ============================================================================
 // Social Models (Follows, Notifications)
 // ============================================================================
@@ -1162,6 +1235,7 @@ pub struct Team {
     pub member_count: i32,
     pub activity_count: i32,
     pub segment_count: i32,
+    pub featured_leaderboard: Option<LeaderboardType>,
     #[serde(with = "rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde(with = "rfc3339::option")]
@@ -1282,6 +1356,7 @@ pub struct UpdateTeamRequest {
     pub avatar_url: Option<String>,
     pub visibility: Option<TeamVisibility>,
     pub join_policy: Option<TeamJoinPolicy>,
+    pub featured_leaderboard: Option<LeaderboardType>,
 }
 
 /// Request to invite a user to a team
