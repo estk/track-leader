@@ -18,12 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TeamSelector } from "@/components/teams/team-selector";
 import { parseGpxFile, getTimestampAtIndex, getTrackTimeRange } from "@/lib/gpx-parser";
-import {
-  ElevationProfile,
-  MultiRangeSegment,
-  getActivityTypeColor,
-} from "@/components/activity/elevation-profile";
-
+import { ElevationProfile, MultiRangeSegment, getActivityTypeColor } from "@/components/activity/elevation-profile";
 
 const VISIBILITY_OPTIONS: {
   value: ActivityVisibility;
@@ -37,7 +32,11 @@ const VISIBILITY_OPTIONS: {
     description: "Anyone can view this activity",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-        <path fillRule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.976.544l.062.029.018.008.006.003zM10 11.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" clipRule="evenodd" />
+        <path
+          fillRule="evenodd"
+          d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.976.544l.062.029.018.008.006.003zM10 11.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z"
+          clipRule="evenodd"
+        />
       </svg>
     ),
   },
@@ -47,7 +46,11 @@ const VISIBILITY_OPTIONS: {
     description: "Only you can view this activity",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-        <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+        <path
+          fillRule="evenodd"
+          d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+          clipRule="evenodd"
+        />
       </svg>
     ),
   },
@@ -117,97 +120,106 @@ export default function UploadActivityPage() {
   }, [isMultiSport, parsedPoints.length, boundaryIndices, segmentTypes, activityType]);
 
   // Handle file selection and parsing
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFile = e.target.files?.[0];
+      if (!selectedFile) return;
 
-    setFile(selectedFile);
-    setParseError(null);
-    setParsedPoints([]);
-    setHasTimestamps(false);
-    setIsMultiSport(false);
-    setBoundaryIndices([]);
-    setSegmentTypes([]);
-
-    // Auto-fill name from filename
-    if (!name) {
-      setName(selectedFile.name.replace(/\.(gpx|fit|tcx)$/i, ""));
-    }
-
-    // Parse GPX for preview
-    setParsing(true);
-    try {
-      const result = await parseGpxFile(selectedFile);
-      setParsedPoints(result.points);
-      setHasTimestamps(result.hasTimestamps);
-
-      // Auto-fill name from GPX metadata if available
-      if (result.name && !name) {
-        setName(result.name);
-      }
-    } catch (err) {
-      setParseError(err instanceof Error ? err.message : "Failed to parse GPX file");
-    } finally {
-      setParsing(false);
-    }
-  }, [name]);
-
-  // Handle clicking on the elevation profile to add a boundary
-  const handleBoundaryClick = useCallback((index: number) => {
-    if (!isMultiSport) return;
-
-    // Don't allow boundaries at the very start or end
-    if (index <= 0 || index >= parsedPoints.length - 1) return;
-
-    setBoundaryIndices((prev) => {
-      // Check if there's already a boundary near this index (within 5 points)
-      const nearbyIndex = prev.findIndex((b) => Math.abs(b - index) < 5);
-
-      if (nearbyIndex !== -1) {
-        // Remove existing nearby boundary
-        const updated = [...prev];
-        updated.splice(nearbyIndex, 1);
-
-        // Also remove the corresponding segment type
-        setSegmentTypes((prevTypes) => {
-          const updatedTypes = [...prevTypes];
-          // When removing boundary at index i, merge segments i and i+1
-          // by removing the type at index i+1
-          updatedTypes.splice(nearbyIndex + 1, 1);
-          return updatedTypes;
-        });
-
-        return updated.sort((a, b) => a - b);
-      } else {
-        // Add new boundary
-        const updated = [...prev, index].sort((a, b) => a - b);
-
-        // Find position of new boundary to insert default type
-        const newPos = updated.indexOf(index);
-        setSegmentTypes((prevTypes) => {
-          const updatedTypes = [...prevTypes];
-          // Insert the default activity type after the new boundary
-          updatedTypes.splice(newPos + 1, 0, activityType);
-          return updatedTypes;
-        });
-
-        return updated;
-      }
-    });
-  }, [isMultiSport, parsedPoints.length, activityType]);
-
-  // Toggle multi-sport mode
-  const handleMultiSportToggle = useCallback((enabled: boolean) => {
-    setIsMultiSport(enabled);
-    if (enabled) {
-      // Initialize with a single segment using the primary activity type
-      setBoundaryIndices([]);
-      setSegmentTypes([activityType]);
-    } else {
+      setFile(selectedFile);
+      setParseError(null);
+      setParsedPoints([]);
+      setHasTimestamps(false);
+      setIsMultiSport(false);
       setBoundaryIndices([]);
       setSegmentTypes([]);
-    }
-  }, [activityType]);
+
+      // Auto-fill name from filename
+      if (!name) {
+        setName(selectedFile.name.replace(/\.(gpx|fit|tcx)$/i, ""));
+      }
+
+      // Parse GPX for preview
+      setParsing(true);
+      try {
+        const result = await parseGpxFile(selectedFile);
+        setParsedPoints(result.points);
+        setHasTimestamps(result.hasTimestamps);
+
+        // Auto-fill name from GPX metadata if available
+        if (result.name && !name) {
+          setName(result.name);
+        }
+      } catch (err) {
+        setParseError(err instanceof Error ? err.message : "Failed to parse GPX file");
+      } finally {
+        setParsing(false);
+      }
+    },
+    [name],
+  );
+
+  // Handle clicking on the elevation profile to add a boundary
+  const handleBoundaryClick = useCallback(
+    (index: number) => {
+      if (!isMultiSport) return;
+
+      // Don't allow boundaries at the very start or end
+      if (index <= 0 || index >= parsedPoints.length - 1) return;
+
+      setBoundaryIndices((prev) => {
+        // Check if there's already a boundary near this index (within 5 points)
+        const nearbyIndex = prev.findIndex((b) => Math.abs(b - index) < 5);
+
+        if (nearbyIndex !== -1) {
+          // Remove existing nearby boundary
+          const updated = [...prev];
+          updated.splice(nearbyIndex, 1);
+
+          // Also remove the corresponding segment type
+          setSegmentTypes((prevTypes) => {
+            const updatedTypes = [...prevTypes];
+            // When removing boundary at index i, merge segments i and i+1
+            // by removing the type at index i+1
+            updatedTypes.splice(nearbyIndex + 1, 1);
+            return updatedTypes;
+          });
+
+          return updated.sort((a, b) => a - b);
+        } else {
+          // Add new boundary
+          const updated = [...prev, index].sort((a, b) => a - b);
+
+          // Find position of new boundary to insert default type
+          const newPos = updated.indexOf(index);
+          setSegmentTypes((prevTypes) => {
+            const updatedTypes = [...prevTypes];
+            // Insert the default activity type after the new boundary
+            updatedTypes.splice(newPos + 1, 0, activityType);
+            return updatedTypes;
+          });
+
+          return updated;
+        }
+      });
+    },
+    [isMultiSport, parsedPoints.length, activityType],
+  );
+
+  // Toggle multi-sport mode
+  const handleMultiSportToggle = useCallback(
+    (enabled: boolean) => {
+      setIsMultiSport(enabled);
+      if (enabled) {
+        // Initialize with a single segment using the primary activity type
+        setBoundaryIndices([]);
+        setSegmentTypes([activityType]);
+      } else {
+        setBoundaryIndices([]);
+        setSegmentTypes([]);
+      }
+    },
+    [activityType],
+  );
 
   // Update segment type at a specific index
   const handleSegmentTypeChange = useCallback((segmentIndex: number, typeId: string) => {
@@ -328,20 +340,14 @@ export default function UploadActivityPage() {
       <Card>
         <CardHeader>
           <CardTitle>Upload Activity</CardTitle>
-          <CardDescription>
-            Upload a GPX file to add a new activity
-          </CardDescription>
+          <CardDescription>Upload a GPX file to add a new activity</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-6">
-            {error && (
-              <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
-                {error}
-              </div>
-            )}
+            {error && <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>}
 
             <div className="space-y-2">
-              <Label htmlFor="file">GPX File</Label>
+              <Label htmlFor="file">Activity File</Label>
               <div
                 className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
                 onClick={() => fileInputRef.current?.click()}
@@ -350,45 +356,19 @@ export default function UploadActivityPage() {
                   ref={fileInputRef}
                   id="file"
                   type="file"
-                  accept=".gpx"
+                  accept=".gpx,.fit,.tcx"
                   onChange={handleFileChange}
                   className="hidden"
                 />
                 {file ? (
                   <p className="text-sm font-medium">{file.name}</p>
                 ) : (
-                  <p className="text-muted-foreground">
-                    Click to select a GPX file
-                  </p>
+                  <p className="text-muted-foreground">Click to select a GPX, FIT, or TCX file</p>
                 )}
               </div>
-              {parsing && (
-                <p className="text-sm text-muted-foreground">Parsing GPX file...</p>
-              )}
-              {parseError && (
-                <p className="text-sm text-destructive">{parseError}</p>
-              )}
+              {parsing && <p className="text-sm text-muted-foreground">Parsing file...</p>}
+              {parseError && <p className="text-sm text-destructive">{parseError}</p>}
             </div>
-
-            {/* Elevation Profile Preview */}
-            {parsedPoints.length > 0 && (
-              <div className="space-y-2">
-                <Label>Elevation Profile Preview</Label>
-                <div className="border rounded-lg p-4">
-                  <ElevationProfile
-                    points={parsedPoints}
-                    multiRangeMode={isMultiSport}
-                    segments={multiRangeSegments}
-                    onBoundaryClick={handleBoundaryClick}
-                  />
-                  {isMultiSport && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Click on the chart to add or remove segment boundaries
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
 
             <div className="space-y-2">
               <Label htmlFor="name">Activity Name</Label>
@@ -419,6 +399,21 @@ export default function UploadActivityPage() {
                 {isMultiSport ? "Primary activity type (used for display)" : "Type of activity"}
               </p>
             </div>
+
+            {/* Elevation Profile Preview */}
+            {parsedPoints.length > 0 && (
+              <div className="space-y-2">
+                <Label>Elevation Profile Preview</Label>
+                <div className="border rounded-lg p-4">
+                  <ElevationProfile
+                    points={parsedPoints}
+                    multiRangeMode={isMultiSport}
+                    segments={multiRangeSegments}
+                    onBoundaryClick={handleBoundaryClick}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Multi-sport toggle - only show if GPX has timestamps */}
             {parsedPoints.length > 0 && hasTimestamps && (
@@ -455,9 +450,7 @@ export default function UploadActivityPage() {
                             borderLeftColor: getActivityTypeColor(segment.activityTypeId),
                           }}
                         >
-                          <span className="text-sm text-muted-foreground min-w-[80px]">
-                            Segment {idx + 1}
-                          </span>
+                          <span className="text-sm text-muted-foreground min-w-[80px]">Segment {idx + 1}</span>
                           <select
                             value={segment.activityTypeId}
                             onChange={(e) => handleSegmentTypeChange(idx, e.target.value)}
@@ -496,11 +489,6 @@ export default function UploadActivityPage() {
                         </div>
                       ))}
                     </div>
-                    {multiRangeSegments.length === 1 && (
-                      <p className="text-xs text-muted-foreground">
-                        Click on the elevation profile above to add segment boundaries
-                      </p>
-                    )}
                   </div>
                 )}
               </div>
@@ -537,20 +525,14 @@ export default function UploadActivityPage() {
                     </div>
                     <div className="flex-1">
                       <div className="font-medium">{option.label}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {option.description}
-                      </div>
+                      <div className="text-sm text-muted-foreground">{option.description}</div>
                     </div>
                     <div
                       className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                        visibility === option.value
-                          ? "border-primary bg-primary"
-                          : "border-muted-foreground/30"
+                        visibility === option.value ? "border-primary bg-primary" : "border-muted-foreground/30"
                       }`}
                     >
-                      {visibility === option.value && (
-                        <div className="w-2 h-2 rounded-full bg-primary-foreground" />
-                      )}
+                      {visibility === option.value && <div className="w-2 h-2 rounded-full bg-primary-foreground" />}
                     </div>
                   </button>
                 ))}
@@ -574,12 +556,7 @@ export default function UploadActivityPage() {
             )}
 
             <div className="flex gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => router.back()}
-              >
+              <Button type="button" variant="outline" className="flex-1" onClick={() => router.back()}>
                 Cancel
               </Button>
               <Button type="submit" className="flex-1" disabled={uploading || parsing}>

@@ -579,6 +579,27 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
 }
 
 pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> anyhow::Result<()> {
+    // Create core components
+    let db = Database::new(pool.clone());
+    let aq = ActivityQueue::new(db.clone());
+    let store = ObjectStoreService::new_local(object_store_path.clone());
+
+    // Recover orphaned activities (uploaded but not processed due to restart)
+    match db.find_orphaned_activities().await {
+        Ok(orphaned) if !orphaned.is_empty() => {
+            tracing::info!(count = orphaned.len(), "Found orphaned activities, reprocessing");
+            for activity in orphaned {
+                if let Err(e) = aq.reprocess_orphaned(activity, &store).await {
+                    tracing::error!("Failed to reprocess orphaned activity: {e}");
+                }
+            }
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::warn!("Failed to check for orphaned activities: {e}");
+        }
+    }
+
     let app = create_router(pool, object_store_path);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;

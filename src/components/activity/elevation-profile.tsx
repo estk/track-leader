@@ -23,6 +23,7 @@ const ACTIVITY_TYPE_COLORS: Record<string, string> = {
   [ACTIVITY_TYPE_IDS.EMTB]: "#eab308",    // yellow
   [ACTIVITY_TYPE_IDS.GRAVEL]: "#a855f7",  // purple
   [ACTIVITY_TYPE_IDS.UNKNOWN]: "#6b7280", // gray
+  [ACTIVITY_TYPE_IDS.DIG]: "#78716c",     // stone/brown for trail work
 };
 
 // Default color for unknown activity types
@@ -159,18 +160,24 @@ export function ElevationProfile({
   const segmentDistances = useMemo(() => {
     if (!multiRangeMode || !segments || segments.length === 0) return null;
 
-    return segments.map((segment) => {
+    const result = segments.map((segment, idx) => {
       // Find the chart data points for start and end indices
       const startData = chartData.find((d) => d.originalIndex >= segment.startIndex);
       const endData = [...chartData].reverse().find((d) => d.originalIndex <= segment.endIndex);
 
+      const startDistance = startData?.distance ?? 0;
+      const endDistance = endData?.distance ?? (chartData[chartData.length - 1]?.distance ?? 0);
+
+
       return {
-        startDistance: startData?.distance ?? 0,
-        endDistance: endData?.distance ?? (chartData[chartData.length - 1]?.distance ?? 0),
+        startDistance,
+        endDistance,
         activityTypeId: segment.activityTypeId,
         color: getActivityTypeColor(segment.activityTypeId),
       };
     });
+
+    return result;
   }, [chartData, multiRangeMode, segments]);
 
   // Extract boundary indices from segments (for rendering boundary lines)
@@ -247,17 +254,22 @@ export function ElevationProfile({
             <div key={item.typeId} className="flex items-center gap-1.5">
               <div
                 className="w-3 h-3 rounded-sm"
-                style={{ backgroundColor: item.color, opacity: 0.6 }}
+                style={{ backgroundColor: item.color, opacity: 0.4 }}
               />
               <span className="text-muted-foreground">{item.name}</span>
             </div>
           ))}
         </div>
       )}
+      <div className="[&_*]:outline-none [&_*]:focus:outline-none">
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart
           data={chartData}
-          onMouseLeave={() => onHover?.(null)}
+          onMouseLeave={() => {
+            lastHoveredIndex.current = null;
+            setCurrentHoverIndex(null);
+            onHover?.(null);
+          }}
           onClick={() => {
             if (selectionMode && lastHoveredIndex.current !== null) {
               onPointClick?.(lastHoveredIndex.current);
@@ -266,7 +278,7 @@ export function ElevationProfile({
               onBoundaryClick?.(lastHoveredIndex.current);
             }
           }}
-          style={{ cursor: selectionMode || multiRangeMode ? "crosshair" : "default" }}
+          style={{ cursor: selectionMode || multiRangeMode ? "crosshair" : "default", outline: "none" }}
         >
           <defs>
             <linearGradient id="elevationGradient" x1="0" y1="0" x2="0" y2="1">
@@ -280,6 +292,8 @@ export function ElevationProfile({
           </defs>
           <XAxis
             dataKey="distance"
+            type="number"
+            domain={[0, totalDistance]}
             tickFormatter={(val) => `${val.toFixed(1)} km`}
             stroke="#888888"
             fontSize={12}
@@ -291,37 +305,23 @@ export function ElevationProfile({
             fontSize={12}
           />
           <Tooltip
+            position={{ y: 0 }}
+            offset={20}
             content={({ payload, active }) => {
               if (active && payload && payload[0]) {
                 const data = payload[0].payload;
                 const idx = data.originalIndex;
-                // Schedule hover update for after render completes
                 if (lastHoveredIndex.current !== idx) {
                   lastHoveredIndex.current = idx;
                   queueMicrotask(() => setCurrentHoverIndex(idx));
                 }
                 return (
-                  <div className="bg-background border rounded-md p-2 shadow-md">
-                    <p className="text-sm font-medium">
-                      {data.elevation.toFixed(0)}m
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {data.distance.toFixed(2)} km
-                    </p>
-                    {selectionMode && (
-                      <p className="text-xs text-green-600 mt-1">
-                        Click to select
-                      </p>
-                    )}
-                    {multiRangeMode && (
-                      <p className="text-xs text-blue-600 mt-1">
-                        Click to add boundary
-                      </p>
-                    )}
+                  <div className="bg-background/90 border rounded-md px-2 py-1 shadow-sm text-xs">
+                    <span className="font-medium">{data.elevation.toFixed(0)}m</span>
+                    <span className="text-muted-foreground ml-2">{data.distance.toFixed(2)} km</span>
                   </div>
                 );
               }
-              // Clear hover when tooltip is not active
               if (!active && lastHoveredIndex.current !== null) {
                 lastHoveredIndex.current = null;
                 queueMicrotask(() => setCurrentHoverIndex(null));
@@ -360,17 +360,23 @@ export function ElevationProfile({
               label={{ value: "End", position: "top", fill: "#ef4444", fontSize: 12 }}
             />
           )}
-          {/* Multi-range segment backgrounds */}
+          {/* Main elevation area - rendered first so segments appear on top */}
+          <Area
+            type="monotone"
+            dataKey="elevation"
+            stroke="#3b82f6"
+            fill="url(#elevationGradient)"
+            strokeWidth={2}
+          />
+          {/* Multi-range segment backgrounds - subtle tint over the elevation area */}
           {segmentDistances?.map((seg, idx) => (
             <ReferenceArea
               key={`segment-${idx}`}
               x1={seg.startDistance}
               x2={seg.endDistance}
               fill={seg.color}
-              fillOpacity={0.2}
-              stroke={seg.color}
-              strokeOpacity={0.4}
-              strokeWidth={1}
+              fillOpacity={0.15}
+              stroke="none"
             />
           ))}
           {/* Multi-range boundary lines */}
@@ -381,21 +387,26 @@ export function ElevationProfile({
               <ReferenceLine
                 key={`boundary-${idx}`}
                 x={boundary.distance}
-                stroke={isSelected ? "#3b82f6" : "#888888"}
+                stroke={isSelected ? "#3b82f6" : "#1f2937"}
                 strokeWidth={isSelected ? 3 : 2}
-                strokeDasharray={isSelected ? "none" : "4 2"}
+                strokeDasharray={isSelected ? "none" : "5 3"}
               />
             );
           })}
-          <Area
-            type="monotone"
-            dataKey="elevation"
-            stroke="#3b82f6"
-            fill="url(#elevationGradient)"
-            strokeWidth={2}
-          />
         </AreaChart>
       </ResponsiveContainer>
+      </div>
+      {/* Instructions for interactive modes */}
+      {multiRangeMode && (
+        <p className="text-xs text-muted-foreground">
+          Click on the chart to add or remove segment boundaries
+        </p>
+      )}
+      {selectionMode && (
+        <p className="text-xs text-muted-foreground">
+          Click to select start and end points
+        </p>
+      )}
     </div>
   );
 }

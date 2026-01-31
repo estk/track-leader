@@ -5013,4 +5013,30 @@ impl Database {
             temperatures: if has_temperature { temperatures } else { None },
         }))
     }
+
+    // ========================================================================
+    // Recovery Methods
+    // ========================================================================
+
+    /// Find activities that have been uploaded but not fully processed.
+    /// These are activities with an object_store_path but no corresponding track geometry.
+    pub async fn find_orphaned_activities(
+        &self,
+    ) -> Result<Vec<crate::models::OrphanedActivity>, AppError> {
+        let rows = sqlx::query_as::<_, crate::models::OrphanedActivity>(
+            r#"
+            SELECT a.id, a.user_id, a.activity_type_id, a.object_store_path,
+                   a.type_boundaries, a.segment_types
+            FROM activities a
+            LEFT JOIN tracks t ON a.id = t.activity_id
+            WHERE t.id IS NULL
+              AND a.deleted_at IS NULL
+            ORDER BY a.submitted_at ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
 }

@@ -1482,3 +1482,18 @@ pub struct ActivitySensorDataResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperatures: Option<Vec<Option<f64>>>,
 }
+
+// ============================================================================
+// Recovery Models
+// ============================================================================
+
+/// An activity that was uploaded but not fully processed (no track geometry).
+#[derive(Debug, sqlx::FromRow)]
+pub struct OrphanedActivity {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub activity_type_id: Uuid,
+    pub object_store_path: String,
+    pub type_boundaries: Option<Vec<time::OffsetDateTime>>,
+    pub segment_types: Option<Vec<Uuid>>,
+}

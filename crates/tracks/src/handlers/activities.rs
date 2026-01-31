@@ -180,10 +180,16 @@ pub async fn new_activity(
             (mime_hdr, file_bytes.freeze())
         };
 
-    let file_type = mime_hdr.map_or(FileType::Other, |ct| {
+    let mut file_type = mime_hdr.map_or(FileType::Other, |ct| {
         let mime = Mime::from(ct);
         FileType::from(mime)
     });
+
+    // If MIME type didn't give us a specific format (e.g., octet-stream),
+    // detect the actual file type from the content
+    if file_type == FileType::Other {
+        file_type = FileType::detect_from_bytes(&file_bytes);
+    }
 
     // Store the file in object store
     let object_store_path = store

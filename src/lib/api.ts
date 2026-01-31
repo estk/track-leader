@@ -39,6 +39,7 @@ export const ACTIVITY_TYPE_IDS = {
   EMTB: '00000000-0000-0000-0000-000000000006',
   GRAVEL: '00000000-0000-0000-0000-000000000007',
   UNKNOWN: '00000000-0000-0000-0000-000000000008',
+  DIG: '00000000-0000-0000-0000-000000000009',
 } as const;
 
 // Display names for built-in activity types
@@ -51,6 +52,7 @@ export const ACTIVITY_TYPE_NAMES: Record<string, string> = {
   [ACTIVITY_TYPE_IDS.EMTB]: 'E-Mountain Biking',
   [ACTIVITY_TYPE_IDS.GRAVEL]: 'Gravel',
   [ACTIVITY_TYPE_IDS.UNKNOWN]: 'Unknown',
+  [ACTIVITY_TYPE_IDS.DIG]: 'Trail Work',
 };
 
 // Activity type options for dropdowns
@@ -62,6 +64,7 @@ export const ACTIVITY_TYPE_OPTIONS = [
   { id: ACTIVITY_TYPE_IDS.WALK, name: 'Walk' },
   { id: ACTIVITY_TYPE_IDS.EMTB, name: 'E-Mountain Biking' },
   { id: ACTIVITY_TYPE_IDS.GRAVEL, name: 'Gravel' },
+  { id: ACTIVITY_TYPE_IDS.DIG, name: 'Trail Work' },
   { id: ACTIVITY_TYPE_IDS.UNKNOWN, name: 'Other' },
 ];
 

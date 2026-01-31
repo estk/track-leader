@@ -61,6 +61,31 @@ impl ActivityQueue {
         }
     }
 
+    /// Reprocess an orphaned activity by loading its file from the object store.
+    pub async fn reprocess_orphaned(
+        &self,
+        activity: crate::models::OrphanedActivity,
+        store: &crate::object_store_service::ObjectStoreService,
+    ) -> anyhow::Result<()> {
+        let bytes = store.get_file(&activity.object_store_path).await?;
+        let file_type = crate::object_store_service::FileType::detect_from_bytes(&bytes);
+
+        tracing::info!(
+            activity_id = %activity.id,
+            "Reprocessing orphaned activity"
+        );
+
+        self.submit(ActivitySubmission {
+            user_id: activity.user_id,
+            activity_id: activity.id,
+            file_type,
+            bytes,
+            activity_type_id: activity.activity_type_id,
+            type_boundaries: activity.type_boundaries,
+            segment_types: activity.segment_types,
+        })
+    }
+
     pub fn submit(&self, submission: ActivitySubmission) -> anyhow::Result<()> {
         let ActivitySubmission {
             user_id: uid,
