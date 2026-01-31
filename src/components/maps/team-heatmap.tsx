@@ -25,7 +25,7 @@ interface ActivityWithTrack {
 }
 
 const MAX_ACTIVITIES = 50;
-const POINT_SAMPLE_INTERVAL = 20; // Sample every Nth point - sparse enough that single tracks show as cool colors
+const POINT_SAMPLE_INTERVAL = 5; // Sample every Nth point for good visibility
 
 const DATE_RANGE_OPTIONS: { value: DateRange; label: string }[] = [
   { value: "7", label: "Last 7 days" },
@@ -204,44 +204,45 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
       });
 
       // Add heatmap layer with color gradient: blue -> green -> yellow -> orange -> red
-      // Tuned for activity tracks - single tracks show as cool colors, overlapping tracks show warmer
+      // Tuned for activity tracks - single tracks show as visible blue/cyan, overlapping tracks show warmer
       map.current.addLayer({
         id: "heatmap-layer",
         type: "heatmap",
         source: "heatmap-data",
         paint: {
-          // Very low weight per point - only overlapping tracks from multiple activities show warm
-          "heatmap-weight": 0.3,
-          // Low intensity - requires many overlapping points for saturation
+          // Weight per point
+          "heatmap-weight": 1,
+          // Intensity by zoom level
           "heatmap-intensity": [
             "interpolate",
             ["linear"],
             ["zoom"],
-            0, 0.2,
-            10, 0.4,
-            15, 0.7,
+            0, 0.6,
+            10, 1,
+            15, 1.5,
           ],
-          // Color gradient - shifted so single tracks appear blue/cyan
+          // Color gradient - single tracks appear blue/cyan, overlapping show warmer
           "heatmap-color": [
             "interpolate",
             ["linear"],
             ["heatmap-density"],
             0, "rgba(0, 0, 255, 0)",       // transparent (no density)
-            0.15, "rgba(65, 105, 225, 0.4)", // royal blue (single track)
-            0.35, "rgba(0, 191, 255, 0.5)", // deep sky blue (low overlap)
-            0.5, "rgba(0, 255, 127, 0.6)", // spring green (medium)
-            0.65, "rgba(255, 255, 0, 0.7)", // yellow (medium-high)
-            0.8, "rgba(255, 140, 0, 0.8)", // dark orange (high)
-            1, "rgba(255, 0, 0, 0.9)",     // red (many overlapping tracks)
+            0.1, "rgba(65, 105, 225, 0.6)", // royal blue (single track)
+            0.25, "rgba(0, 191, 255, 0.7)", // deep sky blue (low overlap)
+            0.4, "rgba(0, 255, 127, 0.75)", // spring green (medium)
+            0.55, "rgba(255, 255, 0, 0.8)", // yellow (medium-high)
+            0.7, "rgba(255, 140, 0, 0.85)", // dark orange (high)
+            0.85, "rgba(255, 69, 0, 0.9)", // orange-red
+            1, "rgba(255, 0, 0, 0.95)",    // red (many overlapping tracks)
           ],
-          // Small radius - tracks appear as thin lines rather than blobs
+          // Radius by zoom - visible but not blobby
           "heatmap-radius": [
             "interpolate",
             ["linear"],
             ["zoom"],
-            0, 1,
-            10, 5,
-            15, 10,
+            0, 3,
+            10, 10,
+            15, 18,
           ],
           // Fade out at high zoom
           "heatmap-opacity": [
@@ -249,7 +250,7 @@ export function TeamHeatmap({ teamId }: TeamHeatmapProps) {
             ["linear"],
             ["zoom"],
             14, 1,
-            17, 0.3,
+            17, 0.5,
           ],
         },
       });
