@@ -130,8 +130,8 @@ export default function TeamDetailPage() {
   useEffect(() => {
     if (!team?.is_member) return;
 
-    // Map tabs handle their own loading
-    if (activeTab === "daily-map" || activeTab === "heat-map") {
+    // These tabs handle their own loading
+    if (activeTab === "daily-map" || activeTab === "heat-map" || activeTab === "leaderboard") {
       setContentLoading(false);
       return;
     }
