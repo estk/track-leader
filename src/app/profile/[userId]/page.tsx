@@ -35,21 +35,31 @@ export default function UserProfilePage() {
 
     const loadProfile = async () => {
       try {
-        const [profileData, activitiesData] = await Promise.all([
-          api.getUserProfile(userId),
-          api.getUserActivities(userId),
-        ]);
+        // Fetch profile first - this is the critical data
+        const profileData = await api.getUserProfile(userId);
         setProfile(profileData);
-        setActivities(activitiesData.filter((a) => a.visibility === "public"));
+
+        // Fetch activities separately - don't fail the whole page if this fails
+        try {
+          const activitiesData = await api.getUserActivities(userId);
+          setActivities(activitiesData.filter((a) => a.visibility === "public"));
+        } catch {
+          // Activities failed to load - show empty list
+          setActivities([]);
+        }
 
         // Check if current user is following this user
         if (currentUser) {
-          const following = await api.getFollowStatus(userId);
-          setIsFollowing(following);
+          try {
+            const following = await api.getFollowStatus(userId);
+            setIsFollowing(following);
+          } catch {
+            // Follow status failed - default to not following
+          }
           setFollowStatusLoaded(true);
         }
       } catch {
-        // User not found
+        // User not found - profile is null
       } finally {
         setLoading(false);
       }
