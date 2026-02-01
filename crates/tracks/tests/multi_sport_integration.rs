@@ -825,6 +825,62 @@ async fn test_activity_with_empty_arrays() {
 }
 
 #[tokio::test]
+async fn test_get_user_activities_returns_started_at() {
+    let Some(pool) = get_test_pool().await else {
+        return;
+    };
+    let db = Database::new(pool.clone());
+    let user_id = create_test_user(&pool, "started_at").await;
+
+    // Create activity with a specific started_at time
+    let started_at = OffsetDateTime::now_utc() - Duration::hours(2);
+    let submitted_at = OffsetDateTime::now_utc();
+
+    let activity = Activity {
+        id: Uuid::new_v4(),
+        user_id,
+        activity_type_id: builtin_types::RUN,
+        name: "Morning Run".to_string(),
+        object_store_path: format!("test/{}.gpx", Uuid::new_v4()),
+        started_at,
+        submitted_at,
+        visibility: Visibility::Public.as_str().to_string(),
+        type_boundaries: None,
+        segment_types: None,
+    };
+
+    db.save_activity(&activity)
+        .await
+        .expect("Failed to save activity");
+
+    // get_user_activities must return started_at correctly
+    // This test would fail if started_at is missing from the SELECT clause
+    let activities = db
+        .get_user_activities(user_id)
+        .await
+        .expect("Failed to get user activities");
+
+    assert_eq!(activities.len(), 1);
+    let retrieved = &activities[0];
+
+    // Verify started_at matches (within 1 second to handle DB precision)
+    let diff = (retrieved.started_at - started_at).abs();
+    assert!(
+        diff < Duration::seconds(1),
+        "started_at mismatch: expected {started_at}, got {}",
+        retrieved.started_at
+    );
+
+    // Also verify it's different from submitted_at
+    assert_ne!(
+        retrieved.started_at, retrieved.submitted_at,
+        "started_at and submitted_at should be different"
+    );
+
+    cleanup_test_data(&pool, user_id).await;
+}
+
+#[tokio::test]
 async fn test_user_activities_include_multi_sport_data() {
     let Some(pool) = get_test_pool().await else {
         return;

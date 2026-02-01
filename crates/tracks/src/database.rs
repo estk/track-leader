@@ -211,7 +211,7 @@ impl Database {
         let activities: Vec<Activity> = sqlx::query_as(
             r#"
             SELECT id, user_id, activity_type_id, name, object_store_path,
-                   submitted_at, visibility, type_boundaries, segment_types
+                   started_at, submitted_at, visibility, type_boundaries, segment_types
             FROM activities
             WHERE user_id = $1 AND deleted_at IS NULL
             ORDER BY submitted_at DESC

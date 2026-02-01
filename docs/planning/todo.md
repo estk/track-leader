@@ -1,6 +1,13 @@
 # Todo
 
-- Simplify activity types when there are two adjacent activitys of the same type
+- [ ] Simplify activity types when there are two adjacent activitys of the same type
+
+- [~] leaderboards: dig time is still empty, and dig percentage leaderboard should not include 0% users
+
+- [~] I tried to upload a multi-sport activity and request failed:
+  - I found this in the console:
+  -  [API_ERROR] {"type":"api_error","timestamp":"2026-02-01T23:45:48.768Z","request_id":"48f4df42-948b-4f28-9328-18124120c460","method":"POST","path":"/auth/login","status":401,"duration_ms":59,"error":"Unauthorized"}
+  - [API_ERROR] {"type":"api_error","timestamp":"2026-02-01T23:46:54.768Z","request_id":null,"method":"GET","path":"/users/0814f1da-a3a5-4e58-bbe3-78f7a0363790/activities","status":500,"duration_ms":41,"error":"Request failed"}
 
 ### Current State
 
