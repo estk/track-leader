@@ -28,8 +28,20 @@ Supports random ports for parallel workspaces. See [docs/ai/development.md](./do
 - **Version Control**: Use `jj` (Jujutsu), never `git`
 - **Formatting**: `cargo +nightly fmt` for Rust
 - **Testing**: `cargo nextest run` for Rust tests
+- **E2E Testing**: Run Playwright tests after significant frontend changes
 - **Imports**: Import unused traits as `use MyTrait as _`
 - **Format strings**: Use inline variables: `println!("Hello, {name}!")`
+
+## E2E Testing
+
+After making significant changes to the frontend, run the Playwright E2E tests to verify nothing is broken:
+
+```bash
+# With dev environment running (./scripts/dev.sh)
+withenv npx playwright test --env E2E_BASE_URL=http://localhost:<frontend-port>
+```
+
+The frontend port is shown when starting the dev environment. Tests use authenticated sessions via storageState and will skip gracefully if test data is unavailable.
 
 ## Security Rules
 
