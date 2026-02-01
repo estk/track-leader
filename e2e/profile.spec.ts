@@ -52,3 +52,125 @@ test.describe("Profile Page", () => {
     }
   });
 });
+
+/**
+ * Tests for viewing other users' profiles (/profile/[userId]).
+ * These tests verify that viewing another user's profile works correctly,
+ * including graceful handling when some data fails to load.
+ */
+test.describe("Other User Profile Page", () => {
+  test("should display other user profile without 'User Not Found' error", async ({
+    page,
+  }) => {
+    // First, go to daily activities to find a user
+    await page.goto("/activities/daily");
+    await page.waitForLoadState("networkidle");
+
+    // Navigate to previous day which should have seeded activities
+    const prevButton = page.getByRole("button", { name: /previous/i });
+    await prevButton.click();
+    await page.waitForLoadState("networkidle");
+
+    // Find a user link in the activity list
+    const userLink = page.locator("a").filter({ hasText: /\w+ \w+/ }).first();
+    const hasUserLink = (await userLink.count()) > 0;
+
+    if (hasUserLink) {
+      // Get the user name before clicking
+      const userName = await userLink.textContent();
+
+      // Click on the user to go to their profile
+      await userLink.click();
+      await page.waitForLoadState("networkidle");
+
+      // Verify we're on a profile page
+      await expect(page).toHaveURL(/\/profile\//);
+
+      // The profile should display the user's name, NOT "User Not Found"
+      const userNotFound = page.getByText("User Not Found");
+      await expect(userNotFound).not.toBeVisible();
+
+      // The user's name should be visible
+      if (userName) {
+        await expect(page.getByText(userName.trim())).toBeVisible();
+      }
+
+      // Profile heading should be visible
+      await expect(
+        page.getByRole("heading", { name: /profile/i })
+      ).toBeVisible();
+    }
+  });
+
+  test("should display public activities section on other user profile", async ({
+    page,
+  }) => {
+    // Go to daily activities and find a user
+    await page.goto("/activities/daily");
+    await page.waitForLoadState("networkidle");
+
+    // Navigate to a previous day
+    const prevButton = page.getByRole("button", { name: /previous/i });
+    await prevButton.click();
+    await page.waitForLoadState("networkidle");
+
+    // Find and click a user link
+    const userLink = page.locator("a").filter({ hasText: /\w+ \w+/ }).first();
+
+    if ((await userLink.count()) > 0) {
+      await userLink.click();
+      await page.waitForLoadState("networkidle");
+
+      // Verify public activities section exists
+      await expect(page.getByText(/public activities/i)).toBeVisible();
+
+      // Should show a count (number) for public activities
+      const activityCount = page.locator("text=/\\d+/").first();
+      await expect(activityCount).toBeVisible();
+    }
+  });
+
+  test("should show follow button on other user profile", async ({ page }) => {
+    // Navigate to daily activities and find a user
+    await page.goto("/activities/daily");
+    await page.waitForLoadState("networkidle");
+
+    const prevButton = page.getByRole("button", { name: /previous/i });
+    await prevButton.click();
+    await page.waitForLoadState("networkidle");
+
+    const userLink = page.locator("a").filter({ hasText: /\w+ \w+/ }).first();
+
+    if ((await userLink.count()) > 0) {
+      await userLink.click();
+      await page.waitForLoadState("networkidle");
+
+      // Should show a Follow or Unfollow button
+      const followButton = page
+        .getByRole("button", { name: /follow|unfollow/i })
+        .first();
+      await expect(followButton).toBeVisible();
+    }
+  });
+
+  test("should display achievements section on other user profile", async ({
+    page,
+  }) => {
+    await page.goto("/activities/daily");
+    await page.waitForLoadState("networkidle");
+
+    const prevButton = page.getByRole("button", { name: /previous/i });
+    await prevButton.click();
+    await page.waitForLoadState("networkidle");
+
+    const userLink = page.locator("a").filter({ hasText: /\w+ \w+/ }).first();
+
+    if ((await userLink.count()) > 0) {
+      await userLink.click();
+      await page.waitForLoadState("networkidle");
+
+      // Should show achievements section
+      await expect(page.getByText(/achievements/i)).toBeVisible();
+    }
+  });
+});
