@@ -810,6 +810,20 @@ export default function ActivityDetailPage() {
               label="Bounds"
               value={`${trackData.bounds.min_lat.toFixed(3)}°, ${trackData.bounds.min_lon.toFixed(3)}°`}
             />
+            {digTimeSummary && digTimeSummary.dig_segment_count > 0 && (
+              <>
+                <StatItem
+                  label="Dig Time"
+                  value={formatDigDuration(digTimeSummary.total_dig_time_seconds)}
+                />
+                {digTimeSummary.activity_duration_seconds && digTimeSummary.activity_duration_seconds > 0 && (
+                  <StatItem
+                    label="Dig %"
+                    value={`${((digTimeSummary.total_dig_time_seconds / digTimeSummary.activity_duration_seconds) * 100).toFixed(1)}%`}
+                  />
+                )}
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

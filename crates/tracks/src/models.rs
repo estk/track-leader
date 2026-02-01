@@ -1447,6 +1447,8 @@ pub struct DigTimeSummary {
     pub activity_id: Uuid,
     pub total_dig_time_seconds: f64,
     pub dig_segment_count: i64,
+    /// Activity duration in seconds (from scores table)
+    pub activity_duration_seconds: Option<f64>,
 }
 
 // ============================================================================

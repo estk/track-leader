@@ -136,6 +136,7 @@ export interface CreateDigSegmentsRequest {
 export interface DigTimeSummary {
   total_dig_time_seconds: number;
   dig_segment_count: number;
+  activity_duration_seconds: number | null;
 }
 
 export interface TrackBounds {

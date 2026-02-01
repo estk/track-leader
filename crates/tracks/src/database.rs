@@ -2659,7 +2659,7 @@ impl Database {
                 {team_join}
                 {where_clause}
                 GROUP BY a.user_id
-                HAVING SUM(sc.duration) > 0
+                HAVING SUM(sc.duration) > 0 AND COALESCE(SUM(ads.duration_seconds), 0) > 0
             )
             SELECT
                 ut.user_id,
@@ -4849,25 +4849,31 @@ impl Database {
         &self,
         activity_id: Uuid,
     ) -> Result<crate::models::DigTimeSummary, AppError> {
-        let row: Option<(f64, i64)> = sqlx::query_as(
+        let row: Option<(f64, i64, Option<f64>)> = sqlx::query_as(
             r#"
             SELECT
-                COALESCE(SUM(duration_seconds), 0.0) as total_dig_time,
-                COUNT(*) as dig_count
-            FROM activity_dig_segments
-            WHERE activity_id = $1
+                COALESCE(SUM(ads.duration_seconds), 0.0) as total_dig_time,
+                COUNT(ads.id) as dig_count,
+                s.duration as activity_duration
+            FROM activities a
+            LEFT JOIN activity_dig_segments ads ON ads.activity_id = a.id
+            LEFT JOIN scores s ON s.activity_id = a.id
+            WHERE a.id = $1
+            GROUP BY a.id, s.duration
             "#,
         )
         .bind(activity_id)
         .fetch_optional(&self.pool)
         .await?;
 
-        let (total_dig_time_seconds, dig_segment_count) = row.unwrap_or((0.0, 0));
+        let (total_dig_time_seconds, dig_segment_count, activity_duration_seconds) =
+            row.unwrap_or((0.0, 0, None));
 
         Ok(crate::models::DigTimeSummary {
             activity_id,
             total_dig_time_seconds,
             dig_segment_count,
+            activity_duration_seconds,
         })
     }
 
