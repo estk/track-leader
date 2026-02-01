@@ -3145,10 +3145,12 @@ impl Database {
         let mut qb = QueryBuilder::new();
 
         // Always filter to followed users (uses $1)
-        qb.add_param_condition(
-            "a.user_id IN (SELECT following_id FROM follows WHERE follower_id = ",
-        );
-        qb.add_condition(")");
+        // Note: We construct the full subquery condition here to avoid the closing paren
+        // being treated as a separate condition joined by AND
+        let subquery_idx = qb.next_param_idx();
+        qb.add_condition(format!(
+            "a.user_id IN (SELECT following_id FROM follows WHERE follower_id = ${subquery_idx})"
+        ));
 
         // Always require public visibility and not deleted
         qb.add_condition("a.visibility = 'public'");
