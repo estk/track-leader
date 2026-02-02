@@ -4966,16 +4966,16 @@ impl Database {
         };
 
         let team_where = if team_id.is_some() {
-            "AND tas.team_id = $3"
+            "AND tas.team_id = $2"
         } else {
             ""
         };
 
         let since_where = if since.is_some() {
             if team_id.is_some() {
-                "AND ads.start_time >= $4"
-            } else {
                 "AND ads.start_time >= $3"
+            } else {
+                "AND ads.start_time >= $2"
             }
         } else {
             ""
@@ -5015,11 +5015,11 @@ impl Database {
         );
 
         // Bind parameters based on which filters are present
+        // $1 = limit, $2 = team_id OR since (if no team), $3 = since (if team present)
         let points: Vec<crate::models::DigHeatmapPoint> = match (team_id, since) {
             (Some(tid), Some(s)) => {
                 sqlx::query_as(&query)
                     .bind(limit)
-                    .bind(tid)
                     .bind(tid)
                     .bind(s)
                     .fetch_all(&self.pool)
@@ -5028,7 +5028,6 @@ impl Database {
             (Some(tid), None) => {
                 sqlx::query_as(&query)
                     .bind(limit)
-                    .bind(tid)
                     .bind(tid)
                     .fetch_all(&self.pool)
                     .await?
