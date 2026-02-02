@@ -4988,7 +4988,7 @@ impl Database {
                     ROUND(ST_X(dp.geom)::numeric, 4) as lon,
                     ROUND(ST_Y(dp.geom)::numeric, 4) as lat,
                     ads.duration_seconds
-                FROM activity_dig_segments ads
+                FROM activity_dig_parts ads
                 JOIN activities a ON a.id = ads.activity_id
                 JOIN tracks t ON t.activity_id = a.id
                 {team_join}
