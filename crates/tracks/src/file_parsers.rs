@@ -5,16 +5,33 @@
 
 use bytes::Buf as _;
 use bytes::Bytes;
+use serde::Serialize;
 use std::io::BufReader;
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 use crate::models::TrackPointData;
 use crate::object_store_service::FileType;
 
+/// Well-known activity type UUIDs (matching frontend ACTIVITY_TYPE_IDS)
+pub mod activity_type_ids {
+    use uuid::Uuid;
+
+    pub const WALK: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
+    pub const RUN: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
+    pub const HIKE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
+    pub const ROAD: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000004);
+    pub const MTB: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000005);
+    pub const EMTB: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000006);
+    pub const GRAVEL: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000007);
+    pub const UNKNOWN: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000008);
+    pub const DIG: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000009);
+}
+
 /// Sensor data extracted from an activity file.
 /// Arrays are parallel to track points - each index corresponds to the same point.
 /// Values are `None` where the sensor data is not available for that point.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct SensorData {
     /// Heart rate in beats per minute
     pub heart_rates: Vec<Option<i32>>,
@@ -49,13 +66,32 @@ impl SensorData {
     }
 }
 
+/// Sport segment extracted from a FIT file's Session messages.
+/// Each session represents a distinct sport within a multi-sport activity.
+#[derive(Debug, Clone, Serialize)]
+pub struct FitSportSegment {
+    /// The sport type as a string (e.g., "running", "cycling")
+    pub sport: String,
+    /// Sub-sport for more specific categorization (e.g., "mountain" for MTB)
+    pub sub_sport: Option<String>,
+    /// Mapped activity type UUID for our system
+    pub activity_type_id: Uuid,
+    /// Start timestamp of this session
+    pub start_time: Option<OffsetDateTime>,
+    /// Total elapsed time in seconds
+    pub total_elapsed_time: Option<f64>,
+}
+
 /// Result of parsing an activity file
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ParsedActivity {
     /// Track points with lat/lon/elevation/timestamp
     pub track_points: Vec<TrackPointData>,
     /// Sensor data parallel to track points
     pub sensor_data: SensorData,
+    /// Sport segments detected from FIT Session messages (FIT files only)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sport_segments: Vec<FitSportSegment>,
 }
 
 impl ParsedActivity {
@@ -142,6 +178,7 @@ pub fn parse_gpx(bytes: Bytes) -> Result<ParsedActivity, ParseError> {
     Ok(ParsedActivity {
         track_points,
         sensor_data,
+        sport_segments: Vec::new(),
     })
 }
 
@@ -222,6 +259,7 @@ pub fn parse_tcx(bytes: Bytes) -> Result<ParsedActivity, ParseError> {
     Ok(ParsedActivity {
         track_points,
         sensor_data,
+        sport_segments: Vec::new(),
     })
 }
 
@@ -247,84 +285,165 @@ fn chrono_to_offset_datetime_local(dt: &chrono::DateTime<chrono::Local>) -> Offs
 
 /// Parse a FIT (Flexible and Interoperable Data Transfer) file.
 pub fn parse_fit(bytes: Bytes) -> Result<ParsedActivity, ParseError> {
+    use fitparser::profile::field_types::MesgNum;
+
     let data = bytes.to_vec();
     let fit_data = fitparser::from_bytes(&data).map_err(|e| ParseError::FitError(e.to_string()))?;
 
     let mut track_points = Vec::new();
     let mut sensor_data = SensorData::default();
+    let mut sport_segments = Vec::new();
 
-    for record in fit_data {
-        // We're looking for "record" messages which contain per-second data
-        if record.kind() != fitparser::profile::field_types::MesgNum::Record {
-            continue;
-        }
+    for record in &fit_data {
+        match record.kind() {
+            MesgNum::Record => {
+                // Extract track point data
+                let mut lat: Option<f64> = None;
+                let mut lon: Option<f64> = None;
+                let mut elevation: Option<f64> = None;
+                let mut timestamp: Option<OffsetDateTime> = None;
+                let mut hr: Option<i32> = None;
+                let mut cad: Option<i32> = None;
+                let mut power: Option<i32> = None;
+                let mut temp: Option<f64> = None;
 
-        let mut lat: Option<f64> = None;
-        let mut lon: Option<f64> = None;
-        let mut elevation: Option<f64> = None;
-        let mut timestamp: Option<OffsetDateTime> = None;
-        let mut hr: Option<i32> = None;
-        let mut cad: Option<i32> = None;
-        let mut power: Option<i32> = None;
-        let mut temp: Option<f64> = None;
-
-        for field in record.fields() {
-            match field.name() {
-                "position_lat" => {
-                    if let fitparser::Value::SInt32(v) = field.value() {
-                        // FIT stores lat/lon as semicircles, convert to degrees
-                        lat = Some(semicircles_to_degrees(*v));
+                for field in record.fields() {
+                    match field.name() {
+                        "position_lat" => {
+                            if let fitparser::Value::SInt32(v) = field.value() {
+                                // FIT stores lat/lon as semicircles, convert to degrees
+                                lat = Some(semicircles_to_degrees(*v));
+                            }
+                        }
+                        "position_long" => {
+                            if let fitparser::Value::SInt32(v) = field.value() {
+                                lon = Some(semicircles_to_degrees(*v));
+                            }
+                        }
+                        "altitude" | "enhanced_altitude" => {
+                            elevation = extract_fit_f64(field.value());
+                        }
+                        "timestamp" => {
+                            if let fitparser::Value::Timestamp(t) = field.value() {
+                                timestamp = Some(chrono_to_offset_datetime_local(t));
+                            }
+                        }
+                        "heart_rate" => {
+                            hr = extract_fit_i32(field.value());
+                        }
+                        "cadence" => {
+                            cad = extract_fit_i32(field.value());
+                        }
+                        "power" => {
+                            power = extract_fit_i32(field.value());
+                        }
+                        "temperature" => {
+                            temp = extract_fit_f64(field.value());
+                        }
+                        _ => {}
                     }
                 }
-                "position_long" => {
-                    if let fitparser::Value::SInt32(v) = field.value() {
-                        lon = Some(semicircles_to_degrees(*v));
-                    }
+
+                // Only add points that have valid position data
+                if let (Some(lat_val), Some(lon_val)) = (lat, lon) {
+                    track_points.push(TrackPointData {
+                        lat: lat_val,
+                        lon: lon_val,
+                        elevation,
+                        timestamp,
+                    });
+
+                    sensor_data.heart_rates.push(hr);
+                    sensor_data.cadences.push(cad);
+                    sensor_data.powers.push(power);
+                    sensor_data.temperatures.push(temp);
                 }
-                "altitude" | "enhanced_altitude" => {
-                    elevation = extract_fit_f64(field.value());
-                }
-                "timestamp" => {
-                    if let fitparser::Value::Timestamp(t) = field.value() {
-                        timestamp = Some(chrono_to_offset_datetime_local(t));
-                    }
-                }
-                "heart_rate" => {
-                    hr = extract_fit_i32(field.value());
-                }
-                "cadence" => {
-                    cad = extract_fit_i32(field.value());
-                }
-                "power" => {
-                    power = extract_fit_i32(field.value());
-                }
-                "temperature" => {
-                    temp = extract_fit_f64(field.value());
-                }
-                _ => {}
             }
-        }
-
-        // Only add points that have valid position data
-        if let (Some(lat_val), Some(lon_val)) = (lat, lon) {
-            track_points.push(TrackPointData {
-                lat: lat_val,
-                lon: lon_val,
-                elevation,
-                timestamp,
-            });
-
-            sensor_data.heart_rates.push(hr);
-            sensor_data.cadences.push(cad);
-            sensor_data.powers.push(power);
-            sensor_data.temperatures.push(temp);
+            MesgNum::Session => {
+                // Extract sport segment from session message
+                if let Some(segment) = extract_fit_sport_segment(record) {
+                    sport_segments.push(segment);
+                }
+            }
+            _ => {}
         }
     }
+
+    // Sort sport segments by start time
+    sport_segments.sort_by(|a, b| a.start_time.cmp(&b.start_time));
 
     Ok(ParsedActivity {
         track_points,
         sensor_data,
+        sport_segments,
     })
+}
+
+/// Extract sport segment information from a FIT Session message.
+fn extract_fit_sport_segment(record: &fitparser::FitDataRecord) -> Option<FitSportSegment> {
+    let mut sport: Option<String> = None;
+    let mut sub_sport: Option<String> = None;
+    let mut start_time: Option<OffsetDateTime> = None;
+    let mut total_elapsed_time: Option<f64> = None;
+
+    for field in record.fields() {
+        match field.name() {
+            "sport" => {
+                sport = Some(format!("{}", field.value()));
+            }
+            "sub_sport" => {
+                let val = format!("{}", field.value());
+                if val != "generic" && val != "Generic" {
+                    sub_sport = Some(val);
+                }
+            }
+            "start_time" => {
+                if let fitparser::Value::Timestamp(t) = field.value() {
+                    start_time = Some(chrono_to_offset_datetime_local(t));
+                }
+            }
+            "total_elapsed_time" => {
+                total_elapsed_time = extract_fit_f64(field.value());
+            }
+            _ => {}
+        }
+    }
+
+    let sport_str = sport?;
+    let activity_type_id = map_fit_sport_to_activity_type(&sport_str, sub_sport.as_deref());
+
+    Some(FitSportSegment {
+        sport: sport_str,
+        sub_sport,
+        activity_type_id,
+        start_time,
+        total_elapsed_time,
+    })
+}
+
+/// Map a FIT sport/sub_sport combination to our activity type UUID.
+fn map_fit_sport_to_activity_type(sport: &str, sub_sport: Option<&str>) -> Uuid {
+    let sport_lower = sport.to_lowercase();
+    let sub_sport_lower = sub_sport.map(|s| s.to_lowercase());
+
+    match sport_lower.as_str() {
+        "running" => activity_type_ids::RUN,
+        "walking" => activity_type_ids::WALK,
+        "hiking" => activity_type_ids::HIKE,
+        "cycling" => {
+            // Check sub_sport for more specific bike type
+            match sub_sport_lower.as_deref() {
+                Some("mountain") | Some("downhill") | Some("trail") => activity_type_ids::MTB,
+                Some("road") | Some("track_cycling") => activity_type_ids::ROAD,
+                Some("gravel") | Some("cyclocross") => activity_type_ids::GRAVEL,
+                _ => activity_type_ids::ROAD, // Default cycling to road
+            }
+        }
+        "e_biking" | "ebiking" => activity_type_ids::EMTB,
+        "transition" => activity_type_ids::UNKNOWN, // Triathlon transition
+        "swimming" | "open_water_swimming" | "lap_swimming" => activity_type_ids::UNKNOWN,
+        _ => activity_type_ids::UNKNOWN,
+    }
 }
 
 /// Convert FIT semicircles to degrees.
@@ -419,5 +538,64 @@ mod tests {
         // Test unknown
         let unknown_bytes = b"random data that is not a valid file";
         assert_eq!(FileType::detect_from_bytes(unknown_bytes), FileType::Other);
+    }
+
+    #[test]
+    fn test_map_fit_sport_to_activity_type() {
+        // Running maps to RUN
+        assert_eq!(
+            map_fit_sport_to_activity_type("running", None),
+            activity_type_ids::RUN
+        );
+        assert_eq!(
+            map_fit_sport_to_activity_type("Running", None),
+            activity_type_ids::RUN
+        );
+
+        // Walking maps to WALK
+        assert_eq!(
+            map_fit_sport_to_activity_type("walking", None),
+            activity_type_ids::WALK
+        );
+
+        // Hiking maps to HIKE
+        assert_eq!(
+            map_fit_sport_to_activity_type("hiking", None),
+            activity_type_ids::HIKE
+        );
+
+        // Cycling with sub_sport
+        assert_eq!(
+            map_fit_sport_to_activity_type("cycling", Some("road")),
+            activity_type_ids::ROAD
+        );
+        assert_eq!(
+            map_fit_sport_to_activity_type("cycling", Some("mountain")),
+            activity_type_ids::MTB
+        );
+        assert_eq!(
+            map_fit_sport_to_activity_type("cycling", Some("gravel")),
+            activity_type_ids::GRAVEL
+        );
+        assert_eq!(
+            map_fit_sport_to_activity_type("cycling", None),
+            activity_type_ids::ROAD
+        );
+
+        // E-biking maps to EMTB
+        assert_eq!(
+            map_fit_sport_to_activity_type("e_biking", None),
+            activity_type_ids::EMTB
+        );
+
+        // Unknown sport maps to UNKNOWN
+        assert_eq!(
+            map_fit_sport_to_activity_type("swimming", None),
+            activity_type_ids::UNKNOWN
+        );
+        assert_eq!(
+            map_fit_sport_to_activity_type("generic", None),
+            activity_type_ids::UNKNOWN
+        );
     }
 }

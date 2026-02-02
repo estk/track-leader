@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -12,6 +12,11 @@ import {
   StoppedSegment,
 } from "@/lib/api";
 import { DigTaggingModal } from "@/components/activity/dig-tagging-modal";
+import {
+  SegmentMergeModal,
+  detectMergeableSegments,
+  mergeAdjacentSegments,
+} from "@/components/activity/segment-merge-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,6 +98,11 @@ export default function UploadActivityPage() {
   const [showDigModal, setShowDigModal] = useState(false);
   const [uploadedActivityId, setUploadedActivityId] = useState<string | null>(null);
   const [stoppedSegments, setStoppedSegments] = useState<StoppedSegment[]>([]);
+
+  // Segment merge modal state
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState(false);
+
   // Boundary indices: always includes 0 (start) and points.length-1 (end) implicitly
   // This array stores only the interior boundary indices
   const [boundaryIndices, setBoundaryIndices] = useState<number[]>([]);
@@ -253,37 +263,42 @@ export default function UploadActivityPage() {
     router.push("/activities");
   }, [router]);
 
-  // Auth check - must be after all hooks
-  if (!authLoading && !user) {
-    router.push("/login");
-    return null;
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (!file) {
-      setError("Please select a file");
-      return;
+  // Check for adjacent same-sport segments and show merge modal if found
+  const checkForMergeableSegments = useCallback((): boolean => {
+    if (!isMultiSport || segmentTypes.length <= 1) {
+      return false;
     }
+    const mergeGroups = detectMergeableSegments(segmentTypes);
+    return mergeGroups.length > 0;
+  }, [isMultiSport, segmentTypes]);
 
-    if (!name.trim()) {
-      setError("Please enter a name");
-      return;
-    }
+  // Handle merge action from the modal
+  const handleMerge = useCallback(() => {
+    const result = mergeAdjacentSegments(boundaryIndices, segmentTypes);
+    setBoundaryIndices(result.boundaryIndices);
+    setSegmentTypes(result.segmentTypes);
+    setShowMergeModal(false);
+    setPendingUpload(true);
+  }, [boundaryIndices, segmentTypes]);
 
-    if (visibility === "teams_only" && selectedTeamIds.length === 0) {
-      setError("Please select at least one team to share with");
-      return;
-    }
+  // Handle "keep as-is" from the modal - proceed with upload
+  const handleKeepAsIs = useCallback(() => {
+    setShowMergeModal(false);
+    setPendingUpload(true);
+  }, []);
+
+  // Handle "edit" from the modal - close modal and stay on page
+  const handleEditSegments = useCallback(() => {
+    setShowMergeModal(false);
+    setPendingUpload(false);
+  }, []);
+
+  // Actual upload function (called after merge decision)
+  const performUpload = useCallback(async () => {
+    if (!file || !user) return;
 
     setUploading(true);
-
-    if (!user) {
-      setError("Not authenticated");
-      return;
-    }
+    setError("");
 
     try {
       const teamIds = visibility === "teams_only" ? selectedTeamIds : undefined;
@@ -332,7 +347,69 @@ export default function UploadActivityPage() {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploading(false);
+      setPendingUpload(false);
     }
+  }, [
+    file,
+    user,
+    name,
+    activityType,
+    visibility,
+    selectedTeamIds,
+    isMultiSport,
+    hasTimestamps,
+    boundaryIndices,
+    segmentTypes,
+    parsedPoints,
+    router,
+  ]);
+
+  // Trigger upload when pendingUpload becomes true
+  // (after merge decision is made)
+  useEffect(() => {
+    if (pendingUpload) {
+      performUpload();
+    }
+  }, [pendingUpload, performUpload]);
+
+  // Auth check - must be after all hooks
+  if (!authLoading && !user) {
+    router.push("/login");
+    return null;
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!file) {
+      setError("Please select a file");
+      return;
+    }
+
+    if (!name.trim()) {
+      setError("Please enter a name");
+      return;
+    }
+
+    if (visibility === "teams_only" && selectedTeamIds.length === 0) {
+      setError("Please select at least one team to share with");
+      return;
+    }
+
+    if (!user) {
+      setError("Not authenticated");
+      return;
+    }
+
+    // Check for mergeable segments before upload
+    if (checkForMergeableSegments()) {
+      setShowMergeModal(true);
+      return;
+    }
+
+    // No merge needed, proceed with upload
+    setPendingUpload(true);
   };
 
   return (
@@ -566,6 +643,21 @@ export default function UploadActivityPage() {
           </CardContent>
         </form>
       </Card>
+
+      {/* Segment Merge Modal */}
+      {showMergeModal && (
+        <SegmentMergeModal
+          segments={multiRangeSegments.map((seg, i) => ({
+            index: i,
+            activityTypeId: seg.activityTypeId,
+            startIndex: seg.startIndex,
+            endIndex: seg.endIndex,
+          }))}
+          onMerge={handleMerge}
+          onKeepAsIs={handleKeepAsIs}
+          onEdit={handleEditSegments}
+        />
+      )}
 
       {/* Dig Tagging Modal */}
       {showDigModal && uploadedActivityId && (

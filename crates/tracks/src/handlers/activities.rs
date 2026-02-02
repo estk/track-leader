@@ -17,7 +17,7 @@ use crate::{
     auth::{AuthUser, OptionalAuthUser},
     database::Database,
     errors::AppError,
-    file_parsers::parse_activity_file,
+    file_parsers::{parse_activity_file, FitSportSegment},
     models::{Activity, ActivitySortBy, DateRangeFilter, FeedActivity, VisibilityFilter},
     object_store_service::{FileType, ObjectStoreService},
 };
@@ -47,6 +47,60 @@ pub struct TrackBounds {
     pub max_lat: f64,
     pub min_lon: f64,
     pub max_lon: f64,
+}
+
+/// Preview track point for activity preview (simpler than full TrackPoint).
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PreviewTrackPoint {
+    pub lat: f64,
+    pub lon: f64,
+    pub ele: Option<f64>,
+    pub time: Option<String>,
+}
+
+/// Sport segment detected from FIT file Session messages.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PreviewSportSegment {
+    /// The sport type as a string (e.g., "running", "cycling")
+    pub sport: String,
+    /// Sub-sport for more specific categorization (e.g., "mountain" for MTB)
+    pub sub_sport: Option<String>,
+    /// Mapped activity type UUID for our system
+    pub activity_type_id: String,
+    /// Start timestamp of this session (ISO8601)
+    pub start_time: Option<String>,
+    /// Total elapsed time in seconds
+    pub total_elapsed_time: Option<f64>,
+}
+
+impl From<FitSportSegment> for PreviewSportSegment {
+    fn from(seg: FitSportSegment) -> Self {
+        Self {
+            sport: seg.sport,
+            sub_sport: seg.sub_sport,
+            activity_type_id: seg.activity_type_id.to_string(),
+            start_time: seg.start_time.map(|t| {
+                t.format(&time::format_description::well_known::Rfc3339)
+                    .unwrap_or_default()
+            }),
+            total_elapsed_time: seg.total_elapsed_time,
+        }
+    }
+}
+
+/// Response from previewing an activity file before upload.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PreviewActivityResponse {
+    /// File type detected (gpx, tcx, fit)
+    pub file_type: String,
+    /// Track points with lat/lon/elevation/timestamp
+    pub points: Vec<PreviewTrackPoint>,
+    /// Geographic bounds of the track
+    pub bounds: TrackBounds,
+    /// Sport segments detected from FIT file (empty for GPX/TCX)
+    pub sport_segments: Vec<PreviewSportSegment>,
+    /// Whether the track has timestamp data (needed for multi-sport)
+    pub has_timestamps: bool,
 }
 
 /// Activity upload query parameters.
@@ -266,6 +320,131 @@ pub async fn new_activity(
     }
 
     Ok(Json(activity))
+}
+
+/// Preview an activity file before upload.
+/// Parses the file and returns track points plus any detected sport segments (FIT only).
+/// Does NOT save anything to the database.
+#[utoipa::path(
+    post,
+    path = "/activities/preview",
+    tag = "activities",
+    request_body(content_type = "multipart/form-data", description = "Activity file upload"),
+    responses(
+        (status = 200, description = "Activity preview data", body = PreviewActivityResponse),
+        (status = 400, description = "Invalid input"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn preview_activity(
+    AuthUser(_claims): AuthUser,
+    mut multipart: Multipart,
+) -> Result<Json<PreviewActivityResponse>, AppError> {
+    // Extract file from multipart
+    let (mime_hdr, file_bytes) = {
+        let mut file_bytes = BytesMut::new();
+        let mut mime_hdr = None;
+
+        while let Some(field) = multipart.next_field().await.map_err(|_| {
+            AppError::InvalidInput("Failed to process multipart data".to_string())
+        })? {
+            if field.name() == Some("file") {
+                mime_hdr = field.headers().typed_get::<ContentType>();
+                let chunk = field.bytes().await.map_err(|_| {
+                    AppError::InvalidInput("Failed to read file data".to_string())
+                })?;
+                file_bytes.extend(chunk);
+            }
+        }
+
+        if file_bytes.is_empty() {
+            return Err(AppError::InvalidInput("No file provided".to_string()));
+        }
+        (mime_hdr, file_bytes.freeze())
+    };
+
+    // Detect file type
+    let mut file_type = mime_hdr.map_or(FileType::Other, |ct| {
+        let mime = Mime::from(ct);
+        FileType::from(mime)
+    });
+
+    if file_type == FileType::Other {
+        file_type = FileType::detect_from_bytes(&file_bytes);
+    }
+
+    // Parse the file
+    let parsed = parse_activity_file(file_type, file_bytes)
+        .map_err(|e| AppError::InvalidInput(format!("Failed to parse file: {e}")))?;
+
+    // Build response
+    let mut min_lat = f64::MAX;
+    let mut max_lat = f64::MIN;
+    let mut min_lon = f64::MAX;
+    let mut max_lon = f64::MIN;
+    let mut has_timestamps = false;
+
+    let points: Vec<PreviewTrackPoint> = parsed
+        .track_points
+        .iter()
+        .map(|pt| {
+            min_lat = min_lat.min(pt.lat);
+            max_lat = max_lat.max(pt.lat);
+            min_lon = min_lon.min(pt.lon);
+            max_lon = max_lon.max(pt.lon);
+
+            if pt.timestamp.is_some() {
+                has_timestamps = true;
+            }
+
+            PreviewTrackPoint {
+                lat: pt.lat,
+                lon: pt.lon,
+                ele: pt.elevation,
+                time: pt.timestamp.map(|t| {
+                    t.format(&time::format_description::well_known::Rfc3339)
+                        .unwrap_or_default()
+                }),
+            }
+        })
+        .collect();
+
+    // Handle case of empty track
+    if points.is_empty() {
+        min_lat = 0.0;
+        max_lat = 0.0;
+        min_lon = 0.0;
+        max_lon = 0.0;
+    }
+
+    let sport_segments: Vec<PreviewSportSegment> = parsed
+        .sport_segments
+        .into_iter()
+        .map(PreviewSportSegment::from)
+        .collect();
+
+    let file_type_str = match file_type {
+        FileType::Gpx => "gpx",
+        FileType::Tcx => "tcx",
+        FileType::Fit => "fit",
+        FileType::Other => "unknown",
+    };
+
+    Ok(Json(PreviewActivityResponse {
+        file_type: file_type_str.to_string(),
+        points,
+        bounds: TrackBounds {
+            min_lat,
+            max_lat,
+            min_lon,
+            max_lon,
+        },
+        sport_segments,
+        has_timestamps,
+    }))
 }
 
 /// Get an activity by ID.

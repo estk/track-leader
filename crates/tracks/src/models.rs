@@ -1090,11 +1090,12 @@ pub struct Stats {
 // ============================================================================
 
 /// Track point with all 4 dimensions for storage in LineStringZM geometry
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TrackPointData {
     pub lat: f64,
     pub lon: f64,
     pub elevation: Option<f64>,
+    #[serde(with = "time::serde::rfc3339::option")]
     pub timestamp: Option<OffsetDateTime>,
 }
 

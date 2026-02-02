@@ -115,6 +115,7 @@ impl ActivityQueue {
             let ParsedActivity {
                 track_points,
                 sensor_data,
+                sport_segments: _,
             } = parsed;
 
             // For GPX files, also parse the raw GPX for segment timing extraction

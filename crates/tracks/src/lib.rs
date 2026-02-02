@@ -52,13 +52,7 @@ use crate::{
         get_user_achievements, get_user_activities, get_user_profile, give_kudos, health_check,
         invite_to_team, is_segment_starred, join_team, leave_team, list_activity_types,
         list_my_teams, list_segments, list_team_members, mark_all_notifications_read,
-        mark_notification_read, new_activity, new_user, preview_segment, remove_kudos,
-        remove_team_member, reprocess_dig_parts, reprocess_segment, resolve_activity_type,
-        review_join_request, revoke_invitation, share_activity_with_teams,
-        share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team,
-        unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics,
-        update_team,
-    },
+        mark_notification_read, new_activity, new_user, preview_segment, remove_kudos, remove_team_member, reprocess_dig_parts, reprocess_segment, resolve_activity_type, review_join_request, revoke_invitation, share_activity_with_teams, share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team, unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics, update_team, preview_activity, },
     object_store_service::ObjectStoreService,
 };
 
@@ -94,6 +88,7 @@ use crate::{
         handlers::all_users,
         // Activities
         handlers::new_activity,
+        handlers::preview_activity,
         handlers::get_activity,
         handlers::update_activity,
         handlers::delete_activity,
@@ -302,6 +297,9 @@ use crate::{
             handlers::TrackPoint,
             handlers::TrackData,
             handlers::TrackBounds,
+            handlers::PreviewTrackPoint,
+            handlers::PreviewSportSegment,
+            handlers::PreviewActivityResponse,
             handlers::UploadQuery,
             handlers::UpdateActivityRequest,
             handlers::UserActivitiesQuery,
@@ -386,6 +384,7 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         .route("/users", get(all_users))
         // Activity routes
         .route("/activities/new", post(new_activity))
+        .route("/activities/preview", post(preview_activity))
         .route("/activities/by-date", get(get_activities_by_date))
         .route(
             "/activities/{id}",

@@ -151,6 +151,30 @@ export interface TrackData {
   bounds: TrackBounds;
 }
 
+// Preview types for activity file preview before upload
+export interface PreviewTrackPoint {
+  lat: number;
+  lon: number;
+  ele: number | null;
+  time: string | null;
+}
+
+export interface PreviewSportSegment {
+  sport: string;
+  sub_sport: string | null;
+  activity_type_id: string;
+  start_time: string | null;
+  total_elapsed_time: number | null;
+}
+
+export interface PreviewActivityResponse {
+  file_type: string;
+  points: PreviewTrackPoint[];
+  bounds: TrackBounds;
+  sport_segments: PreviewSportSegment[];
+  has_timestamps: boolean;
+}
+
 // Sensor data types
 export interface SensorData {
   activity_id: string;
@@ -932,6 +956,30 @@ class ApiClient {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Upload failed' }));
       throw new Error(error.error || 'Upload failed');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Preview an activity file before upload.
+   * Returns track points and detected sport segments (FIT only).
+   * Does NOT save anything to the database.
+   */
+  async previewActivity(file: File): Promise<PreviewActivityResponse> {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/activities/preview`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Preview failed' }));
+      throw new Error(error.error || 'Preview failed');
     }
 
     return response.json();
