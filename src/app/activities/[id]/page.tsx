@@ -88,6 +88,16 @@ function formatClimbCategory(category: number | null): string | null {
   return info?.label ?? null;
 }
 
+// Format duration in seconds to h:mm:ss or m:ss format
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return h > 0
+    ? `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+    : `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function ActivityDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -179,6 +189,19 @@ export default function ActivityDetailPage() {
   }, [activity, trackData]);
 
   const isMultiSport = multiRangeSegments.length > 1;
+
+  // Calculate segment durations from track point times for multi-sport breakdown
+  const segmentDurations = useMemo(() => {
+    if (!isMultiSport || !trackData?.points) return [];
+    return multiRangeSegments.map((seg) => {
+      const startPoint = trackData.points[seg.startIndex];
+      const endPoint = trackData.points[seg.endIndex];
+      if (!startPoint?.time || !endPoint?.time) return { ...seg, duration: null };
+      const duration =
+        (new Date(endPoint.time).getTime() - new Date(startPoint.time).getTime()) / 1000;
+      return { ...seg, duration };
+    });
+  }, [isMultiSport, multiRangeSegments, trackData]);
 
   useEffect(() => {
     // Wait for auth to finish loading before making requests
@@ -795,20 +818,28 @@ export default function ActivityDetailPage() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatItem
+              label="Distance"
+              value={activity.distance ? `${(activity.distance / 1000).toFixed(2)} km` : "N/A"}
+            />
+            <StatItem
+              label="Duration"
+              value={activity.duration ? formatDuration(activity.duration) : "N/A"}
+            />
+            <StatItem
+              label="Elevation Gain"
+              value={activity.elevation_gain ? `${activity.elevation_gain.toFixed(0)} m` : "N/A"}
+            />
+            <StatItem
+              label="Average Speed"
+              value={
+                activity.distance && activity.duration
+                  ? `${((activity.distance / 1000) / (activity.duration / 3600)).toFixed(1)} km/h`
+                  : "N/A"
+              }
+            />
+            <StatItem
               label="Points"
               value={trackData.points.length.toLocaleString()}
-            />
-            <StatItem
-              label="Start Elevation"
-              value={`${trackData.points[0]?.ele?.toFixed(0) ?? "N/A"}m`}
-            />
-            <StatItem
-              label="End Elevation"
-              value={`${trackData.points[trackData.points.length - 1]?.ele?.toFixed(0) ?? "N/A"}m`}
-            />
-            <StatItem
-              label="Bounds"
-              value={`${trackData.bounds.min_lat.toFixed(3)}°, ${trackData.bounds.min_lon.toFixed(3)}°`}
             />
             {digTimeSummary && digTimeSummary.dig_part_count > 0 && (
               <>
@@ -827,6 +858,29 @@ export default function ActivityDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Multi-sport Time Breakdown */}
+      {isMultiSport && segmentDurations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Time Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {segmentDurations.map((seg, i) => (
+                <div key={i} className="flex justify-between items-center">
+                  <span className="text-muted-foreground">
+                    {getActivityTypeName(seg.activityTypeId)}
+                  </span>
+                  <span className="font-medium">
+                    {seg.duration !== null ? formatDuration(seg.duration) : "N/A"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dig Time */}
       {digTimeSummary && digTimeSummary.dig_part_count > 0 && (

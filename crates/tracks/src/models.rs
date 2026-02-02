@@ -74,6 +74,27 @@ pub struct Activity {
     pub segment_types: Option<Vec<Uuid>>,
 }
 
+/// Activity with optional statistics from scores table
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct ActivityWithStats {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub activity_type_id: Uuid,
+    pub name: String,
+    pub object_store_path: String,
+    #[serde(with = "rfc3339")]
+    pub started_at: OffsetDateTime,
+    #[serde(with = "rfc3339")]
+    pub submitted_at: OffsetDateTime,
+    pub visibility: String,
+    pub type_boundaries: Option<Vec<OffsetDateTime>>,
+    pub segment_types: Option<Vec<Uuid>>,
+    // Stats from scores table
+    pub distance: Option<f64>,
+    pub duration: Option<f64>,
+    pub elevation_gain: Option<f64>,
+}
+
 // ============================================================================
 // Activity Type Models (table-based, replaces enum)
 // ============================================================================

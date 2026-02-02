@@ -1,12 +1,12 @@
 use crate::errors::AppError;
 use crate::models::{
     Achievement, AchievementHolder, AchievementType, AchievementWithSegment, Activity,
-    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, AgeGroup, CountryStats,
-    CrownCountEntry, DateRangeFilter, DistanceLeaderEntry, GenderFilter, LeaderboardEntry,
-    LeaderboardFilters, LeaderboardScope, ResolvedActivityType, Scores, Segment, SegmentEffort,
-    Team, TeamInvitation, TeamInvitationWithDetails, TeamJoinRequest, TeamJoinRequestWithUser,
-    TeamMember, TeamMembership, TeamRole, TeamSummary, TeamVisibility, TeamWithMembership,
-    UpdateDemographicsRequest, User, UserWithDemographics, WeightClass,
+    ActivityAliasRow, ActivitySegmentEffort, ActivityTypeRow, ActivityWithStats, AgeGroup,
+    CountryStats, CrownCountEntry, DateRangeFilter, DistanceLeaderEntry, GenderFilter,
+    LeaderboardEntry, LeaderboardFilters, LeaderboardScope, ResolvedActivityType, Scores, Segment,
+    SegmentEffort, Team, TeamInvitation, TeamInvitationWithDetails, TeamJoinRequest,
+    TeamJoinRequestWithUser, TeamMember, TeamMembership, TeamRole, TeamSummary, TeamVisibility,
+    TeamWithMembership, UpdateDemographicsRequest, User, UserWithDemographics, WeightClass,
 };
 use crate::query_builder::QueryBuilder;
 use crate::segment_matching::{ActivityMatch, SegmentMatch};
@@ -198,6 +198,27 @@ impl Database {
                    started_at, submitted_at, visibility, type_boundaries, segment_types
             FROM activities
             WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(activity)
+    }
+
+    pub async fn get_activity_with_stats(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<ActivityWithStats>, AppError> {
+        let activity = sqlx::query_as(
+            r#"
+            SELECT a.id, a.user_id, a.activity_type_id, a.name, a.object_store_path,
+                   a.started_at, a.submitted_at, a.visibility, a.type_boundaries, a.segment_types,
+                   s.distance, s.duration, s.elevation_gain
+            FROM activities a
+            LEFT JOIN scores s ON s.activity_id = a.id
+            WHERE a.id = $1 AND a.deleted_at IS NULL
             "#,
         )
         .bind(id)

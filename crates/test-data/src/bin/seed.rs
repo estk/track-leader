@@ -336,10 +336,7 @@ async fn main() -> anyhow::Result<()> {
         dig_result.users.len(),
         comp_result.users.len()
     );
-    tracing::info!(
-        "  Activities: {} uploaded via API",
-        activity_id_map.len()
-    );
+    tracing::info!("  Activities: {} uploaded via API", activity_id_map.len());
     tracing::info!("  Segments: {}", comp_result.segments.len());
     tracing::info!("  Efforts: {}", updated_efforts.len());
     tracing::info!("  Follows: {}", comp_result.follows.len());

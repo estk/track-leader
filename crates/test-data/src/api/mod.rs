@@ -3,8 +3,8 @@
 //! Uploads activities via the HTTP API to ensure DIG part extraction
 //! happens through the production code path in `activity_queue.rs`.
 
-use reqwest::multipart::{Form, Part};
 use reqwest::Client;
+use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use time::OffsetDateTime;
@@ -89,9 +89,7 @@ impl ApiSeeder {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::LoginFailed(format!(
-                "Status {status}: {body}"
-            )));
+            return Err(ApiError::LoginFailed(format!("Status {status}: {body}")));
         }
 
         let login_resp: LoginResponse = resp.json().await?;
@@ -154,9 +152,7 @@ impl ApiSeeder {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(ApiError::UploadFailed(format!(
-                "Status {status}: {body}"
-            )));
+            return Err(ApiError::UploadFailed(format!("Status {status}: {body}")));
         }
 
         let activity_resp: ActivityResponse = resp.json().await?;

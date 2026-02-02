@@ -18,7 +18,10 @@ use crate::{
     database::Database,
     errors::AppError,
     file_parsers::{FitSportSegment, parse_activity_file},
-    models::{Activity, ActivitySortBy, DateRangeFilter, FeedActivity, VisibilityFilter},
+    models::{
+        Activity, ActivitySortBy, ActivityWithStats, DateRangeFilter, FeedActivity,
+        VisibilityFilter,
+    },
     object_store_service::{FileType, ObjectStoreService},
 };
 
@@ -457,7 +460,7 @@ pub async fn preview_activity(
         ("id" = Uuid, Path, description = "Activity ID")
     ),
     responses(
-        (status = 200, description = "Activity details", body = Activity),
+        (status = 200, description = "Activity details", body = ActivityWithStats),
         (status = 404, description = "Activity not found")
     )
 )]
@@ -465,8 +468,11 @@ pub async fn get_activity(
     Extension(db): Extension<Database>,
     OptionalAuthUser(claims): OptionalAuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Activity>, AppError> {
-    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+) -> Result<Json<ActivityWithStats>, AppError> {
+    let activity = db
+        .get_activity_with_stats(id)
+        .await?
+        .ok_or(AppError::NotFound)?;
 
     // Check visibility-based access control
     let has_access = match activity.visibility.as_str() {

@@ -85,6 +85,10 @@ export interface Activity {
   // Multi-sport support
   type_boundaries: (string | number[])[] | null;  // ISO8601 timestamps or Rust OffsetDateTime arrays
   segment_types: string[] | null;     // Activity type UUIDs
+  // Stats from scores table (optional, from GET /activities/{id} endpoint)
+  distance: number | null;
+  duration: number | null;
+  elevation_gain: number | null;
 }
 
 // Activity filter types
