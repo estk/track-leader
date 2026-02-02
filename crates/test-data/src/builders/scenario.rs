@@ -715,17 +715,11 @@ impl ScenarioBuilder {
                 continue;
             }
 
-            // Record boundary timestamp (start of this segment)
-            if let Some(first_point) = segment_points.first() {
-                if let Some(ts) = first_point.timestamp {
-                    type_boundaries.push(ts);
-                }
-            }
-
             // Record segment type
             segment_types.push(seg.activity_type_id);
 
             // For continuity, adjust timestamps of subsequent segments
+            // IMPORTANT: We record boundaries AFTER adjusting timestamps so they match actual track data
             if !all_track_points.is_empty() {
                 let last_ts = all_track_points
                     .last()
@@ -739,6 +733,13 @@ impl ScenarioBuilder {
 
                 let offset = last_ts - first_ts + time::Duration::seconds(1);
 
+                // Record boundary timestamp (start of this segment) with adjusted time
+                if let Some(first_point) = segment_points.first() {
+                    if let Some(ts) = first_point.timestamp {
+                        type_boundaries.push(ts + offset);
+                    }
+                }
+
                 for point in &segment_points {
                     all_track_points.push(TrackPointData {
                         lat: point.lat,
@@ -748,6 +749,12 @@ impl ScenarioBuilder {
                     });
                 }
             } else {
+                // First segment - record boundary from original timestamp
+                if let Some(first_point) = segment_points.first() {
+                    if let Some(ts) = first_point.timestamp {
+                        type_boundaries.push(ts);
+                    }
+                }
                 all_track_points.extend(segment_points.clone());
             }
 

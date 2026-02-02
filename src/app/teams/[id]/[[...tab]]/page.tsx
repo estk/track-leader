@@ -891,10 +891,10 @@ function TeamLeaderboardList({
                 <span>{formatDistance((entry as DistanceLeaderEntry).total_distance_meters)}</span>
               )}
               {type === "dig_time" && (
-                <span>{formatDuration((entry as DigTimeLeaderEntry).total_dig_time_seconds)}</span>
+                <span>{formatDuration((entry as DigTimeLeaderEntry).total_dig_time_seconds ?? 0)}</span>
               )}
               {type === "dig_percentage" && (
-                <span>{((entry as DigPercentageLeaderEntry).dig_percentage * 100).toFixed(1)}%</span>
+                <span>{((entry as DigPercentageLeaderEntry).dig_percentage ?? 0).toFixed(1)}%</span>
               )}
               {type === "average_speed" && (
                 <span>{formatSpeed((entry as AverageSpeedLeaderEntry).average_speed_mps)}</span>
@@ -1011,10 +1011,10 @@ function FeaturedLeaderboard({
                       <span>{formatDistance((entry as DistanceLeaderEntry).total_distance_meters)}</span>
                     )}
                     {leaderboardType === "dig_time" && (
-                      <span>{formatDuration((entry as DigTimeLeaderEntry).total_dig_time_seconds)}</span>
+                      <span>{formatDuration((entry as DigTimeLeaderEntry).total_dig_time_seconds ?? 0)}</span>
                     )}
                     {leaderboardType === "dig_percentage" && (
-                      <span>{((entry as DigPercentageLeaderEntry).dig_percentage * 100).toFixed(1)}%</span>
+                      <span>{((entry as DigPercentageLeaderEntry).dig_percentage ?? 0).toFixed(1)}%</span>
                     )}
                     {leaderboardType === "average_speed" && (
                       <span>{formatSpeed((entry as AverageSpeedLeaderEntry).average_speed_mps)}</span>

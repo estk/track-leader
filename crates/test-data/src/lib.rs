@@ -25,10 +25,12 @@
 //!     .await?;
 //! ```
 
+pub mod api;
 pub mod builders;
 pub mod config;
 pub mod db;
 pub mod generators;
+pub mod gpx;
 pub mod profiles;
 pub mod sources;
 pub mod terrain;

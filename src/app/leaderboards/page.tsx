@@ -989,7 +989,7 @@ function DigPercentageLeaderboard({
 
                 {/* Dig Percentage */}
                 <div className="hidden sm:block text-right font-medium">
-                  {(entry.dig_percentage * 100).toFixed(1)}%
+                  {entry.dig_percentage.toFixed(1)}%
                 </div>
 
                 {/* Dig Time */}
@@ -1005,7 +1005,7 @@ function DigPercentageLeaderboard({
                 {/* Mobile-only stats row */}
                 <div className="sm:hidden col-span-2 flex items-center justify-between text-sm">
                   <span className="font-medium">
-                    {(entry.dig_percentage * 100).toFixed(1)}%
+                    {entry.dig_percentage.toFixed(1)}%
                   </span>
                   <span className="text-muted-foreground">
                     {formatDuration(entry.total_dig_time_seconds)} / {formatDuration(entry.total_activity_duration_seconds)}
