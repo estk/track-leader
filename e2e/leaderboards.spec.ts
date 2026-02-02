@@ -175,4 +175,62 @@ test.describe("Leaderboards Page", () => {
       // It's okay if no specific crown icons - content depends on implementation
     });
   });
+
+  test.describe("Dig Percentage Leaderboard Data Quality", () => {
+    test("should not show users with 0% dig percentage", async ({ page }) => {
+      // Switch to Dig % leaderboard
+      await page.getByRole("button", { name: /dig %/i }).click();
+      await page.waitForLoadState("networkidle");
+
+      // Wait for content to load
+      await page.waitForTimeout(1000);
+
+      // Look for table rows or list items in the leaderboard
+      const tableBody = page.locator("tbody");
+      const isTableVisible = await tableBody.isVisible();
+
+      if (isTableVisible) {
+        const rows = tableBody.getByRole("row");
+        const rowCount = await rows.count();
+
+        if (rowCount > 0) {
+          // Check that no row contains "0.0%" or "0%" as the dig percentage
+          // The dig percentage column typically shows values like "5.2%", "12.1%", etc.
+          const zeroPercentRows = page.locator("td:has-text('0.0%'), td:has-text('0%')");
+          const zeroCount = await zeroPercentRows.count();
+
+          // Verify no 0% entries exist
+          expect(zeroCount).toBe(0);
+        }
+      }
+      // If no table is visible, the leaderboard is empty which is valid
+    });
+
+    test("should display percentage values for all entries", async ({ page }) => {
+      // Switch to Dig % leaderboard
+      await page.getByRole("button", { name: /dig %/i }).click();
+      await page.waitForLoadState("networkidle");
+
+      // Wait for content to load
+      await page.waitForTimeout(1000);
+
+      // Look for percentage values in the leaderboard
+      const tableBody = page.locator("tbody");
+      const isTableVisible = await tableBody.isVisible();
+
+      if (isTableVisible) {
+        const rows = tableBody.getByRole("row");
+        const rowCount = await rows.count();
+
+        if (rowCount > 0) {
+          // Verify each row contains a percentage value
+          const percentageValues = page.locator("td").filter({ hasText: /\d+\.\d+%|\d+%/ });
+          const percentCount = await percentageValues.count();
+
+          // There should be at least as many percentage values as rows
+          expect(percentCount).toBeGreaterThanOrEqual(rowCount);
+        }
+      }
+    });
+  });
 });

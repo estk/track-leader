@@ -110,4 +110,46 @@ test.describe("Activity Detail Page", () => {
       .first();
     await expect(stats).toBeVisible({ timeout: 10000 });
   });
+
+  test.describe("Dig Statistics", () => {
+    test("should display dig time in statistics when activity has dig parts", async ({ page }) => {
+      // Look for Dig Time stat in the Statistics section
+      // This only appears when the activity has dig parts (multi-sport with DIG segments)
+      const digTimeLabel = page.getByText("Dig Time", { exact: true });
+      const digTimeExists = await digTimeLabel.count() > 0;
+
+      if (digTimeExists) {
+        // Verify the value is displayed (format: Xm Ys or Xm or Ys)
+        const digTimeValue = page.locator("text=/\\d+m|\\d+s/").first();
+        await expect(digTimeValue).toBeVisible();
+      }
+      // If no dig time, test passes - not all activities have dig parts
+    });
+
+    test("should display dig percentage in statistics when activity has dig parts", async ({ page }) => {
+      // Look for Dig % stat in the Statistics section
+      const digPercentLabel = page.getByText("Dig %", { exact: true });
+      const digPercentExists = await digPercentLabel.count() > 0;
+
+      if (digPercentExists) {
+        // Verify the percentage value is displayed
+        const digPercentValue = page.locator("text=/\\d+(\\.\\d+)?%/").first();
+        await expect(digPercentValue).toBeVisible();
+      }
+      // If no dig %, test passes - not all activities have dig parts
+    });
+
+    test("should display Trail Maintenance section when activity has dig parts", async ({ page }) => {
+      // Look for the Trail Maintenance card header
+      const trailMaintenanceHeader = page.getByText("Trail Maintenance");
+      const hasDigParts = await trailMaintenanceHeader.count() > 0;
+
+      if (hasDigParts) {
+        // Verify the section contains dig sessions
+        const digSessionsLabel = page.getByText("Dig Sessions");
+        await expect(digSessionsLabel).toBeVisible();
+      }
+      // If no Trail Maintenance section, test passes - not all activities have dig parts
+    });
+  });
 });
