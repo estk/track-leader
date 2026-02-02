@@ -4960,7 +4960,7 @@ impl Database {
     ) -> Result<crate::models::DigHeatmapResponse, AppError> {
         // Build the query dynamically based on filters
         let team_join = if team_id.is_some() {
-            "JOIN team_activity_shares tas ON tas.activity_id = a.id"
+            "JOIN activity_teams tas ON tas.activity_id = a.id"
         } else {
             ""
         };

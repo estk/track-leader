@@ -12,9 +12,43 @@
 
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use std::path::Path;
 use test_data::builders::ScenarioBuilder;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
+
+/// Read the postgres port from .dev-ports file if it exists.
+/// Returns None if the file doesn't exist or can't be parsed.
+fn read_dev_ports_postgres_port() -> Option<u16> {
+    let dev_ports_path = Path::new(".dev-ports");
+    if !dev_ports_path.exists() {
+        return None;
+    }
+
+    let contents = std::fs::read_to_string(dev_ports_path).ok()?;
+    for line in contents.lines() {
+        if let Some(port_str) = line.strip_prefix("POSTGRES_PORT=") {
+            return port_str.trim().parse().ok();
+        }
+    }
+    None
+}
+
+/// Get the database URL, checking .dev-ports file for the postgres port.
+fn get_database_url() -> String {
+    // First check if DATABASE_URL is explicitly set
+    if let Ok(url) = std::env::var("DATABASE_URL") {
+        return url;
+    }
+
+    // Try to read port from .dev-ports file
+    let port = read_dev_ports_postgres_port().unwrap_or(5432);
+
+    format!(
+        "postgres://tracks_user:tracks_password@localhost:{}/tracks_db",
+        port
+    )
+}
 
 /// Known E2E test users with predictable credentials.
 /// All users have password "password".
@@ -74,9 +108,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        "postgres://tracks_user:tracks_password@localhost:5432/tracks_db".to_string()
-    });
+    let database_url = get_database_url();
+    tracing::info!("Using database URL: {}", database_url.replace("tracks_password", "***"));
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
