@@ -80,6 +80,16 @@ export default function LoginPage() {
                 Sign up
               </Link>
             </p>
+            {process.env.NODE_ENV === "development" && (
+              <div className="w-full p-3 bg-muted rounded-md">
+                <p className="text-sm font-medium mb-2">Test Accounts</p>
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  <li>test.user1@example.com / tracks.rs</li>
+                  <li>test.user2@example.com / tracks.rs</li>
+                  <li>test.user3@example.com / tracks.rs</li>
+                </ul>
+              </div>
+            )}
           </CardFooter>
         </form>
       </Card>

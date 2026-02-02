@@ -1,8 +1,5 @@
 # Todo
 
-- Add dig heatmap to main menu and team menu
-- there does not seem to be a join team link when looking at a team in discover
-
 ### Current State
 
 **Fully Filtered:**

@@ -2,11 +2,11 @@
  * Known test user credentials for E2E tests.
  *
  * These users are created by the seed script (cargo run -p test-data --bin seed)
- * with predictable credentials. All test users have the password "password".
+ * with predictable credentials. All test users have the password "tracks.rs".
  */
 
 /** All test users share this password (set in test-data generator) */
-export const TEST_PASSWORD = "password";
+export const TEST_PASSWORD = "tracks.rs";
 
 /** Known E2E test user configuration */
 export interface TestUser {

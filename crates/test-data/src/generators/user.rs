@@ -83,7 +83,7 @@ impl UserGenerator {
 
         // Hash using the same algorithm the auth system uses
         let password_hash =
-            tracks::auth::hash_password("password").expect("Failed to hash password");
+            tracks::auth::hash_password("tracks.rs").expect("Failed to hash password");
 
         let (gender, birth_year, weight_kg, country, region) =
             if rng.r#gen::<f64>() < self.config.demographics_fill_rate {

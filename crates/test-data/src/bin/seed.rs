@@ -6,9 +6,9 @@
 //! ```
 //!
 //! Creates test users for E2E testing:
-//! - test.user1@example.com (password: "password")
-//! - test.user2@example.com (password: "password")
-//! - test.user3@example.com (password: "password")
+//! - test.user1@example.com (password: "tracks.rs")
+//! - test.user2@example.com (password: "tracks.rs")
+//! - test.user3@example.com (password: "tracks.rs")
 //!
 //! Activities are uploaded via the API to ensure DIG part extraction
 //! occurs through the production code path.
@@ -57,7 +57,7 @@ fn get_database_url() -> String {
 }
 
 /// Known E2E test users with predictable credentials.
-/// All users have password "password".
+/// All users have password "tracks.rs".
 const E2E_TEST_USERS: &[(&str, &str, &str)] = &[
     (
         "00000000-0000-0000-0000-000000000e01",
@@ -80,7 +80,7 @@ const E2E_TEST_USERS: &[(&str, &str, &str)] = &[
 async fn seed_e2e_test_users(pool: &PgPool) -> anyhow::Result<()> {
     tracing::info!("Creating E2E test users...");
 
-    let password_hash = tracks::auth::hash_password("password")?;
+    let password_hash = tracks::auth::hash_password("tracks.rs")?;
 
     for (id_str, email, name) in E2E_TEST_USERS {
         let id = Uuid::parse_str(id_str)?;
@@ -205,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
         let mut uploaded_dig = 0;
         for activity in &dig_result.activities {
             if let Some(email) = user_emails.get(&activity.user_id) {
-                match api_seeder.login(email, "password").await {
+                match api_seeder.login(email, "tracks.rs").await {
                     Ok(token) => match api_seeder.upload_activity(&token, activity).await {
                         Ok(new_id) => {
                             activity_id_map.insert(activity.id, new_id);
@@ -227,7 +227,7 @@ async fn main() -> anyhow::Result<()> {
         let mut uploaded_comp = 0;
         for activity in &comp_result.activities {
             if let Some(email) = user_emails.get(&activity.user_id) {
-                match api_seeder.login(email, "password").await {
+                match api_seeder.login(email, "tracks.rs").await {
                     Ok(token) => match api_seeder.upload_activity(&token, activity).await {
                         Ok(new_id) => {
                             activity_id_map.insert(activity.id, new_id);

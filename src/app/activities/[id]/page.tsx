@@ -15,6 +15,8 @@ import { LazyActivityMap } from "@/components/activity/lazy-activity-map";
 import { LazyElevationProfile } from "@/components/activity/lazy-elevation-profile";
 import { MultiRangeSegment } from "@/components/activity/elevation-profile";
 import { Textarea } from "@/components/ui/textarea";
+import { KudosButton } from "@/components/social/kudos-button";
+import { CommentsSection } from "@/components/social/comments-section";
 
 // Convert type_boundaries array format [year, ordinal_day, hour, min, sec, nano...] to Date
 function typeBoundaryToDate(boundary: number[]): Date | null {
@@ -108,6 +110,9 @@ export default function ActivityDetailPage() {
   const [digTimeSummary, setDigTimeSummary] = useState<DigTimeSummary | null>(null);
   const [digParts, setDigParts] = useState<DigPart[]>([]);
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
+  const [kudosCount, setKudosCount] = useState(0);
+  const [hasGivenKudos, setHasGivenKudos] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
@@ -215,14 +220,20 @@ export default function ActivityDetailPage() {
         api.getDigTime(activityId).catch(() => null),
         api.getDigParts(activityId).catch(() => []),
         api.getActivitySensorData(activityId).catch(() => null),
+        api.getKudosGivers(activityId).catch(() => []),
+        api.getKudosStatus(activityId).catch(() => false),
+        api.getComments(activityId).catch(() => []),
       ])
-        .then(([act, track, segments, digTime, digs, sensor]) => {
+        .then(([act, track, segments, digTime, digs, sensor, kudosGivers, kudosStatus, comments]) => {
           setActivity(act);
           setTrackData(track);
           setSegmentEfforts(segments);
           setDigTimeSummary(digTime);
           setDigParts(digs);
           setSensorData(sensor);
+          setKudosCount(kudosGivers.length);
+          setHasGivenKudos(kudosStatus);
+          setCommentCount(comments.length);
         })
         .catch((err) => setError(err.message))
         .finally(() => setLoading(false));
@@ -856,6 +867,28 @@ export default function ActivityDetailPage() {
               </>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Social Interactions */}
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex items-center gap-4">
+            <KudosButton
+              activityId={activityId}
+              initialHasGiven={hasGivenKudos}
+              initialCount={kudosCount}
+              disabled={!user}
+              onKudosChange={(hasGiven, count) => {
+                setHasGivenKudos(hasGiven);
+                setKudosCount(count);
+              }}
+            />
+          </div>
+          <CommentsSection
+            activityId={activityId}
+            initialCommentCount={commentCount}
+          />
         </CardContent>
       </Card>
 
