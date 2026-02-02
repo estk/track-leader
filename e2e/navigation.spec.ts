@@ -3,60 +3,200 @@ import { test, expect } from "@playwright/test";
 /**
  * Tests for main navigation elements.
  * These tests verify authenticated navigation functionality.
+ * Navigation is now in a sidebar on desktop and a drawer on mobile.
  */
 test.describe("Navigation", () => {
-  test.describe("Main Navigation Links", () => {
-    test("should display all main nav links", async ({ page }) => {
+  test.describe("Sidebar Navigation Links", () => {
+    test("should display main navigation sections in sidebar", async ({
+      page,
+    }) => {
       await page.goto("/activities");
       await page.waitForLoadState("networkidle");
 
-      // Verify main navigation links are visible
-      await expect(page.getByRole("link", { name: /feed/i })).toBeVisible();
-      await expect(page.getByRole("link", { name: /daily/i })).toBeVisible();
+      // On desktop, the sidebar should be visible
+      const sidebar = page.locator("aside");
+      await expect(sidebar).toBeVisible();
+
+      // Should have Explore section with key links
       await expect(
-        page.getByRole("link", { name: /my activities/i })
+        sidebar.getByRole("button", { name: /explore/i })
       ).toBeVisible();
-      await expect(page.getByRole("link", { name: /segments/i })).toBeVisible();
+
+      // Should have My Stuff section (auth only)
       await expect(
-        page.getByRole("link", { name: /leaderboards/i })
+        sidebar.getByRole("button", { name: /my stuff/i })
       ).toBeVisible();
-      await expect(page.getByRole("link", { name: /teams/i })).toBeVisible();
     });
 
-    test("should navigate to Feed page", async ({ page }) => {
+    test("should expand Explore section and show links", async ({ page }) => {
       await page.goto("/activities");
-      await page.getByRole("link", { name: /feed/i }).click();
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Click to expand Explore section if collapsed
+      const exploreButton = sidebar.getByRole("button", { name: /explore/i });
+      const isExpanded =
+        (await exploreButton.getAttribute("aria-expanded")) === "true";
+      if (!isExpanded) {
+        await exploreButton.click();
+      }
+
+      // Verify navigation links in Explore section
+      await expect(sidebar.getByRole("link", { name: /feed/i })).toBeVisible();
+      await expect(
+        sidebar.getByRole("link", { name: /daily activities/i })
+      ).toBeVisible();
+      await expect(
+        sidebar.getByRole("link", { name: /segments/i })
+      ).toBeVisible();
+      await expect(
+        sidebar.getByRole("link", { name: /leaderboards/i })
+      ).toBeVisible();
+      await expect(
+        sidebar.getByRole("link", { name: /dig heatmap/i })
+      ).toBeVisible();
+    });
+
+    test("should expand My Stuff section and show links", async ({ page }) => {
+      await page.goto("/activities");
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Click to expand My Stuff section if collapsed
+      const myStuffButton = sidebar.getByRole("button", { name: /my stuff/i });
+      const isExpanded =
+        (await myStuffButton.getAttribute("aria-expanded")) === "true";
+      if (!isExpanded) {
+        await myStuffButton.click();
+      }
+
+      // Verify My Activities link
+      await expect(
+        sidebar.getByRole("link", { name: /my activities/i })
+      ).toBeVisible();
+
+      // My Teams should be visible (may need to expand)
+      await expect(
+        sidebar.getByRole("button", { name: /my teams/i })
+      ).toBeVisible();
+    });
+
+    test("should navigate to Feed page from sidebar", async ({ page }) => {
+      await page.goto("/activities");
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Expand Explore if needed
+      const exploreButton = sidebar.getByRole("button", { name: /explore/i });
+      if ((await exploreButton.getAttribute("aria-expanded")) !== "true") {
+        await exploreButton.click();
+      }
+
+      await sidebar.getByRole("link", { name: /feed/i }).click();
       await expect(page).toHaveURL(/\/feed/);
     });
 
-    test("should navigate to Daily page", async ({ page }) => {
+    test("should navigate to Daily Activities page from sidebar", async ({
+      page,
+    }) => {
       await page.goto("/activities");
-      await page.getByRole("link", { name: /daily/i }).click();
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Expand Explore if needed
+      const exploreButton = sidebar.getByRole("button", { name: /explore/i });
+      if ((await exploreButton.getAttribute("aria-expanded")) !== "true") {
+        await exploreButton.click();
+      }
+
+      await sidebar.getByRole("link", { name: /daily activities/i }).click();
       await expect(page).toHaveURL(/\/activities\/daily/);
     });
 
-    test("should navigate to My Activities page", async ({ page }) => {
+    test("should navigate to My Activities page from sidebar", async ({
+      page,
+    }) => {
       await page.goto("/feed");
-      await page.getByRole("link", { name: /my activities/i }).click();
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Expand My Stuff if needed
+      const myStuffButton = sidebar.getByRole("button", { name: /my stuff/i });
+      if ((await myStuffButton.getAttribute("aria-expanded")) !== "true") {
+        await myStuffButton.click();
+      }
+
+      await sidebar.getByRole("link", { name: /my activities/i }).click();
       await expect(page).toHaveURL(/\/activities$/);
     });
 
-    test("should navigate to Segments page", async ({ page }) => {
+    test("should navigate to Segments page from sidebar", async ({ page }) => {
       await page.goto("/activities");
-      await page.getByRole("link", { name: /segments/i }).click();
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Expand Explore if needed
+      const exploreButton = sidebar.getByRole("button", { name: /explore/i });
+      if ((await exploreButton.getAttribute("aria-expanded")) !== "true") {
+        await exploreButton.click();
+      }
+
+      await sidebar.getByRole("link", { name: /segments/i }).click();
       await expect(page).toHaveURL(/\/segments/);
     });
 
-    test("should navigate to Leaderboards page", async ({ page }) => {
+    test("should navigate to Leaderboards page from sidebar", async ({
+      page,
+    }) => {
       await page.goto("/activities");
-      await page.getByRole("link", { name: /leaderboards/i }).click();
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Expand Explore if needed
+      const exploreButton = sidebar.getByRole("button", { name: /explore/i });
+      if ((await exploreButton.getAttribute("aria-expanded")) !== "true") {
+        await exploreButton.click();
+      }
+
+      await sidebar.getByRole("link", { name: /leaderboards/i }).click();
       await expect(page).toHaveURL(/\/leaderboards/);
     });
 
-    test("should navigate to Teams page", async ({ page }) => {
+    test("should navigate to Dig Heatmap page from sidebar", async ({
+      page,
+    }) => {
       await page.goto("/activities");
-      await page.getByRole("link", { name: /teams/i }).click();
-      await expect(page).toHaveURL(/\/teams/);
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Expand Explore if needed
+      const exploreButton = sidebar.getByRole("button", { name: /explore/i });
+      if ((await exploreButton.getAttribute("aria-expanded")) !== "true") {
+        await exploreButton.click();
+      }
+
+      await sidebar.getByRole("link", { name: /dig heatmap/i }).click();
+      await expect(page).toHaveURL(/\/dig-heatmap/);
+    });
+
+    test("should navigate to Discover Teams page from sidebar", async ({
+      page,
+    }) => {
+      await page.goto("/activities");
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      await sidebar.getByRole("link", { name: /discover teams/i }).click();
+      await expect(page).toHaveURL(/\/teams\?view=discover/);
     });
   });
 
@@ -94,17 +234,52 @@ test.describe("Navigation", () => {
   });
 
   test.describe("Logo Navigation", () => {
-    test("should navigate to home when clicking logo", async ({ page }) => {
+    test("should navigate to home when clicking logo in sidebar", async ({
+      page,
+    }) => {
       await page.goto("/activities");
       await page.waitForLoadState("networkidle");
 
-      // Find the logo link by its aria-label
-      const logoLink = page.getByRole("link", { name: /TRACKS\.RS - Home/i });
+      // Find the logo link in the sidebar
+      const sidebar = page.locator("aside");
+      const logoLink = sidebar.getByRole("link", { name: /TRACKS\.RS/i });
       await expect(logoLink).toBeVisible();
       await logoLink.click();
 
       // Should navigate to home
       await expect(page).toHaveURL(/\/$/);
+    });
+  });
+
+  test.describe("Sidebar Collapse", () => {
+    test("should be able to collapse and expand sidebar", async ({ page }) => {
+      await page.goto("/activities");
+      await page.waitForLoadState("networkidle");
+
+      const sidebar = page.locator("aside");
+
+      // Find collapse button
+      const collapseButton = sidebar.getByRole("button", {
+        name: /collapse sidebar/i,
+      });
+      await expect(collapseButton).toBeVisible();
+
+      // Click to collapse
+      await collapseButton.click();
+
+      // Now should show expand button
+      const expandButton = sidebar.getByRole("button", {
+        name: /expand sidebar/i,
+      });
+      await expect(expandButton).toBeVisible();
+
+      // Click to expand
+      await expandButton.click();
+
+      // Collapse button should be back
+      await expect(
+        sidebar.getByRole("button", { name: /collapse sidebar/i })
+      ).toBeVisible();
     });
   });
 });

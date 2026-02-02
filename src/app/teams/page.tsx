@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api, TeamWithMembership, TeamSummary } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -12,14 +12,26 @@ import { TeamCard } from "@/components/teams/team-card";
 
 type ViewMode = "my-teams" | "discover";
 
-export default function TeamsPage() {
+function TeamsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [myTeams, setMyTeams] = useState<TeamWithMembership[]>([]);
   const [discoverableTeams, setDiscoverableTeams] = useState<TeamSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("my-teams");
+
+  // Initialize from URL param, default to "my-teams"
+  const viewParam = searchParams.get("view");
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    viewParam === "discover" ? "discover" : "my-teams"
+  );
+
+  // Sync viewMode with URL param changes
+  useEffect(() => {
+    const newMode = viewParam === "discover" ? "discover" : "my-teams";
+    setViewMode(newMode);
+  }, [viewParam]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -70,14 +82,20 @@ export default function TeamsPage() {
         <Button
           variant={viewMode === "my-teams" ? "default" : "outline"}
           size="sm"
-          onClick={() => setViewMode("my-teams")}
+          onClick={() => {
+            setViewMode("my-teams");
+            router.push("/teams");
+          }}
         >
           My Teams
         </Button>
         <Button
           variant={viewMode === "discover" ? "default" : "outline"}
           size="sm"
-          onClick={() => setViewMode("discover")}
+          onClick={() => {
+            setViewMode("discover");
+            router.push("/teams?view=discover");
+          }}
         >
           Discover
         </Button>
@@ -101,6 +119,22 @@ export default function TeamsPage() {
         <DiscoverContent teams={discoverableTeams} router={router} />
       )}
     </div>
+  );
+}
+
+export default function TeamsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-48" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      }
+    >
+      <TeamsPageContent />
+    </Suspense>
   );
 }
 

@@ -3,6 +3,7 @@ import { Inter, Orbitron } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Header } from "@/components/header";
+import { Sidebar } from "@/components/navigation";
 
 const inter = Inter({ subsets: ["latin"] });
 const orbitron = Orbitron({
@@ -32,16 +33,19 @@ export default function RootLayout({
           >
             Skip to main content
           </a>
-          <div className="min-h-screen bg-background">
-            <Header />
-            <main
-              id="main-content"
-              className="container mx-auto px-4 py-8"
-              role="main"
-              tabIndex={-1}
-            >
-              {children}
-            </main>
+          <div className="flex min-h-screen bg-background">
+            <Sidebar />
+            <div className="flex-1 flex flex-col">
+              <Header />
+              <main
+                id="main-content"
+                className="flex-1 container mx-auto px-4 py-8"
+                role="main"
+                tabIndex={-1}
+              >
+                {children}
+              </main>
+            </div>
           </div>
         </Providers>
       </body>

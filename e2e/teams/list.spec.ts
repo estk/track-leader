@@ -17,18 +17,21 @@ test.describe("Teams List Page", () => {
   });
 
   test("should have My Teams and Discover buttons", async ({ page }) => {
-    // These are buttons, not tabs
+    // These are toggle buttons in the main content area (not sidebar)
+    const main = page.locator("#main-content");
     await expect(
-      page.getByRole("button", { name: /my teams/i })
+      main.getByRole("button", { name: /my teams/i })
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /discover/i })
+      main.getByRole("button", { name: /discover/i })
     ).toBeVisible();
   });
 
   test("should switch between views", async ({ page }) => {
-    const myTeamsBtn = page.getByRole("button", { name: /my teams/i });
-    const discoverBtn = page.getByRole("button", { name: /discover/i });
+    // Scope to main content area to avoid conflict with sidebar
+    const main = page.locator("#main-content");
+    const myTeamsBtn = main.getByRole("button", { name: /my teams/i });
+    const discoverBtn = main.getByRole("button", { name: /discover/i });
 
     // Click Discover
     await discoverBtn.click();
@@ -44,8 +47,11 @@ test.describe("Teams List Page", () => {
   });
 
   test("should display team cards when teams exist", async ({ page }) => {
+    // Scope to main content area
+    const main = page.locator("#main-content");
+
     // Check Discover tab for public teams
-    await page.getByRole("button", { name: /discover/i }).click();
+    await main.getByRole("button", { name: /discover/i }).click();
     await page.waitForLoadState("networkidle");
 
     // Teams may or may not exist - just verify the page doesn't crash
