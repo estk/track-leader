@@ -469,7 +469,7 @@ CREATE TABLE IF NOT EXISTS activity_stopped_segments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS activity_dig_segments (
+CREATE TABLE IF NOT EXISTS activity_dig_parts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
     start_time TIMESTAMPTZ NOT NULL,
@@ -480,8 +480,8 @@ CREATE TABLE IF NOT EXISTS activity_dig_segments (
 
 CREATE INDEX IF NOT EXISTS idx_activity_stopped_segments_activity_id
     ON activity_stopped_segments(activity_id);
-CREATE INDEX IF NOT EXISTS idx_activity_dig_segments_activity_id
-    ON activity_dig_segments(activity_id);
+CREATE INDEX IF NOT EXISTS idx_activity_dig_parts_activity_id
+    ON activity_dig_parts(activity_id);
 
 -- ============================================================================
 -- Done! Your Supabase database is ready for Track Leader.

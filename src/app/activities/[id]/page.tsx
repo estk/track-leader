@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName, DigTimeSummary, DigSegment, SensorData } from "@/lib/api";
+import { api, Activity, TrackData, TrackPoint, ActivitySegmentEffort, PreviewSegmentResponse, ActivityVisibility, ACTIVITY_TYPE_OPTIONS, getActivityTypeName, DigTimeSummary, DigPart, SensorData } from "@/lib/api";
 import { SensorGraphs } from "@/components/activity/sensor-graphs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -96,7 +96,7 @@ export default function ActivityDetailPage() {
   const [trackData, setTrackData] = useState<TrackData | null>(null);
   const [segmentEfforts, setSegmentEfforts] = useState<ActivitySegmentEffort[]>([]);
   const [digTimeSummary, setDigTimeSummary] = useState<DigTimeSummary | null>(null);
-  const [digSegments, setDigSegments] = useState<DigSegment[]>([]);
+  const [digParts, setDigParts] = useState<DigPart[]>([]);
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -190,7 +190,7 @@ export default function ActivityDetailPage() {
         api.getActivityTrack(activityId),
         api.getActivitySegments(activityId),
         api.getDigTime(activityId).catch(() => null),
-        api.getDigSegments(activityId).catch(() => []),
+        api.getDigParts(activityId).catch(() => []),
         api.getActivitySensorData(activityId).catch(() => null),
       ])
         .then(([act, track, segments, digTime, digs, sensor]) => {
@@ -198,7 +198,7 @@ export default function ActivityDetailPage() {
           setTrackData(track);
           setSegmentEfforts(segments);
           setDigTimeSummary(digTime);
-          setDigSegments(digs);
+          setDigParts(digs);
           setSensorData(sensor);
         })
         .catch((err) => setError(err.message))
@@ -810,7 +810,7 @@ export default function ActivityDetailPage() {
               label="Bounds"
               value={`${trackData.bounds.min_lat.toFixed(3)}°, ${trackData.bounds.min_lon.toFixed(3)}°`}
             />
-            {digTimeSummary && digTimeSummary.dig_segment_count > 0 && (
+            {digTimeSummary && digTimeSummary.dig_part_count > 0 && (
               <>
                 <StatItem
                   label="Dig Time"
@@ -829,7 +829,7 @@ export default function ActivityDetailPage() {
       </Card>
 
       {/* Dig Time */}
-      {digTimeSummary && digTimeSummary.dig_segment_count > 0 && (
+      {digTimeSummary && digTimeSummary.dig_part_count > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -856,13 +856,13 @@ export default function ActivityDetailPage() {
               />
               <StatItem
                 label="Dig Sessions"
-                value={digTimeSummary.dig_segment_count.toString()}
+                value={digTimeSummary.dig_part_count.toString()}
               />
             </div>
-            {digSegments.length > 0 && (
+            {digParts.length > 0 && (
               <div className="mt-4 space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Sessions</p>
-                {digSegments.map((seg) => (
+                {digParts.map((seg) => (
                   <div
                     key={seg.id}
                     className="flex items-center justify-between p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md text-sm"

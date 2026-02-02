@@ -878,7 +878,7 @@ function DigTimeLeaderboard({
 
                 {/* Segment count */}
                 <div className="hidden sm:block text-right text-muted-foreground">
-                  {entry.dig_segment_count} {entry.dig_segment_count === 1 ? "segment" : "segments"}
+                  {entry.dig_part_count} {entry.dig_part_count === 1 ? "session" : "sessions"}
                 </div>
 
                 {/* Mobile-only stats row */}
@@ -887,7 +887,7 @@ function DigTimeLeaderboard({
                     {formatDuration(entry.total_dig_time_seconds)}
                   </span>
                   <span className="text-muted-foreground">
-                    {entry.dig_segment_count} {entry.dig_segment_count === 1 ? "segment" : "segments"}
+                    {entry.dig_part_count} {entry.dig_part_count === 1 ? "session" : "sessions"}
                   </span>
                 </div>
               </div>

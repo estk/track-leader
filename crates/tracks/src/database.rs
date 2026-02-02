@@ -2502,8 +2502,8 @@ impl Database {
                 SELECT
                     a.user_id,
                     SUM(ads.duration_seconds) as total_dig_time_seconds,
-                    COUNT(*) as dig_segment_count
-                FROM activity_dig_segments ads
+                    COUNT(*) as dig_part_count
+                FROM activity_dig_parts ads
                 JOIN activities a ON a.id = ads.activity_id
                 JOIN users u ON u.id = a.user_id
                 {team_join}
@@ -2514,7 +2514,7 @@ impl Database {
                 dt.user_id,
                 u.name as user_name,
                 dt.total_dig_time_seconds,
-                dt.dig_segment_count,
+                dt.dig_part_count,
                 ROW_NUMBER() OVER (ORDER BY dt.total_dig_time_seconds DESC) as rank
             FROM dig_totals dt
             JOIN users u ON u.id = dt.user_id
@@ -2655,7 +2655,7 @@ impl Database {
                 FROM activities a
                 JOIN scores sc ON sc.activity_id = a.id
                 JOIN users u ON u.id = a.user_id
-                LEFT JOIN activity_dig_segments ads ON ads.activity_id = a.id
+                LEFT JOIN activity_dig_parts ads ON ads.activity_id = a.id
                 {team_join}
                 {where_clause}
                 GROUP BY a.user_id
@@ -4776,11 +4776,11 @@ impl Database {
     }
 
     /// Create dig segments from stopped segment IDs.
-    pub async fn create_dig_segments(
+    pub async fn create_dig_parts(
         &self,
         activity_id: Uuid,
         stopped_segment_ids: &[Uuid],
-    ) -> Result<Vec<crate::models::DigSegment>, AppError> {
+    ) -> Result<Vec<crate::models::DigPart>, AppError> {
         // First verify all stopped segments belong to this activity
         let stopped_segments: Vec<crate::models::StoppedSegment> = sqlx::query_as(
             r#"
@@ -4801,11 +4801,11 @@ impl Database {
         }
 
         // Create dig segments from the stopped segments
-        let mut dig_segments = Vec::new();
+        let mut dig_parts = Vec::new();
         for stopped in &stopped_segments {
-            let dig: crate::models::DigSegment = sqlx::query_as(
+            let dig: crate::models::DigPart = sqlx::query_as(
                 r#"
-                INSERT INTO activity_dig_segments
+                INSERT INTO activity_dig_parts
                     (activity_id, start_time, end_time, duration_seconds)
                 VALUES ($1, $2, $3, $4)
                 RETURNING id, activity_id, start_time, end_time, duration_seconds, created_at
@@ -4818,21 +4818,47 @@ impl Database {
             .fetch_one(&self.pool)
             .await?;
 
-            dig_segments.push(dig);
+            dig_parts.push(dig);
         }
 
-        Ok(dig_segments)
+        Ok(dig_parts)
+    }
+
+    /// Save dig segments extracted from multi-sport activities.
+    /// Used when processing activities with DIG activity type segments.
+    pub async fn save_dig_parts_batch(
+        &self,
+        activity_id: Uuid,
+        segments: &[crate::activity_queue::DetectedStoppedSegment],
+    ) -> Result<(), AppError> {
+        for segment in segments {
+            sqlx::query(
+                r#"
+                INSERT INTO activity_dig_parts
+                    (activity_id, start_time, end_time, duration_seconds)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT DO NOTHING
+                "#,
+            )
+            .bind(activity_id)
+            .bind(segment.start_time)
+            .bind(segment.end_time)
+            .bind(segment.duration_seconds)
+            .execute(&self.pool)
+            .await?;
+        }
+        Ok(())
     }
 
     /// Get dig segments for an activity.
-    pub async fn get_dig_segments(
+    pub async fn get_dig_parts(
         &self,
         activity_id: Uuid,
-    ) -> Result<Vec<crate::models::DigSegment>, AppError> {
-        let segments: Vec<crate::models::DigSegment> = sqlx::query_as(
+    ) -> Result<Vec<crate::models::DigPart>, AppError> {
+        let segments: Vec<crate::models::DigPart> = sqlx::query_as(
             r#"
             SELECT id, activity_id, start_time, end_time, duration_seconds, created_at
-            FROM activity_dig_segments
+            FROM activity_dig_parts
             WHERE activity_id = $1
             ORDER BY start_time
             "#,
@@ -4856,7 +4882,7 @@ impl Database {
                 COUNT(ads.id) as dig_count,
                 s.duration as activity_duration
             FROM activities a
-            LEFT JOIN activity_dig_segments ads ON ads.activity_id = a.id
+            LEFT JOIN activity_dig_parts ads ON ads.activity_id = a.id
             LEFT JOIN scores s ON s.activity_id = a.id
             WHERE a.id = $1
             GROUP BY a.id, s.duration
@@ -4866,31 +4892,57 @@ impl Database {
         .fetch_optional(&self.pool)
         .await?;
 
-        let (total_dig_time_seconds, dig_segment_count, activity_duration_seconds) =
+        let (total_dig_time_seconds, dig_part_count, activity_duration_seconds) =
             row.unwrap_or((0.0, 0, None));
 
         Ok(crate::models::DigTimeSummary {
             activity_id,
             total_dig_time_seconds,
-            dig_segment_count,
+            dig_part_count,
             activity_duration_seconds,
         })
     }
 
     /// Delete a dig segment.
-    pub async fn delete_dig_segment(
+    pub async fn delete_dig_part(
         &self,
         activity_id: Uuid,
-        dig_segment_id: Uuid,
+        dig_part_id: Uuid,
     ) -> Result<bool, AppError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM activity_dig_segments
+            DELETE FROM activity_dig_parts
             WHERE id = $1 AND activity_id = $2
             "#,
         )
-        .bind(dig_segment_id)
+        .bind(dig_part_id)
         .bind(activity_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Insert a dig part if it doesn't already exist (based on activity_id and start_time).
+    /// Returns true if a new row was inserted, false if it already existed.
+    pub async fn insert_dig_part_if_not_exists(
+        &self,
+        activity_id: Uuid,
+        start_time: time::OffsetDateTime,
+        end_time: time::OffsetDateTime,
+        duration_seconds: f64,
+    ) -> Result<bool, AppError> {
+        let result = sqlx::query(
+            r#"
+            INSERT INTO activity_dig_parts (activity_id, start_time, end_time, duration_seconds)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+            "#,
+        )
+        .bind(activity_id)
+        .bind(start_time)
+        .bind(end_time)
+        .bind(duration_seconds)
         .execute(&self.pool)
         .await?;
 

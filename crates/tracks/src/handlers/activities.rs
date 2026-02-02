@@ -667,14 +667,14 @@ pub async fn get_stopped_segments(
 /// Tags the specified stopped segments as "dig time" (trail maintenance).
 #[utoipa::path(
     post,
-    path = "/activities/{id}/dig-segments",
+    path = "/activities/{id}/dig-parts",
     tag = "activities",
     params(
         ("id" = Uuid, Path, description = "Activity ID")
     ),
-    request_body = crate::models::CreateDigSegmentsRequest,
+    request_body = crate::models::CreateDigPartsRequest,
     responses(
-        (status = 201, description = "Dig segments created", body = Vec<crate::models::DigSegment>),
+        (status = 201, description = "Dig segments created", body = Vec<crate::models::DigPart>),
         (status = 400, description = "Invalid input"),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
@@ -684,12 +684,12 @@ pub async fn get_stopped_segments(
         ("bearer_auth" = [])
     )
 )]
-pub async fn create_dig_segments(
+pub async fn create_dig_parts(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
     Path(id): Path<Uuid>,
-    Json(req): Json<crate::models::CreateDigSegmentsRequest>,
-) -> Result<(StatusCode, Json<Vec<crate::models::DigSegment>>), AppError> {
+    Json(req): Json<crate::models::CreateDigPartsRequest>,
+) -> Result<(StatusCode, Json<Vec<crate::models::DigPart>>), AppError> {
     // Verify activity exists and user is the owner
     let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
 
@@ -703,20 +703,20 @@ pub async fn create_dig_segments(
         ));
     }
 
-    let dig_segments = db.create_dig_segments(id, &req.stopped_segment_ids).await?;
-    Ok((StatusCode::CREATED, Json(dig_segments)))
+    let dig_parts = db.create_dig_parts(id, &req.stopped_segment_ids).await?;
+    Ok((StatusCode::CREATED, Json(dig_parts)))
 }
 
 /// Get dig segments for an activity.
 #[utoipa::path(
     get,
-    path = "/activities/{id}/dig-segments",
+    path = "/activities/{id}/dig-parts",
     tag = "activities",
     params(
         ("id" = Uuid, Path, description = "Activity ID")
     ),
     responses(
-        (status = 200, description = "Dig segments for the activity", body = Vec<crate::models::DigSegment>),
+        (status = 200, description = "Dig segments for the activity", body = Vec<crate::models::DigPart>),
         (status = 401, description = "Unauthorized"),
         (status = 403, description = "Forbidden"),
         (status = 404, description = "Activity not found")
@@ -725,11 +725,11 @@ pub async fn create_dig_segments(
         ("bearer_auth" = [])
     )
 )]
-pub async fn get_dig_segments(
+pub async fn get_dig_parts(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vec<crate::models::DigSegment>>, AppError> {
+) -> Result<Json<Vec<crate::models::DigPart>>, AppError> {
     // Verify activity exists and user has access
     let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
 
@@ -738,7 +738,7 @@ pub async fn get_dig_segments(
         return Err(AppError::Forbidden);
     }
 
-    let segments = db.get_dig_segments(id).await?;
+    let segments = db.get_dig_parts(id).await?;
     Ok(Json(segments))
 }
 
@@ -780,7 +780,7 @@ pub async fn get_dig_time(
 /// Delete a dig segment.
 #[utoipa::path(
     delete,
-    path = "/activities/{activity_id}/dig-segments/{segment_id}",
+    path = "/activities/{activity_id}/dig-parts/{segment_id}",
     tag = "activities",
     params(
         ("activity_id" = Uuid, Path, description = "Activity ID"),
@@ -796,7 +796,7 @@ pub async fn get_dig_time(
         ("bearer_auth" = [])
     )
 )]
-pub async fn delete_dig_segment(
+pub async fn delete_dig_part(
     Extension(db): Extension<Database>,
     AuthUser(claims): AuthUser,
     Path((activity_id, segment_id)): Path<(Uuid, Uuid)>,
@@ -811,11 +811,101 @@ pub async fn delete_dig_segment(
         return Err(AppError::Forbidden);
     }
 
-    if db.delete_dig_segment(activity_id, segment_id).await? {
+    if db.delete_dig_part(activity_id, segment_id).await? {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(AppError::NotFound)
     }
+}
+
+/// Reprocess response for activity dig parts extraction.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReprocessDigPartsResult {
+    pub activity_id: Uuid,
+    pub dig_parts_found: usize,
+    pub dig_parts_created: usize,
+}
+
+/// Reprocess an activity to extract dig parts from multi-sport DIG segments.
+/// This is useful for activities uploaded before dig part extraction was implemented.
+#[utoipa::path(
+    post,
+    path = "/activities/{id}/reprocess-dig-parts",
+    tag = "activities",
+    params(
+        ("id" = Uuid, Path, description = "Activity ID")
+    ),
+    responses(
+        (status = 200, description = "Reprocessing results", body = ReprocessDigPartsResult),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Activity not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn reprocess_dig_parts(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ReprocessDigPartsResult>, AppError> {
+    // Get the activity
+    let activity = db.get_activity(id).await?.ok_or(AppError::NotFound)?;
+
+    // Only activity owner can reprocess
+    if activity.user_id != claims.sub {
+        return Err(AppError::Forbidden);
+    }
+
+    // Check if this is a multi-sport activity with DIG segments
+    let (Some(boundaries), Some(types)) = (activity.type_boundaries, activity.segment_types) else {
+        return Ok(Json(ReprocessDigPartsResult {
+            activity_id: id,
+            dig_parts_found: 0,
+            dig_parts_created: 0,
+        }));
+    };
+
+    // Extract dig parts from the boundaries and types
+    use crate::models::builtin_types;
+
+    let mut dig_parts_found = 0;
+    let mut dig_parts_created = 0;
+
+    for (i, segment_type) in types.iter().enumerate() {
+        if *segment_type != builtin_types::DIG {
+            continue;
+        }
+
+        let Some(start_time) = boundaries.get(i).copied() else {
+            continue;
+        };
+        let Some(end_time) = boundaries.get(i + 1).copied() else {
+            continue;
+        };
+
+        let duration = (end_time - start_time).as_seconds_f64();
+        if duration <= 0.0 {
+            continue;
+        }
+
+        dig_parts_found += 1;
+
+        // Try to insert (will be ignored if already exists due to ON CONFLICT)
+        if db
+            .insert_dig_part_if_not_exists(id, start_time, end_time, duration)
+            .await?
+        {
+            dig_parts_created += 1;
+        }
+    }
+
+    Ok(Json(ReprocessDigPartsResult {
+        activity_id: id,
+        dig_parts_found,
+        dig_parts_created,
+    }))
 }
 
 /// Get sensor data for an activity.

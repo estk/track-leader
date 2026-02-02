@@ -90,6 +90,7 @@ pub mod builtin_types {
     pub const EMTB: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000006);
     pub const GRAVEL: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000007);
     pub const UNKNOWN: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000008);
+    pub const DIG: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000009);
 }
 
 /// Row from the activity_types table
@@ -831,7 +832,7 @@ pub struct DigTimeLeaderEntry {
     pub user_id: Uuid,
     pub user_name: String,
     pub total_dig_time_seconds: f64,
-    pub dig_segment_count: i64,
+    pub dig_part_count: i64,
     pub rank: i64,
 }
 
@@ -1420,9 +1421,9 @@ pub struct StoppedSegment {
     pub created_at: OffsetDateTime,
 }
 
-/// A user-tagged dig segment (trail maintenance time).
+/// A dig part - trail maintenance time within an activity.
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
-pub struct DigSegment {
+pub struct DigPart {
     pub id: Uuid,
     pub activity_id: Uuid,
     #[serde(with = "rfc3339")]
@@ -1434,9 +1435,9 @@ pub struct DigSegment {
     pub created_at: OffsetDateTime,
 }
 
-/// Request to create dig segments from stopped segments
+/// Request to create dig parts from stopped segments
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct CreateDigSegmentsRequest {
+pub struct CreateDigPartsRequest {
     /// List of stopped segment IDs to tag as dig time
     pub stopped_segment_ids: Vec<Uuid>,
 }
@@ -1446,7 +1447,7 @@ pub struct CreateDigSegmentsRequest {
 pub struct DigTimeSummary {
     pub activity_id: Uuid,
     pub total_dig_time_seconds: f64,
-    pub dig_segment_count: i64,
+    pub dig_part_count: i64,
     /// Activity duration in seconds (from scores table)
     pub activity_duration_seconds: Option<f64>,
 }

@@ -208,6 +208,22 @@ impl ActivityQueue {
                         tracing::error!("Failed to save stopped segments: {e}");
                     }
                 }
+
+                // Extract dig segments from multi-sport activities with DIG activity type
+                if let (Some(boundaries), Some(types)) = (&type_boundaries, &segment_types) {
+                    let dig_parts =
+                        extract_dig_parts_from_multi_sport(&track_points, boundaries, types);
+                    if !dig_parts.is_empty() {
+                        tracing::info!(
+                            "Found {} dig segments in multi-sport activity {}",
+                            dig_parts.len(),
+                            id
+                        );
+                        if let Err(e) = db.save_dig_parts_batch(id, &dig_parts).await {
+                            tracing::error!("Failed to save dig segments: {e}");
+                        }
+                    }
+                }
             });
             tx.send(id).unwrap();
         });
@@ -307,6 +323,50 @@ fn detect_stopped_segments(points: &[TrackPointData]) -> Vec<DetectedStoppedSegm
     }
 
     segments
+}
+
+/// Extract dig segments from multi-sport activities where segment type is DIG.
+/// Returns detected dig segments with their time ranges and durations.
+fn extract_dig_parts_from_multi_sport(
+    _points: &[TrackPointData],
+    boundaries: &[OffsetDateTime],
+    types: &[Uuid],
+) -> Vec<DetectedStoppedSegment> {
+    use crate::models::builtin_types;
+
+    let mut dig_parts = Vec::new();
+
+    // boundaries define edges: [start, b1, b2, ..., end] for n segments
+    // types[i] is the activity type for segment between boundaries[i] and boundaries[i+1]
+    if boundaries.len() < 2 || types.is_empty() {
+        return dig_parts;
+    }
+
+    for (i, segment_type) in types.iter().enumerate() {
+        // Check if this segment is a DIG type
+        if *segment_type != builtin_types::DIG {
+            continue;
+        }
+
+        // Get the boundary timestamps for this segment
+        let Some(start_time) = boundaries.get(i).copied() else {
+            continue;
+        };
+        let Some(end_time) = boundaries.get(i + 1).copied() else {
+            continue;
+        };
+
+        let duration = (end_time - start_time).as_seconds_f64();
+        if duration > 0.0 {
+            dig_parts.push(DetectedStoppedSegment {
+                start_time,
+                end_time,
+                duration_seconds: duration,
+            });
+        }
+    }
+
+    dig_parts
 }
 
 /// Calculate the distance in meters between two lat/lon points using the haversine formula

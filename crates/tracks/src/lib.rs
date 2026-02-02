@@ -36,12 +36,12 @@ use crate::{
     database::Database,
     handlers::{
         accept_invitation, add_comment, all_users, change_member_role, create_activity_type,
-        create_dig_segments, create_segment, create_team, delete_activity, delete_comment,
-        delete_dig_segment, delete_team, discover_teams, download_gpx_file, follow_user,
+        create_dig_parts, create_segment, create_team, delete_activity, delete_comment,
+        delete_dig_part, delete_team, discover_teams, download_gpx_file, follow_user,
         get_activities_by_date, get_activity, get_activity_segments, get_activity_sensor_data,
         get_activity_teams, get_activity_track, get_activity_type, get_average_speed_leaderboard,
         get_comments, get_countries, get_crown_leaderboard, get_dig_percentage_leaderboard,
-        get_dig_segments, get_dig_time, get_dig_time_leaderboard, get_distance_leaderboard,
+        get_dig_parts, get_dig_time, get_dig_time_leaderboard, get_distance_leaderboard,
         get_feed, get_filtered_leaderboard, get_follow_status, get_followers, get_following,
         get_invitation, get_join_requests, get_kudos_givers, get_kudos_status,
         get_leaderboard_position, get_my_achievements, get_my_demographics, get_my_segment_efforts,
@@ -53,10 +53,11 @@ use crate::{
         invite_to_team, is_segment_starred, join_team, leave_team, list_activity_types,
         list_my_teams, list_segments, list_team_members, mark_all_notifications_read,
         mark_notification_read, new_activity, new_user, preview_segment, remove_kudos,
-        remove_team_member, reprocess_segment, resolve_activity_type, review_join_request,
-        revoke_invitation, share_activity_with_teams, share_segment_with_teams, star_segment,
-        unfollow_user, unshare_activity_from_team, unshare_segment_from_team, unstar_segment,
-        update_activity, update_my_demographics, update_team,
+        remove_team_member, reprocess_dig_parts, reprocess_segment, resolve_activity_type,
+        review_join_request, revoke_invitation, share_activity_with_teams,
+        share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team,
+        unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics,
+        update_team,
     },
     object_store_service::ObjectStoreService,
 };
@@ -102,10 +103,11 @@ use crate::{
         handlers::get_activity_segments,
         handlers::get_activities_by_date,
         handlers::get_stopped_segments,
-        handlers::get_dig_segments,
-        handlers::create_dig_segments,
+        handlers::get_dig_parts,
+        handlers::create_dig_parts,
         handlers::get_dig_time,
-        handlers::delete_dig_segment,
+        handlers::delete_dig_part,
+        handlers::reprocess_dig_parts,
         handlers::get_activity_sensor_data,
         // Activity types
         handlers::health_check,
@@ -264,9 +266,10 @@ use crate::{
             models::FeedActivityWithTeams,
             // Stopped/Dig segment types
             models::StoppedSegment,
-            models::DigSegment,
-            models::CreateDigSegmentsRequest,
+            models::DigPart,
+            models::CreateDigPartsRequest,
             models::DigTimeSummary,
+            handlers::ReprocessDigPartsResult,
             // Sensor data types
             models::ActivitySensorDataResponse,
             // Kudos/Comments
@@ -398,13 +401,17 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             get(get_stopped_segments),
         )
         .route(
-            "/activities/{id}/dig-segments",
-            get(get_dig_segments).post(create_dig_segments),
+            "/activities/{id}/dig-parts",
+            get(get_dig_parts).post(create_dig_parts),
         )
         .route("/activities/{id}/dig-time", get(get_dig_time))
         .route(
-            "/activities/{activity_id}/dig-segments/{segment_id}",
-            axum::routing::delete(delete_dig_segment),
+            "/activities/{id}/reprocess-dig-parts",
+            post(reprocess_dig_parts),
+        )
+        .route(
+            "/activities/{activity_id}/dig-parts/{segment_id}",
+            axum::routing::delete(delete_dig_part),
         )
         .route(
             "/activities/{id}/sensor-data",

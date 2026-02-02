@@ -120,7 +120,7 @@ export interface StoppedSegment {
   duration_seconds: number;
 }
 
-export interface DigSegment {
+export interface DigPart {
   id: string;
   activity_id: string;
   start_time: string;
@@ -129,13 +129,13 @@ export interface DigSegment {
   created_at: string;
 }
 
-export interface CreateDigSegmentsRequest {
+export interface CreateDigPartsRequest {
   stopped_segment_ids: string[];
 }
 
 export interface DigTimeSummary {
   total_dig_time_seconds: number;
-  dig_segment_count: number;
+  dig_part_count: number;
   activity_duration_seconds: number | null;
 }
 
@@ -424,7 +424,7 @@ export interface DigTimeLeaderEntry {
   user_id: string;
   user_name: string;
   total_dig_time_seconds: number;
-  dig_segment_count: number;
+  dig_part_count: number;
   rank: number;
 }
 
@@ -856,19 +856,19 @@ class ApiClient {
     return this.request<StoppedSegment[]>(`/activities/${activityId}/stopped-segments`);
   }
 
-  async getDigSegments(activityId: string): Promise<DigSegment[]> {
-    return this.request<DigSegment[]>(`/activities/${activityId}/dig-segments`);
+  async getDigParts(activityId: string): Promise<DigPart[]> {
+    return this.request<DigPart[]>(`/activities/${activityId}/dig-parts`);
   }
 
-  async createDigSegments(activityId: string, stoppedSegmentIds: string[]): Promise<DigSegment[]> {
-    return this.request<DigSegment[]>(`/activities/${activityId}/dig-segments`, {
+  async createDigParts(activityId: string, stoppedSegmentIds: string[]): Promise<DigPart[]> {
+    return this.request<DigPart[]>(`/activities/${activityId}/dig-parts`, {
       method: 'POST',
       body: JSON.stringify({ stopped_segment_ids: stoppedSegmentIds }),
     });
   }
 
-  async deleteDigSegment(activityId: string, segmentId: string): Promise<void> {
-    await this.request<void>(`/activities/${activityId}/dig-segments/${segmentId}`, {
+  async deleteDigPart(activityId: string, segmentId: string): Promise<void> {
+    await this.request<void>(`/activities/${activityId}/dig-parts/${segmentId}`, {
       method: 'DELETE',
     });
   }

@@ -66,7 +66,7 @@ export function DigTaggingModal({
     setError(null);
 
     try {
-      await api.createDigSegments(activityId, Array.from(selectedIds));
+      await api.createDigParts(activityId, Array.from(selectedIds));
       onComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save dig tags");
