@@ -24,6 +24,10 @@ pub struct GeneratedActivity {
     pub moving_time_seconds: f64,
     /// Calculated from track: total elevation gain in meters.
     pub elevation_gain_meters: f64,
+    /// Multi-sport: timestamps marking segment boundaries. First = start, last = end.
+    pub type_boundaries: Option<Vec<OffsetDateTime>>,
+    /// Multi-sport: activity type IDs for each segment. Length = type_boundaries.length - 1.
+    pub segment_types: Option<Vec<Uuid>>,
 }
 
 /// Configuration for activity name generation.
@@ -134,6 +138,8 @@ impl ActivityGenerator {
             duration_seconds,
             moving_time_seconds,
             elevation_gain_meters,
+            type_boundaries: None,
+            segment_types: None,
         }
     }
 

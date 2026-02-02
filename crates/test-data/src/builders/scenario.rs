@@ -21,9 +21,18 @@ use crate::generators::{
     },
     user::{GeneratedUser, UserGenConfig, UserGenerator},
 };
-use crate::profiles::{AthleteProfile, CyclistProfile, HikerProfile, RunnerProfile};
+use crate::profiles::{AthleteProfile, CyclistProfile, DigProfile, HikerProfile, RunnerProfile};
 use crate::sources::ProceduralGenerator;
 use tracks::models::builtin_types;
+
+/// Configuration for a single segment in a multi-sport activity.
+#[derive(Debug, Clone)]
+pub struct MultiSportSegment {
+    /// Activity type UUID for this segment.
+    pub activity_type_id: Uuid,
+    /// Fraction of total activity duration for this segment. Must sum to 1.0 across all segments.
+    pub duration_fraction: f64,
+}
 
 /// Result of building and seeding a scenario.
 #[derive(Debug)]
@@ -110,6 +119,9 @@ pub struct ScenarioBuilder {
     team_count: usize,
     team_config: TeamGenConfig,
 
+    // Multi-sport configuration
+    multi_sport_segments: Option<Vec<MultiSportSegment>>,
+
     // Misc
     seed: u32,
     track_metrics: bool,
@@ -164,6 +176,7 @@ impl ScenarioBuilder {
             social_config: SocialGenConfig::default(),
             team_count: 0, // No teams by default
             team_config: TeamGenConfig::default(),
+            multi_sport_segments: None,
             seed: 42,
             track_metrics: false,
         }
@@ -299,6 +312,50 @@ impl ScenarioBuilder {
         self
     }
 
+    /// Configures multi-sport segment composition.
+    ///
+    /// Each segment specifies an activity type and duration fraction.
+    /// Fractions must sum to 1.0.
+    ///
+    /// Example: MTB -> DIG -> MTB
+    /// ```rust,ignore
+    /// builder.with_multi_sport_segments(vec![
+    ///     MultiSportSegment { activity_type_id: builtin_types::MTB, duration_fraction: 0.4 },
+    ///     MultiSportSegment { activity_type_id: builtin_types::DIG, duration_fraction: 0.2 },
+    ///     MultiSportSegment { activity_type_id: builtin_types::MTB, duration_fraction: 0.4 },
+    /// ])
+    /// ```
+    pub fn with_multi_sport_segments(mut self, segments: Vec<MultiSportSegment>) -> Self {
+        self.multi_sport_segments = Some(segments);
+        self
+    }
+
+    /// Convenience method for adding a dig section to an activity.
+    ///
+    /// Creates a 3-segment pattern: primary_type -> DIG -> primary_type
+    /// where the dig section takes `dig_fraction` of total duration.
+    ///
+    /// Example: `with_dig_section(0.15)` creates MTB(42.5%) -> DIG(15%) -> MTB(42.5%)
+    pub fn with_dig_section(mut self, dig_fraction: f64) -> Self {
+        let remaining = 1.0 - dig_fraction;
+        let half = remaining / 2.0;
+        self.multi_sport_segments = Some(vec![
+            MultiSportSegment {
+                activity_type_id: self.activity_type_id,
+                duration_fraction: half,
+            },
+            MultiSportSegment {
+                activity_type_id: builtin_types::DIG,
+                duration_fraction: dig_fraction,
+            },
+            MultiSportSegment {
+                activity_type_id: self.activity_type_id,
+                duration_fraction: half,
+            },
+        ]);
+        self
+    }
+
     /// Enables metrics tracking for performance analysis.
     ///
     /// When enabled, the result will include timing and count metrics
@@ -322,10 +379,7 @@ impl ScenarioBuilder {
         let user_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
 
         // Generate tracks and activities
-        let track_gen = ProceduralGenerator::for_region(self.region, self.seed)
-            .with_distance(self.track_distance);
         let activity_gen = ActivityGenerator::new();
-        let profile = self.get_profile();
 
         let mut activities = Vec::new();
         let mut reference_track = None;
@@ -334,14 +388,22 @@ impl ScenarioBuilder {
             let num_activities = rng.gen_range(self.activities_per_user.clone());
 
             for _ in 0..num_activities {
-                let track_points = track_gen.generate(profile.as_ref(), rng);
+                let activity = if let Some(ref multi_segments) = self.multi_sport_segments {
+                    // Multi-sport activity: generate track segments for each sport type
+                    self.generate_multi_sport_activity(user.id, multi_segments, &activity_gen, rng)
+                } else {
+                    // Single-sport activity
+                    let track_gen = ProceduralGenerator::for_region(self.region, self.seed)
+                        .with_distance(self.track_distance);
+                    let profile = self.get_profile();
+                    let track_points = track_gen.generate(profile.as_ref(), rng);
+                    activity_gen.from_track(user.id, self.activity_type_id, track_points, rng)
+                };
 
                 if reference_track.is_none() {
-                    reference_track = Some(track_points.clone());
+                    reference_track = Some(activity.track_points.clone());
                 }
 
-                let activity =
-                    activity_gen.from_track(user.id, self.activity_type_id, track_points, rng);
                 activities.push(activity);
             }
         }
@@ -375,6 +437,7 @@ impl ScenarioBuilder {
                     // Generate a dedicated track for this segment
                     let independent_gen = ProceduralGenerator::for_region(self.region, self.seed)
                         .with_distance(*distance);
+                    let profile = self.get_profile();
                     let track_points = independent_gen.generate(profile.as_ref(), rng);
 
                     // Use the entire track as the segment
@@ -612,20 +675,135 @@ impl ScenarioBuilder {
         Ok(result)
     }
 
+    /// Generates a multi-sport activity with segments of different activity types.
+    ///
+    /// Creates a continuous track where different portions use different athletic profiles,
+    /// and records the type boundaries and segment types for multisport support.
+    fn generate_multi_sport_activity(
+        &self,
+        user_id: Uuid,
+        multi_segments: &[MultiSportSegment],
+        activity_gen: &ActivityGenerator,
+        rng: &mut impl Rng,
+    ) -> GeneratedActivity {
+        use tracks::models::TrackPointData;
+
+        let mut all_track_points: Vec<TrackPointData> = Vec::new();
+        let mut type_boundaries: Vec<OffsetDateTime> = Vec::new();
+        let mut segment_types: Vec<Uuid> = Vec::new();
+
+        // Calculate distance for each segment based on duration fractions
+        // Since different profiles have different speeds, we use distance proportional to fraction
+        let total_distance = self.track_distance;
+
+        // Get a starting point for continuity
+        let start_point = self.region.random_point(rng);
+        let mut current_position = start_point;
+
+        for (i, seg) in multi_segments.iter().enumerate() {
+            let segment_distance = total_distance * seg.duration_fraction;
+            let profile = Self::get_profile_for_type(seg.activity_type_id);
+
+            // Generate track for this segment
+            let track_gen = ProceduralGenerator::for_region(self.region, self.seed + i as u32)
+                .with_distance(segment_distance)
+                .with_start(current_position.0, current_position.1);
+
+            let segment_points = track_gen.generate(profile.as_ref(), rng);
+
+            if segment_points.is_empty() {
+                continue;
+            }
+
+            // Record boundary timestamp (start of this segment)
+            if let Some(first_point) = segment_points.first() {
+                if let Some(ts) = first_point.timestamp {
+                    type_boundaries.push(ts);
+                }
+            }
+
+            // Record segment type
+            segment_types.push(seg.activity_type_id);
+
+            // For continuity, adjust timestamps of subsequent segments
+            if !all_track_points.is_empty() {
+                let last_ts = all_track_points
+                    .last()
+                    .and_then(|p| p.timestamp)
+                    .unwrap_or_else(OffsetDateTime::now_utc);
+
+                let first_ts = segment_points
+                    .first()
+                    .and_then(|p| p.timestamp)
+                    .unwrap_or(last_ts);
+
+                let offset = last_ts - first_ts + time::Duration::seconds(1);
+
+                for point in &segment_points {
+                    all_track_points.push(TrackPointData {
+                        lat: point.lat,
+                        lon: point.lon,
+                        elevation: point.elevation,
+                        timestamp: point.timestamp.map(|ts| ts + offset),
+                    });
+                }
+            } else {
+                all_track_points.extend(segment_points.clone());
+            }
+
+            // Update current position for next segment
+            if let Some(last_point) = all_track_points.last() {
+                current_position = (last_point.lat, last_point.lon);
+            }
+        }
+
+        // Add final boundary (end timestamp)
+        if let Some(last_point) = all_track_points.last() {
+            if let Some(ts) = last_point.timestamp {
+                type_boundaries.push(ts);
+            }
+        }
+
+        // Create the activity with multisport metadata
+        let mut activity =
+            activity_gen.from_track(user_id, self.activity_type_id, all_track_points, rng);
+
+        // Set multisport fields
+        // Invariant: segment_types.len() == type_boundaries.len() - 1
+        debug_assert_eq!(
+            segment_types.len(),
+            type_boundaries.len().saturating_sub(1),
+            "Multisport invariant violated: types.len()={} != boundaries.len()-1={}",
+            segment_types.len(),
+            type_boundaries.len().saturating_sub(1)
+        );
+
+        activity.type_boundaries = Some(type_boundaries);
+        activity.segment_types = Some(segment_types);
+
+        activity
+    }
+
     /// Gets the appropriate athletic profile for the activity type.
     fn get_profile(&self) -> Box<dyn AthleteProfile> {
-        if self.activity_type_id == builtin_types::RUN {
+        Self::get_profile_for_type(self.activity_type_id)
+    }
+
+    /// Gets the appropriate athletic profile for a given activity type UUID.
+    fn get_profile_for_type(activity_type_id: Uuid) -> Box<dyn AthleteProfile> {
+        if activity_type_id == builtin_types::RUN {
             Box::new(RunnerProfile::default())
-        } else if self.activity_type_id == builtin_types::ROAD
-            || self.activity_type_id == builtin_types::MTB
-            || self.activity_type_id == builtin_types::EMTB
-            || self.activity_type_id == builtin_types::GRAVEL
+        } else if activity_type_id == builtin_types::ROAD
+            || activity_type_id == builtin_types::MTB
+            || activity_type_id == builtin_types::EMTB
+            || activity_type_id == builtin_types::GRAVEL
         {
             Box::new(CyclistProfile::default())
-        } else if self.activity_type_id == builtin_types::HIKE
-            || self.activity_type_id == builtin_types::WALK
+        } else if activity_type_id == builtin_types::HIKE || activity_type_id == builtin_types::WALK
         {
             Box::new(HikerProfile::default())
+        } else if activity_type_id == builtin_types::DIG {
+            Box::new(DigProfile::default())
         } else {
             Box::new(RunnerProfile::default())
         }
@@ -849,6 +1027,64 @@ impl ScenarioBuilder {
                 avg_comments_per_activity: 2.0,
                 ..Default::default()
             })
+            .with_metrics(true)
+    }
+
+    /// Creates a scenario for testing dig leaderboard functionality.
+    ///
+    /// Generates multi-sport activities with MTB→DIG→MTB patterns:
+    /// - 50 users with varied skill levels
+    /// - 8km activities with 15% dig time
+    /// - 2-4 activities per user for leaderboard variety
+    /// - No segments (focuses on dig time extraction)
+    pub fn dig_leaderboard_test() -> Self {
+        Self::new()
+            .with_users(50)
+            .with_region(Region::BOULDER)
+            .with_activity_type_id(builtin_types::MTB)
+            .with_track_distance(8000.0)
+            .with_activities_per_user(2..=4)
+            .with_dig_section(0.15) // 15% dig time
+            .with_social(false)
+            .with_metrics(true)
+    }
+
+    /// Creates a scenario for testing multi-dig activities.
+    ///
+    /// Generates activities with multiple dig sections (MTB→DIG→MTB→DIG→MTB):
+    /// - 30 users
+    /// - 12km activities with two dig sections (10% each)
+    /// - Tests extraction of multiple dig parts per activity
+    pub fn multi_dig_test() -> Self {
+        Self::new()
+            .with_users(30)
+            .with_region(Region::BOULDER)
+            .with_activity_type_id(builtin_types::MTB)
+            .with_track_distance(12000.0)
+            .with_activities_per_user(1..=2)
+            .with_multi_sport_segments(vec![
+                MultiSportSegment {
+                    activity_type_id: builtin_types::MTB,
+                    duration_fraction: 0.3,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::DIG,
+                    duration_fraction: 0.1,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::MTB,
+                    duration_fraction: 0.3,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::DIG,
+                    duration_fraction: 0.1,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::MTB,
+                    duration_fraction: 0.2,
+                },
+            ])
+            .with_social(false)
             .with_metrics(true)
     }
 }
@@ -1095,5 +1331,138 @@ mod tests {
             builder.effort_coverage,
             EffortCoverage::Zipf { .. }
         ));
+    }
+
+    #[test]
+    fn test_preset_dig_leaderboard() {
+        let builder = ScenarioBuilder::dig_leaderboard_test();
+        assert_eq!(builder.user_count, 50);
+        assert_eq!(builder.activity_type_id, builtin_types::MTB);
+        assert!(builder.multi_sport_segments.is_some());
+        let segments = builder.multi_sport_segments.unwrap();
+        assert_eq!(segments.len(), 3); // MTB -> DIG -> MTB
+        assert_eq!(segments[1].activity_type_id, builtin_types::DIG);
+    }
+
+    #[test]
+    fn test_preset_multi_dig() {
+        let builder = ScenarioBuilder::multi_dig_test();
+        assert_eq!(builder.user_count, 30);
+        assert!(builder.multi_sport_segments.is_some());
+        let segments = builder.multi_sport_segments.unwrap();
+        assert_eq!(segments.len(), 5); // MTB -> DIG -> MTB -> DIG -> MTB
+
+        // Count DIG segments
+        let dig_count = segments
+            .iter()
+            .filter(|s| s.activity_type_id == builtin_types::DIG)
+            .count();
+        assert_eq!(dig_count, 2);
+    }
+
+    #[test]
+    fn test_multi_sport_activity_generation() {
+        let mut rng = rand::thread_rng();
+
+        let result = ScenarioBuilder::new()
+            .with_users(3)
+            .with_activity_type_id(builtin_types::MTB)
+            .with_track_distance(5000.0)
+            .with_dig_section(0.2) // 20% dig time
+            .with_activities_per_user(1..=1)
+            .with_social(false)
+            .build_data(&mut rng);
+
+        assert_eq!(result.users.len(), 3);
+        assert_eq!(result.activities.len(), 3);
+
+        // All activities should have multisport metadata
+        for activity in &result.activities {
+            assert!(
+                activity.type_boundaries.is_some(),
+                "Activity should have type_boundaries"
+            );
+            assert!(
+                activity.segment_types.is_some(),
+                "Activity should have segment_types"
+            );
+
+            let boundaries = activity.type_boundaries.as_ref().unwrap();
+            let types = activity.segment_types.as_ref().unwrap();
+
+            // Verify invariant: segment_types.len() == type_boundaries.len() - 1
+            assert_eq!(
+                types.len(),
+                boundaries.len() - 1,
+                "Multisport invariant violated: types.len()={} != boundaries.len()-1={}",
+                types.len(),
+                boundaries.len() - 1
+            );
+
+            // Should have 3 segments: MTB -> DIG -> MTB
+            assert_eq!(types.len(), 3);
+            assert_eq!(types[0], builtin_types::MTB);
+            assert_eq!(types[1], builtin_types::DIG);
+            assert_eq!(types[2], builtin_types::MTB);
+
+            // Boundaries should be monotonically increasing
+            for window in boundaries.windows(2) {
+                assert!(
+                    window[1] > window[0],
+                    "Type boundaries should be monotonically increasing"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_multi_sport_invariant() {
+        let mut rng = rand::thread_rng();
+
+        // Test with multiple dig sections
+        let result = ScenarioBuilder::new()
+            .with_users(2)
+            .with_activity_type_id(builtin_types::MTB)
+            .with_track_distance(10000.0)
+            .with_multi_sport_segments(vec![
+                MultiSportSegment {
+                    activity_type_id: builtin_types::MTB,
+                    duration_fraction: 0.25,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::DIG,
+                    duration_fraction: 0.1,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::MTB,
+                    duration_fraction: 0.3,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::DIG,
+                    duration_fraction: 0.1,
+                },
+                MultiSportSegment {
+                    activity_type_id: builtin_types::MTB,
+                    duration_fraction: 0.25,
+                },
+            ])
+            .with_activities_per_user(1..=1)
+            .with_social(false)
+            .build_data(&mut rng);
+
+        for activity in &result.activities {
+            let boundaries = activity.type_boundaries.as_ref().unwrap();
+            let types = activity.segment_types.as_ref().unwrap();
+
+            // Verify invariant: segment_types.len() == type_boundaries.len() - 1
+            assert_eq!(
+                types.len(),
+                boundaries.len() - 1,
+                "Multisport invariant violated"
+            );
+
+            // Should have 5 segments
+            assert_eq!(types.len(), 5);
+        }
     }
 }

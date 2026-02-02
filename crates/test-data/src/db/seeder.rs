@@ -142,8 +142,8 @@ impl Seeder {
         // Insert activity record
         sqlx::query(
             r#"
-            INSERT INTO activities (id, user_id, activity_type_id, name, object_store_path, started_at, submitted_at, visibility)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO activities (id, user_id, activity_type_id, name, object_store_path, started_at, submitted_at, visibility, type_boundaries, segment_types)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (id) DO NOTHING
             "#,
         )
@@ -155,6 +155,8 @@ impl Seeder {
         .bind(started_at)
         .bind(activity.submitted_at)
         .bind(activity.visibility.as_str())
+        .bind(&activity.type_boundaries)
+        .bind(&activity.segment_types)
         .execute(&self.pool)
         .await?;
 

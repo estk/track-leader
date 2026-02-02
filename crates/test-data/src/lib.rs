@@ -41,14 +41,16 @@ pub use tracks::models::{
 pub mod prelude {
     //! Convenient re-exports for common usage.
 
-    pub use crate::builders::{ScenarioBuilder, ScenarioMetrics, ScenarioResult};
+    pub use crate::builders::{
+        MultiSportSegment, ScenarioBuilder, ScenarioMetrics, ScenarioResult,
+    };
     pub use crate::config::{BoundingBox, EffortCoverage, Region, SeedConfig, SkillDistribution};
     pub use crate::db::Seeder;
     pub use crate::generators::{
         ActivityGenerator, EffortGenerator, SegmentGenerator, SocialGenerator, UserGenerator,
     };
     pub use crate::profiles::{
-        AthleteProfile, CyclistProfile, HikerProfile, RunnerProfile, sample_variance,
+        AthleteProfile, CyclistProfile, DigProfile, HikerProfile, RunnerProfile, sample_variance,
         speed_at_grade,
     };
     pub use crate::sources::{GpxLoader, OsmClient, ProceduralGenerator, RoutePattern};

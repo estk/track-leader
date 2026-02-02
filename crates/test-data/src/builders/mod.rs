@@ -5,4 +5,4 @@
 
 mod scenario;
 
-pub use scenario::{ScenarioBuilder, ScenarioMetrics, ScenarioResult};
+pub use scenario::{MultiSportSegment, ScenarioBuilder, ScenarioMetrics, ScenarioResult};

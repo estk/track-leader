@@ -4,10 +4,12 @@
 //! They are used by track generators to produce realistic timestamps.
 
 mod cyclist;
+mod dig;
 mod hiker;
 mod runner;
 
 pub use cyclist::CyclistProfile;
+pub use dig::DigProfile;
 pub use hiker::HikerProfile;
 pub use runner::RunnerProfile;
 

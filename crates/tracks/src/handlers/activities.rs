@@ -17,7 +17,7 @@ use crate::{
     auth::{AuthUser, OptionalAuthUser},
     database::Database,
     errors::AppError,
-    file_parsers::{parse_activity_file, FitSportSegment},
+    file_parsers::{FitSportSegment, parse_activity_file},
     models::{Activity, ActivitySortBy, DateRangeFilter, FeedActivity, VisibilityFilter},
     object_store_service::{FileType, ObjectStoreService},
 };
@@ -344,27 +344,28 @@ pub async fn preview_activity(
     mut multipart: Multipart,
 ) -> Result<Json<PreviewActivityResponse>, AppError> {
     // Extract file from multipart
-    let (mime_hdr, file_bytes) = {
-        let mut file_bytes = BytesMut::new();
-        let mut mime_hdr = None;
+    let (mime_hdr, file_bytes) =
+        {
+            let mut file_bytes = BytesMut::new();
+            let mut mime_hdr = None;
 
-        while let Some(field) = multipart.next_field().await.map_err(|_| {
-            AppError::InvalidInput("Failed to process multipart data".to_string())
-        })? {
-            if field.name() == Some("file") {
-                mime_hdr = field.headers().typed_get::<ContentType>();
-                let chunk = field.bytes().await.map_err(|_| {
-                    AppError::InvalidInput("Failed to read file data".to_string())
-                })?;
-                file_bytes.extend(chunk);
+            while let Some(field) = multipart.next_field().await.map_err(|_| {
+                AppError::InvalidInput("Failed to process multipart data".to_string())
+            })? {
+                if field.name() == Some("file") {
+                    mime_hdr = field.headers().typed_get::<ContentType>();
+                    let chunk = field.bytes().await.map_err(|_| {
+                        AppError::InvalidInput("Failed to read file data".to_string())
+                    })?;
+                    file_bytes.extend(chunk);
+                }
             }
-        }
 
-        if file_bytes.is_empty() {
-            return Err(AppError::InvalidInput("No file provided".to_string()));
-        }
-        (mime_hdr, file_bytes.freeze())
-    };
+            if file_bytes.is_empty() {
+                return Err(AppError::InvalidInput("No file provided".to_string()));
+            }
+            (mime_hdr, file_bytes.freeze())
+        };
 
     // Detect file type
     let mut file_type = mime_hdr.map_or(FileType::Other, |ct| {
