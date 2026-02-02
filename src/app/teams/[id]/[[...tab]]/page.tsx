@@ -28,13 +28,14 @@ import { RoleBadge } from "@/components/teams/role-badge";
 import { FeedCard } from "@/components/feed/feed-card";
 import { LazyDailyActivitiesMap } from "@/components/activity/lazy-daily-activities-map";
 import { LazyTeamHeatmap } from "@/components/maps/lazy-team-heatmap";
+import { LazyDigHeatmap } from "@/components/maps/lazy-dig-heatmap";
 import { RankBadge } from "@/components/leaderboard/crown-badge";
 import { cn } from "@/lib/utils";
 import { Crown, MapPin, Shovel, Percent, Gauge } from "lucide-react";
 
-type TabType = "daily-map" | "heat-map" | "activities" | "segments" | "members" | "leaderboard";
+type TabType = "daily-map" | "heat-map" | "dig-heatmap" | "activities" | "segments" | "members" | "leaderboard";
 
-const VALID_TABS: TabType[] = ["daily-map", "heat-map", "activities", "segments", "members", "leaderboard"];
+const VALID_TABS: TabType[] = ["daily-map", "heat-map", "dig-heatmap", "activities", "segments", "members", "leaderboard"];
 
 function parseTab(tabParam: string[] | undefined): TabType {
   if (!tabParam || tabParam.length === 0) return "daily-map";
@@ -131,7 +132,7 @@ export default function TeamDetailPage() {
     if (!team?.is_member) return;
 
     // These tabs handle their own loading
-    if (activeTab === "daily-map" || activeTab === "heat-map" || activeTab === "leaderboard") {
+    if (activeTab === "daily-map" || activeTab === "heat-map" || activeTab === "dig-heatmap" || activeTab === "leaderboard") {
       setContentLoading(false);
       return;
     }
@@ -269,6 +270,13 @@ export default function TeamDetailPage() {
               Heat Map
             </TabLink>
             <TabLink
+              href={`/teams/${teamId}/dig-heatmap`}
+              active={activeTab === "dig-heatmap"}
+            >
+              <Shovel className="h-4 w-4" />
+              Dig Map
+            </TabLink>
+            <TabLink
               href={`/teams/${teamId}/activities`}
               active={activeTab === "activities"}
               count={team.activity_count}
@@ -307,6 +315,7 @@ export default function TeamDetailPage() {
             <>
               {activeTab === "daily-map" && <DailyMapTab teamId={teamId} />}
               {activeTab === "heat-map" && <HeatMapTab teamId={teamId} />}
+              {activeTab === "dig-heatmap" && <DigHeatMapTab teamId={teamId} />}
               {activeTab === "activities" && (
                 <ActivitiesTab activities={activities} />
               )}
@@ -541,6 +550,22 @@ function HeatMapTab({ teamId }: { teamId: string }) {
       </CardHeader>
       <CardContent>
         <LazyTeamHeatmap teamId={teamId} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function DigHeatMapTab({ teamId }: { teamId: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Shovel className="h-5 w-5" />
+          Team Dig Heat Map
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <LazyDigHeatmap teamId={teamId} />
       </CardContent>
     </Card>
   );

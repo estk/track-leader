@@ -1501,3 +1501,34 @@ pub struct OrphanedActivity {
     pub type_boundaries: Option<Vec<time::OffsetDateTime>>,
     pub segment_types: Option<Vec<Uuid>>,
 }
+
+// ============================================================================
+// Dig Heatmap Models
+// ============================================================================
+
+/// A single point in the dig heatmap, representing aggregated dig activity at a location.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
+pub struct DigHeatmapPoint {
+    pub lon: f64,
+    pub lat: f64,
+    pub total_duration_seconds: f64,
+    pub frequency: i64,
+}
+
+/// Geographic bounds for a heatmap.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DigHeatmapBounds {
+    pub min_lat: f64,
+    pub max_lat: f64,
+    pub min_lon: f64,
+    pub max_lon: f64,
+}
+
+/// Response containing dig heatmap data with geographic points and summary statistics.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct DigHeatmapResponse {
+    pub points: Vec<DigHeatmapPoint>,
+    pub bounds: Option<DigHeatmapBounds>,
+    pub total_dig_time_seconds: f64,
+    pub total_dig_count: i64,
+}

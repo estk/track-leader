@@ -4949,6 +4949,139 @@ impl Database {
         Ok(result.rows_affected() > 0)
     }
 
+    /// Get dig heatmap data showing geographic locations where trail maintenance occurred.
+    /// Extracts track points that fall within dig segment time ranges, aggregates by
+    /// rounded coordinates (4 decimal places ≈ 10m grid), and returns summary statistics.
+    pub async fn get_dig_heatmap_data(
+        &self,
+        team_id: Option<Uuid>,
+        since: Option<time::OffsetDateTime>,
+        limit: i64,
+    ) -> Result<crate::models::DigHeatmapResponse, AppError> {
+        // Build the query dynamically based on filters
+        let team_join = if team_id.is_some() {
+            "JOIN team_activity_shares tas ON tas.activity_id = a.id"
+        } else {
+            ""
+        };
+
+        let team_where = if team_id.is_some() {
+            "AND tas.team_id = $3"
+        } else {
+            ""
+        };
+
+        let since_where = if since.is_some() {
+            if team_id.is_some() {
+                "AND ads.start_time >= $4"
+            } else {
+                "AND ads.start_time >= $3"
+            }
+        } else {
+            ""
+        };
+
+        let query = format!(
+            r#"
+            WITH dig_points AS (
+                SELECT
+                    ROUND(ST_X(dp.geom)::numeric, 4) as lon,
+                    ROUND(ST_Y(dp.geom)::numeric, 4) as lat,
+                    ads.duration_seconds
+                FROM activity_dig_segments ads
+                JOIN activities a ON a.id = ads.activity_id
+                JOIN tracks t ON t.activity_id = a.id
+                {team_join}
+                CROSS JOIN LATERAL ST_DumpPoints(t.geo::geometry) AS dp(path, geom)
+                WHERE a.deleted_at IS NULL
+                AND ST_M(dp.geom) BETWEEN EXTRACT(EPOCH FROM ads.start_time) AND EXTRACT(EPOCH FROM ads.end_time)
+                {team_where}
+                {since_where}
+            ),
+            aggregated AS (
+                SELECT
+                    lon::float8 as lon,
+                    lat::float8 as lat,
+                    SUM(duration_seconds) as total_duration_seconds,
+                    COUNT(*) as frequency
+                FROM dig_points
+                GROUP BY lon, lat
+                ORDER BY total_duration_seconds DESC
+                LIMIT $1
+            )
+            SELECT lon, lat, total_duration_seconds, frequency
+            FROM aggregated
+            "#
+        );
+
+        // Bind parameters based on which filters are present
+        let points: Vec<crate::models::DigHeatmapPoint> = match (team_id, since) {
+            (Some(tid), Some(s)) => {
+                sqlx::query_as(&query)
+                    .bind(limit)
+                    .bind(tid)
+                    .bind(tid)
+                    .bind(s)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+            (Some(tid), None) => {
+                sqlx::query_as(&query)
+                    .bind(limit)
+                    .bind(tid)
+                    .bind(tid)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+            (None, Some(s)) => {
+                sqlx::query_as(&query)
+                    .bind(limit)
+                    .bind(s)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+            (None, None) => {
+                sqlx::query_as(&query)
+                    .bind(limit)
+                    .fetch_all(&self.pool)
+                    .await?
+            }
+        };
+
+        // Calculate bounds and totals
+        let bounds = if points.is_empty() {
+            None
+        } else {
+            let min_lat = points.iter().map(|p| p.lat).fold(f64::INFINITY, f64::min);
+            let max_lat = points
+                .iter()
+                .map(|p| p.lat)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let min_lon = points.iter().map(|p| p.lon).fold(f64::INFINITY, f64::min);
+            let max_lon = points
+                .iter()
+                .map(|p| p.lon)
+                .fold(f64::NEG_INFINITY, f64::max);
+
+            Some(crate::models::DigHeatmapBounds {
+                min_lat,
+                max_lat,
+                min_lon,
+                max_lon,
+            })
+        };
+
+        let total_dig_time_seconds: f64 = points.iter().map(|p| p.total_duration_seconds).sum();
+        let total_dig_count: i64 = points.iter().map(|p| p.frequency).sum();
+
+        Ok(crate::models::DigHeatmapResponse {
+            points,
+            bounds,
+            total_dig_time_seconds,
+            total_dig_count,
+        })
+    }
+
     // ========================================================================
     // Sensor Data Methods
     // ========================================================================

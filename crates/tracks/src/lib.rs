@@ -53,6 +53,31 @@ use crate::{
         invite_to_team, is_segment_starred, join_team, leave_team, list_activity_types,
         list_my_teams, list_segments, list_team_members, mark_all_notifications_read,
         mark_notification_read, new_activity, new_user, preview_segment, remove_kudos, remove_team_member, reprocess_dig_parts, reprocess_segment, resolve_activity_type, review_join_request, revoke_invitation, share_activity_with_teams, share_segment_with_teams, star_segment, unfollow_user, unshare_activity_from_team, unshare_segment_from_team, unstar_segment, update_activity, update_my_demographics, update_team, preview_activity, },
+    handlers::{
+        accept_invitation, add_comment, all_users, change_member_role, create_activity_type,
+        create_dig_parts, create_segment, create_team, delete_activity, delete_comment,
+        delete_dig_part, delete_team, discover_teams, download_gpx_file, follow_user,
+        get_activities_by_date, get_activity, get_activity_segments, get_activity_sensor_data,
+        get_activity_teams, get_activity_track, get_activity_type, get_average_speed_leaderboard,
+        get_comments, get_countries, get_crown_leaderboard, get_dig_percentage_leaderboard,
+        get_dig_parts, get_dig_time, get_dig_time_leaderboard, get_distance_leaderboard,
+        get_feed, get_filtered_leaderboard, get_follow_status, get_followers, get_following,
+        get_global_dig_heatmap, get_invitation, get_join_requests, get_kudos_givers,
+        get_kudos_status, get_leaderboard_position, get_my_achievements, get_my_demographics,
+        get_my_segment_efforts, get_nearby_segments, get_notifications, get_segment,
+        get_segment_achievements, get_segment_leaderboard, get_segment_teams, get_segment_track,
+        get_starred_segment_efforts, get_starred_segments, get_stats, get_stopped_segments,
+        get_team, get_team_activities, get_team_activities_by_date, get_team_dig_heatmap,
+        get_team_invitations, get_team_leaderboard, get_team_segments, get_user_achievements,
+        get_user_activities, get_user_profile, give_kudos, health_check, invite_to_team,
+        is_segment_starred, join_team, leave_team, list_activity_types, list_my_teams,
+        list_segments, list_team_members, mark_all_notifications_read, mark_notification_read,
+        new_activity, new_user, preview_segment, remove_kudos, remove_team_member,
+        reprocess_segment, resolve_activity_type, review_join_request, revoke_invitation,
+        share_activity_with_teams, share_segment_with_teams, star_segment, unfollow_user,
+        unshare_activity_from_team, unshare_segment_from_team, unstar_segment, update_activity,
+        update_my_demographics, update_team,
+    },
     object_store_service::ObjectStoreService,
 };
 
@@ -195,6 +220,9 @@ use crate::{
         handlers::get_team_activities_by_date,
         handlers::get_team_segments,
         handlers::get_team_leaderboard,
+        // Dig heatmap
+        handlers::get_team_dig_heatmap,
+        handlers::get_global_dig_heatmap,
     ),
     components(
         schemas(
@@ -293,6 +321,10 @@ use crate::{
             models::JoinTeamRequest,
             models::ShareWithTeamsRequest,
             models::TeamSummary,
+            // Dig heatmap types
+            models::DigHeatmapPoint,
+            models::DigHeatmapBounds,
+            models::DigHeatmapResponse,
             // Handler request/response types
             handlers::TrackPoint,
             handlers::TrackData,
@@ -336,6 +368,7 @@ use crate::{
             handlers::TeamActivitiesByDateQuery,
             handlers::TeamLeaderboardQuery,
             handlers::TeamLeaderboardResponse,
+            handlers::DigHeatmapQuery,
         )
     ),
     security(
@@ -543,6 +576,9 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
             "/teams/{id}/leaderboard/{leaderboard_type}",
             get(get_team_leaderboard),
         )
+        .route("/teams/{id}/dig-heatmap", get(get_team_dig_heatmap))
+        // Global dig heatmap (public route)
+        .route("/dig-heatmap", get(get_global_dig_heatmap))
         // Invitation acceptance (public route, token-based)
         .route("/invitations/{token}", get(get_invitation))
         .route("/invitations/{token}/accept", post(accept_invitation))

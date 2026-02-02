@@ -1365,3 +1365,92 @@ pub async fn get_team_leaderboard(
 
     Ok(Json(response))
 }
+
+// ============================================================================
+// Dig Heatmap Handlers
+// ============================================================================
+
+fn default_heatmap_limit() -> i64 {
+    10000
+}
+
+/// Query parameters for dig heatmap requests.
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct DigHeatmapQuery {
+    /// Time range filter: 7, 30, 90 days, or "all" for all time
+    #[serde(default)]
+    pub days: Option<String>,
+    /// Maximum number of points to return
+    #[serde(default = "default_heatmap_limit")]
+    pub limit: i64,
+}
+
+impl DigHeatmapQuery {
+    /// Convert days parameter to OffsetDateTime threshold
+    fn since(&self) -> Option<time::OffsetDateTime> {
+        let days_str = self.days.as_deref().unwrap_or("all");
+        let days: Option<i64> = match days_str {
+            "7" => Some(7),
+            "30" => Some(30),
+            "90" => Some(90),
+            "all" | "" => None,
+            s => s.parse().ok(),
+        };
+
+        days.map(|d| time::OffsetDateTime::now_utc() - time::Duration::days(d))
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/teams/{id}/dig-heatmap",
+    tag = "teams",
+    params(
+        ("id" = Uuid, Path, description = "Team ID"),
+        DigHeatmapQuery
+    ),
+    responses(
+        (status = 200, description = "Dig heatmap data for the team", body = crate::models::DigHeatmapResponse),
+        (status = 404, description = "Team not found or not a member"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+/// Get dig heatmap data for a team's activities.
+/// Returns geographic points where trail maintenance occurred, aggregated by location.
+pub async fn get_team_dig_heatmap(
+    Extension(db): Extension<Database>,
+    AuthUser(claims): AuthUser,
+    Path(team_id): Path<Uuid>,
+    Query(query): Query<DigHeatmapQuery>,
+) -> Result<Json<crate::models::DigHeatmapResponse>, AppError> {
+    // Verify user is a member
+    db.get_team_membership(team_id, claims.sub)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let response = db
+        .get_dig_heatmap_data(Some(team_id), query.since(), query.limit)
+        .await?;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    get,
+    path = "/dig-heatmap",
+    tag = "stats",
+    params(DigHeatmapQuery),
+    responses(
+        (status = 200, description = "Global dig heatmap data", body = crate::models::DigHeatmapResponse)
+    )
+)]
+/// Get global dig heatmap data for all public activities.
+/// Returns geographic points where trail maintenance occurred, aggregated by location.
+pub async fn get_global_dig_heatmap(
+    Extension(db): Extension<Database>,
+    Query(query): Query<DigHeatmapQuery>,
+) -> Result<Json<crate::models::DigHeatmapResponse>, AppError> {
+    let response = db
+        .get_dig_heatmap_data(None, query.since(), query.limit)
+        .await?;
+    Ok(Json(response))
+}

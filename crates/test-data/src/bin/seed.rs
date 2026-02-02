@@ -10,8 +10,8 @@
 //! - test.user2@example.com (password: "password")
 //! - test.user3@example.com (password: "password")
 
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use test_data::builders::ScenarioBuilder;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;

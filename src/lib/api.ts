@@ -139,6 +139,21 @@ export interface DigTimeSummary {
   activity_duration_seconds: number | null;
 }
 
+// Dig heatmap types
+export interface DigHeatmapPoint {
+  lon: number;
+  lat: number;
+  total_duration_seconds: number;
+  frequency: number;
+}
+
+export interface DigHeatmapResponse {
+  points: DigHeatmapPoint[];
+  bounds: TrackBounds | null;
+  total_dig_time_seconds: number;
+  total_dig_count: number;
+}
+
 export interface TrackBounds {
   min_lat: number;
   max_lat: number;
@@ -1538,6 +1553,23 @@ class ApiClient {
     if (limit !== undefined) params.set('limit', limit.toString());
     if (offset !== undefined) params.set('offset', offset.toString());
     return this.request<FeedActivity[]>(`/teams/${teamId}/activities/daily?${params.toString()}`);
+  }
+
+  // Dig heatmap endpoints
+  async getTeamDigHeatmap(teamId: string, days?: number, limit?: number): Promise<DigHeatmapResponse> {
+    const params = new URLSearchParams();
+    if (days !== undefined) params.set('days', days.toString());
+    if (limit !== undefined) params.set('limit', limit.toString());
+    const queryString = params.toString();
+    return this.request<DigHeatmapResponse>(`/teams/${teamId}/dig-heatmap${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getGlobalDigHeatmap(days?: number, limit?: number): Promise<DigHeatmapResponse> {
+    const params = new URLSearchParams();
+    if (days !== undefined) params.set('days', days.toString());
+    if (limit !== undefined) params.set('limit', limit.toString());
+    const queryString = params.toString();
+    return this.request<DigHeatmapResponse>(`/dig-heatmap${queryString ? `?${queryString}` : ''}`);
   }
 }
 
