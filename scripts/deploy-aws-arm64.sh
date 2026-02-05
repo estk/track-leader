@@ -1,8 +1,7 @@
 #!/bin/bash
 # AWS EC2 ARM64 (Amazon Linux 2023) Deployment Script for Track Leader
 #
-# This script sets up a fresh Amazon Linux 2023 ARM64 instance to run Track Leader.
-# Run this on your EC2 instance after SSHing in.
+# Uses nerdctl + containerd instead of Docker.
 #
 # Prerequisites:
 #   1. EC2 t4g.micro (ARM64) instance with Amazon Linux 2023
@@ -42,31 +41,33 @@ if [ "$ARCH" != "aarch64" ]; then
     log_warn "Expected ARM64 (aarch64), got $ARCH. Script may still work."
 fi
 
+NERDCTL_VERSION="2.0.4"
+
 echo ""
-log_info "Step 1: Installing Docker..."
+log_info "Step 1: Installing containerd + nerdctl + buildkit..."
 echo ""
 
-# Install Docker on Amazon Linux 2023
-if ! command -v docker &> /dev/null; then
+if ! command -v nerdctl &> /dev/null; then
     sudo dnf update -y
-    sudo dnf install -y docker
-    sudo systemctl start docker
-    sudo systemctl enable docker
-    sudo usermod -aG docker ec2-user
-    log_info "Docker installed. You may need to log out and back in for group changes."
-else
-    log_info "Docker already installed."
-fi
+    sudo dnf install -y tar gzip curl
 
-# Install Docker Compose plugin
-if ! docker compose version &> /dev/null; then
-    log_info "Installing Docker Compose plugin..."
-    sudo mkdir -p /usr/local/lib/docker/cli-plugins
-    sudo curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64" \
-        -o /usr/local/lib/docker/cli-plugins/docker-compose
-    sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+    # Download nerdctl full package (includes containerd, buildkit, CNI plugins)
+    NERDCTL_ARCHIVE="nerdctl-full-${NERDCTL_VERSION}-linux-arm64.tar.gz"
+    curl -sSL "https://github.com/containerd/nerdctl/releases/download/v${NERDCTL_VERSION}/${NERDCTL_ARCHIVE}" \
+        -o "/tmp/${NERDCTL_ARCHIVE}"
+
+    # Extract to /usr/local (puts binaries in /usr/local/bin, services in /usr/local/lib/systemd)
+    sudo tar -xzf "/tmp/${NERDCTL_ARCHIVE}" -C /usr/local
+    rm -f "/tmp/${NERDCTL_ARCHIVE}"
+
+    # Enable and start containerd
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now containerd
+    sudo systemctl enable --now buildkit
+
+    log_info "nerdctl ${NERDCTL_VERSION} installed (containerd + buildkit + CNI)."
 else
-    log_info "Docker Compose already installed."
+    log_info "nerdctl already installed: $(nerdctl --version)"
 fi
 
 echo ""
@@ -137,18 +138,18 @@ if [ -f ".env.production" ]; then
         log_info "Edit the file and re-run this script, or run manually:"
         echo ""
         echo "  cd $APP_DIR"
-        echo "  docker compose -f docker-compose.supabase.yml --env-file .env.production up -d --build"
+        echo "  sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d --build"
         echo ""
         exit 1
     fi
 fi
 
-# Build and start
+# Build and start (nerdctl requires root for compose with port binding)
 log_info "Building containers (this may take 5-10 minutes on first run)..."
-docker compose -f docker-compose.supabase.yml --env-file .env.production build
+sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production build
 
 log_info "Starting services..."
-docker compose -f docker-compose.supabase.yml --env-file .env.production up -d
+sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d
 
 echo ""
 log_info "Step 6: Verifying deployment..."
@@ -158,7 +159,7 @@ sleep 10  # Give services time to start
 
 # Check container status
 echo "Container status:"
-docker compose -f docker-compose.supabase.yml ps
+sudo nerdctl compose -f docker-compose.supabase.yml ps
 
 echo ""
 
@@ -186,11 +187,11 @@ echo "  2. Caddy will automatically obtain SSL certificates"
 echo "  3. Access your app at https://\$DOMAIN"
 echo ""
 echo "Useful commands:"
-echo "  View logs:     docker compose -f docker-compose.supabase.yml logs -f"
-echo "  Stop:          docker compose -f docker-compose.supabase.yml down"
-echo "  Restart:       docker compose -f docker-compose.supabase.yml restart"
-echo "  Update:        git pull && docker compose -f docker-compose.supabase.yml up -d --build"
+echo "  View logs:     sudo nerdctl compose -f docker-compose.supabase.yml logs -f"
+echo "  Stop:          sudo nerdctl compose -f docker-compose.supabase.yml down"
+echo "  Restart:       sudo nerdctl compose -f docker-compose.supabase.yml restart"
+echo "  Update:        git pull && sudo nerdctl compose -f docker-compose.supabase.yml up -d --build"
 echo ""
 echo "Monitor resources:"
-echo "  docker stats"
+echo "  sudo nerdctl stats"
 echo ""

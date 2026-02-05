@@ -90,27 +90,32 @@ services:
       retries: 3
       start_period: 30s
 
-  # Reverse proxy (optional - use if not using external load balancer)
-  nginx:
-    image: nginx:alpine
-    container_name: tracks_nginx_prod
+  # Reverse proxy with automatic HTTPS via Caddy
+  caddy:
+    image: caddy:2-alpine
+    container_name: tracks_caddy_prod
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
     depends_on:
       - frontend
       - backend
     restart: always
-    profiles:
-      - with-nginx
 
 volumes:
   postgres_data:
     driver: local
   uploads_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
     driver: local
 
 networks:

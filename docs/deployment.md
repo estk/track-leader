@@ -174,19 +174,18 @@ Add to crontab:
 
 ## Cloud Deployments
 
-### AWS
+### AWS (Free Tier)
 
-#### EC2 Instance
-1. Launch EC2 instance (t3.medium recommended)
-2. Install Docker and Docker Compose
-3. Clone repository
-4. Configure environment
-5. Run docker-compose
+See `docs/planning/deployment.md` for the full guide using:
+- **t4g.micro** (ARM64, free tier 12 months) + **Supabase** free tier = $0/month
+- **nerdctl/containerd** instead of Docker (lighter on constrained instances)
+- **Caddy** for automatic HTTPS
 
-#### RDS for PostgreSQL
-1. Create RDS PostgreSQL instance with PostGIS
-2. Update DATABASE_URL to point to RDS endpoint
-3. Ensure security group allows connection from EC2
+#### Quick Start
+1. Launch EC2 t4g.micro (Amazon Linux 2023 ARM64)
+2. Run `./scripts/deploy-aws-arm64.sh` (installs nerdctl + containerd + buildkit)
+3. Configure `.env.production` (Supabase connection string, PASETO key, domain)
+4. `sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d --build`
 
 ### Google Cloud
 

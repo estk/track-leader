@@ -1,8 +1,8 @@
 # Track Leader Deployment Guide
 
-AWS ARM64 (t4g.micro) + Supabase Free Tier
+AWS ARM64 (t4g.micro) + Supabase Free Tier, using nerdctl/containerd.
 
-## Files Created
+## Files
 
 | File | Purpose |
 |------|---------|
@@ -10,7 +10,7 @@ AWS ARM64 (t4g.micro) + Supabase Free Tier
 | `scripts/supabase-setup.sql` | Combined migrations to run in Supabase SQL Editor |
 | `caddy/Caddyfile` | Automatic HTTPS reverse proxy config |
 | `.env.production.example` | Template for production secrets |
-| `scripts/deploy-aws-arm64.sh` | Setup script for Amazon Linux 2023 ARM64 |
+| `scripts/deploy-aws-arm64.sh` | Setup script for Amazon Linux 2023 ARM64 (nerdctl) |
 
 ## Deployment Steps
 
@@ -45,6 +45,8 @@ cd track-leader
 ./scripts/deploy-aws-arm64.sh
 ```
 
+The deploy script installs containerd, nerdctl (full package with buildkit + CNI), and git.
+
 ### 4. Configure Secrets
 
 ```bash
@@ -59,7 +61,7 @@ Required values:
 ### 5. Start Services
 
 ```bash
-docker compose -f docker-compose.supabase.yml --env-file .env.production up -d --build
+sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d --build
 ```
 
 Caddy handles SSL automatically once your domain resolves to the server.
@@ -68,22 +70,22 @@ Caddy handles SSL automatically once your domain resolves to the server.
 
 ```bash
 # View logs
-docker compose -f docker-compose.supabase.yml logs -f
+sudo nerdctl compose -f docker-compose.supabase.yml logs -f
 
 # View specific service logs
-docker compose -f docker-compose.supabase.yml logs -f backend
+sudo nerdctl compose -f docker-compose.supabase.yml logs -f backend
 
 # Stop services
-docker compose -f docker-compose.supabase.yml down
+sudo nerdctl compose -f docker-compose.supabase.yml down
 
 # Restart services
-docker compose -f docker-compose.supabase.yml restart
+sudo nerdctl compose -f docker-compose.supabase.yml restart
 
 # Update and rebuild
-git pull && docker compose -f docker-compose.supabase.yml up -d --build
+git pull && sudo nerdctl compose -f docker-compose.supabase.yml up -d --build
 
 # Monitor resources
-docker stats
+sudo nerdctl stats
 ```
 
 ## Cost Estimate
@@ -101,34 +103,41 @@ After free tier expires:
 ## Architecture
 
 ```
-                    ┌─────────────┐
-                    │   Caddy     │ :80, :443
-                    │ (auto SSL)  │
-                    └──────┬──────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-              ▼                         ▼
-       ┌─────────────┐          ┌─────────────┐
-       │  Frontend   │          │   Backend   │
-       │  (Next.js)  │ ────────▶│   (Rust)    │
-       │    :3000    │  /api/*  │    :3001    │
-       └─────────────┘          └──────┬──────┘
-                                       │
-                                       ▼
-                               ┌─────────────┐
-                               │  Supabase   │
-                               │ (PostgreSQL │
-                               │ + PostGIS)  │
-                               └─────────────┘
+                    +---------------+
+                    |     Caddy     | :80, :443
+                    |  (auto SSL)   |
+                    +-------+-------+
+                            |
+               +------------+------------+
+               |                         |
+               v                         v
+        +-------------+          +-------------+
+        |  Frontend   |          |   Backend   |
+        |  (Next.js)  | ------->|   (Rust)    |
+        |    :3000    |  /api/* |    :3001    |
+        +-------------+          +------+------+
+                                        |
+                                        v
+                                +-------------+
+                                |  Supabase   |
+                                | (PostgreSQL |
+                                | + PostGIS)  |
+                                +-------------+
 ```
+
+## Why nerdctl?
+
+- Lighter weight than Docker Engine (just containerd + nerdctl binary)
+- No Docker daemon overhead - better for constrained t4g.micro instances
+- Full compose compatibility via `nerdctl compose`
+- BuildKit included in the full package for image builds
 
 ## Troubleshooting
 
 ### Backend won't start
 ```bash
 # Check logs
-docker compose -f docker-compose.supabase.yml logs backend
+sudo nerdctl compose -f docker-compose.supabase.yml logs backend
 
 # Common issues:
 # - DATABASE_URL incorrect or unreachable
@@ -138,7 +147,7 @@ docker compose -f docker-compose.supabase.yml logs backend
 ### SSL certificate not working
 ```bash
 # Check Caddy logs
-docker compose -f docker-compose.supabase.yml logs caddy
+sudo nerdctl compose -f docker-compose.supabase.yml logs caddy
 
 # Common issues:
 # - Domain not pointing to server IP yet
@@ -149,3 +158,18 @@ docker compose -f docker-compose.supabase.yml logs caddy
 - Use "Session" mode in connection pooler (not "Transaction")
 - Keep `DATABASE_MAX_CONNECTIONS` low (10) for free tier
 - Check if your IP is allowed in Supabase network settings
+
+### nerdctl-specific issues
+```bash
+# Check containerd is running
+sudo systemctl status containerd
+
+# Check buildkit is running (required for builds)
+sudo systemctl status buildkit
+
+# List running containers
+sudo nerdctl ps
+
+# Clean up unused images/containers
+sudo nerdctl system prune
+```

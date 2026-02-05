@@ -484,5 +484,41 @@ CREATE INDEX IF NOT EXISTS idx_activity_dig_parts_activity_id
     ON activity_dig_parts(activity_id);
 
 -- ============================================================================
+-- 009_expanded_leaderboards.sql - Leaderboard types and featured leaderboards
+-- ============================================================================
+
+CREATE TYPE leaderboard_type AS ENUM (
+    'crowns',
+    'distance',
+    'dig_time',
+    'dig_percentage',
+    'average_speed'
+);
+
+ALTER TABLE teams ADD COLUMN featured_leaderboard leaderboard_type;
+
+CREATE INDEX idx_teams_featured_leaderboard ON teams(featured_leaderboard) WHERE featured_leaderboard IS NOT NULL;
+
+-- ============================================================================
+-- 010_fix_null_started_at.sql - Make started_at NOT NULL
+-- ============================================================================
+
+UPDATE activities SET started_at = submitted_at WHERE started_at IS NULL;
+ALTER TABLE activities ALTER COLUMN started_at SET NOT NULL;
+COMMENT ON COLUMN activities.started_at IS 'When the activity actually occurred (from GPX track data). Required.';
+
+-- ============================================================================
+-- 011_dig_activity_type.sql - Add DIG activity type
+-- ============================================================================
+
+INSERT INTO activity_types (id, name, is_builtin) VALUES
+    ('00000000-0000-0000-0000-000000000009', 'dig', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO activity_aliases (alias, activity_type_id) VALUES
+    ('trail_work', '00000000-0000-0000-0000-000000000009')
+ON CONFLICT DO NOTHING;
+
+-- ============================================================================
 -- Done! Your Supabase database is ready for Track Leader.
 -- ============================================================================

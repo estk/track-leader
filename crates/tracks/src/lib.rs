@@ -13,6 +13,8 @@ pub mod scoring;
 pub mod segment_matching;
 pub mod types;
 
+use std::env;
+
 use axum::{
     Extension, Router,
     http::{HeaderValue, Method, header},
@@ -22,7 +24,7 @@ use axum::{
 use sqlx::PgPool;
 use tower_http::{
     compression::CompressionLayer,
-    cors::{Any, CorsLayer},
+    cors::{AllowOrigin, Any, CorsLayer},
     set_header::SetResponseHeaderLayer,
 };
 
@@ -381,10 +383,23 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
     let aq = ActivityQueue::new(db.clone());
     let store = ObjectStoreService::new_local(object_store_path);
 
+    // Parse CORS origins from environment variable (comma-separated)
+    // Defaults to localhost:3000 for development
+    let cors_origins = env::var("CORS_ORIGINS").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let allow_origin = if cors_origins == "*" {
+        AllowOrigin::any()
+    } else {
+        let origins: Vec<HeaderValue> = cors_origins
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+        AllowOrigin::list(origins)
+    };
+
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
         .allow_headers(Any)
-        .allow_origin(Any);
+        .allow_origin(allow_origin);
 
     Router::new()
         .route("/health", get(health_check))

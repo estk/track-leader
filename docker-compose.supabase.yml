@@ -1,5 +1,5 @@
-# Production Docker Compose for Supabase + VPS deployment
-# Usage: docker compose -f docker-compose.supabase.yml up -d
+# Production compose for Supabase + VPS deployment
+# Usage: sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d
 #
 # Prerequisites:
 #   1. Run scripts/supabase-setup.sql in Supabase SQL Editor
