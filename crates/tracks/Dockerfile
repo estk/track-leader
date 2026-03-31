@@ -1,5 +1,5 @@
 # Build stage - multi-arch support for Apple Silicon and x86_64
-FROM rust:1.85-bookworm as builder
+FROM rust:1.90-trixie as builder
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ COPY crates/tracks/.sqlx ./crates/tracks/.sqlx
 RUN touch crates/tracks/src/main.rs && cargo build --release -p tracks
 
 # Runtime stage
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # Install required runtime dependencies
 RUN apt-get update && apt-get install -y \
