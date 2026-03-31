@@ -23,6 +23,7 @@ use tracks::models::{Activity, Visibility, builtin_types};
 use uuid::Uuid;
 
 /// Get database pool, skipping tests if DATABASE_URL is not set.
+/// Runs migrations to ensure the schema is up to date.
 async fn get_test_pool() -> Option<PgPool> {
     let database_url = match env::var("DATABASE_URL") {
         Ok(url) => url,
@@ -32,17 +33,24 @@ async fn get_test_pool() -> Option<PgPool> {
         }
     };
 
-    match PgPoolOptions::new()
+    let pool = match PgPoolOptions::new()
         .max_connections(1)
         .connect(&database_url)
         .await
     {
-        Ok(pool) => Some(pool),
+        Ok(pool) => pool,
         Err(e) => {
             eprintln!("Skipping test: Failed to connect to database: {e}");
-            None
+            return None;
         }
-    }
+    };
+
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run migrations");
+
+    Some(pool)
 }
 
 /// Helper to create a test user in the database.
