@@ -3,12 +3,14 @@ FROM rust:1.85-bookworm as builder
 
 WORKDIR /app
 
-# Copy workspace manifest and crate manifest
+# Copy workspace manifest and crate manifests
 COPY Cargo.toml ./
 COPY crates/tracks/Cargo.toml crates/tracks/Cargo.lock ./crates/tracks/
+COPY crates/test-data/Cargo.toml ./crates/test-data/
 
-# Create src directory and dummy main.rs to cache dependencies
+# Create dummy src files so cargo can resolve the workspace
 RUN mkdir -p crates/tracks/src && echo "fn main() {}" > crates/tracks/src/main.rs
+RUN mkdir -p crates/test-data/src && echo "fn main() {}" > crates/test-data/src/lib.rs
 
 # Build dependencies (this will be cached)
 # SQLX_OFFLINE enables compile-time query checking without a live database
