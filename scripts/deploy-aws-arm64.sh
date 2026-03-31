@@ -49,7 +49,7 @@ echo ""
 
 if ! command -v nerdctl &> /dev/null; then
     sudo dnf update -y
-    sudo dnf install -y tar gzip curl
+    sudo dnf install -y tar gzip curl --allowerasing
 
     # Download nerdctl full package (includes containerd, buildkit, CNI plugins)
     NERDCTL_ARCHIVE="nerdctl-full-${NERDCTL_VERSION}-linux-arm64.tar.gz"
