@@ -1,5 +1,5 @@
 # Build stage - multi-arch support for Apple Silicon and x86_64
-FROM rust:1.83-bookworm as builder
+FROM rust:1.85-bookworm as builder
 
 WORKDIR /app
 
