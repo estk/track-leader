@@ -1,91 +1,119 @@
 # Track Leader Deployment Guide
 
-AWS ARM64 (t4g.micro) + Supabase Free Tier, using nerdctl/containerd.
+AWS ARM64 (t4g.micro) + Supabase Free Tier. Images built in GitHub CI, pulled on EC2.
+
+## Architecture
+
+```
+  GitHub Actions (on tag push)
+       |
+       | builds linux/arm64 images
+       v
+    ghcr.io
+       |
+       | nerdctl compose pull
+       v
+  EC2 t4g.micro
+  +--------------------+
+  |  Caddy  :80/:443   |
+  |    |          |     |
+  | Frontend  Backend   |
+  |  :3000     :3001    |
+  +-----------|--------+
+              |
+         Supabase
+        (PostgreSQL)
+```
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.supabase.yml` | Slim compose with backend, frontend, Caddy (no postgres) |
-| `scripts/supabase-setup.sql` | Combined migrations to run in Supabase SQL Editor |
+| `.github/workflows/deploy.yml` | CI: builds + pushes images to ghcr.io on tag |
+| `docker-compose.deploy.yml` | Production compose (pulls pre-built images) |
 | `caddy/Caddyfile` | Automatic HTTPS reverse proxy config |
 | `.env.production.example` | Template for production secrets |
-| `scripts/deploy-aws-arm64.sh` | Setup script for Amazon Linux 2023 ARM64 (nerdctl) |
+| `scripts/deploy-aws-arm64.sh` | EC2 setup script (installs nerdctl, pulls images) |
+| `scripts/supabase-setup.sql` | Combined migrations for Supabase SQL Editor |
 
-## Deployment Steps
+## Workflow
 
-### 1. Supabase Setup
+### Release a version
 
-1. Create a Supabase project at https://supabase.com
-2. Go to SQL Editor, paste contents of `scripts/supabase-setup.sql`, run it
-3. Get your connection string: Settings > Database > Connection string (use Session mode)
+```bash
+# Tag and push (triggers CI build)
+jj commit -m "Release v0.1.0"
+jj bookmark set v0.1.0
+jj git push --bookmark v0.1.0
+```
 
-### 2. AWS Setup
+CI builds both images for `linux/arm64` and pushes to `ghcr.io/estk/track-leader/{backend,frontend}`.
+
+### First-time EC2 setup
 
 1. Launch EC2 instance:
    - AMI: Amazon Linux 2023 (ARM64)
    - Instance type: t4g.micro (free tier eligible)
-   - Storage: 8GB gp3 (default)
+   - Storage: 8GB gp3
 
-2. Security group rules:
-   - SSH (22) from your IP
-   - HTTP (80) from anywhere
-   - HTTPS (443) from anywhere
+2. Security group: SSH (22) from your IP, HTTP (80) + HTTPS (443) from anywhere
 
-3. Attach an Elastic IP (recommended for stable DNS)
+3. Attach Elastic IP, point domain A record to it
 
-4. Point your domain A record to the Elastic IP
+4. SSH in and run:
+   ```bash
+   git clone <your-repo> track-leader
+   cd track-leader
+   ./scripts/deploy-aws-arm64.sh
+   ```
 
-### 3. On the VPS
+5. The script will:
+   - Install containerd + nerdctl
+   - Prompt for GitHub PAT (needs `read:packages` scope) to authenticate with ghcr.io
+   - Create `.env.production` from the example
+   - Pull images and start services
 
-```bash
-ssh -i your-key.pem ec2-user@your-ip
-git clone <your-repo> track-leader
-cd track-leader
-./scripts/deploy-aws-arm64.sh
-```
+6. Edit `.env.production`:
+   - `DATABASE_URL`: Supabase connection string (Session mode)
+   - `PASETO_KEY`: `openssl rand -hex 32`
+   - `DOMAIN`: your domain
 
-The deploy script installs containerd, nerdctl (full package with buildkit + CNI), and git.
+### Deploy an update
 
-### 4. Configure Secrets
-
-```bash
-nano .env.production
-```
-
-Required values:
-- `DATABASE_URL`: Your Supabase connection string
-- `PASETO_KEY`: Run `openssl rand -hex 32` to generate
-- `DOMAIN`: Your domain name (e.g., tracks.example.com)
-
-### 5. Start Services
+On the EC2 instance:
 
 ```bash
-sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d --build
+cd ~/track-leader
+sudo nerdctl compose -f docker-compose.deploy.yml pull
+sudo nerdctl compose -f docker-compose.deploy.yml up -d
 ```
 
-Caddy handles SSL automatically once your domain resolves to the server.
+### Supabase setup
+
+1. Create a project at https://supabase.com
+2. SQL Editor > paste `scripts/supabase-setup.sql` > run
+3. Settings > Database > Connection string (Session mode)
 
 ## Useful Commands
 
 ```bash
 # View logs
-sudo nerdctl compose -f docker-compose.supabase.yml logs -f
+sudo nerdctl compose -f docker-compose.deploy.yml logs -f
 
-# View specific service logs
-sudo nerdctl compose -f docker-compose.supabase.yml logs -f backend
+# View specific service
+sudo nerdctl compose -f docker-compose.deploy.yml logs -f backend
 
-# Stop services
-sudo nerdctl compose -f docker-compose.supabase.yml down
+# Stop
+sudo nerdctl compose -f docker-compose.deploy.yml down
 
-# Restart services
-sudo nerdctl compose -f docker-compose.supabase.yml restart
-
-# Update and rebuild
-git pull && sudo nerdctl compose -f docker-compose.supabase.yml up -d --build
+# Restart
+sudo nerdctl compose -f docker-compose.deploy.yml restart
 
 # Monitor resources
 sudo nerdctl stats
+
+# Clean up old images
+sudo nerdctl image prune -a
 ```
 
 ## Cost Estimate
@@ -94,82 +122,37 @@ sudo nerdctl stats
 |---------|------|
 | AWS t4g.micro | Free for 12 months (750 hrs/mo) |
 | Supabase free tier | $0 |
+| ghcr.io (private, <500MB) | $0 |
+| GitHub Actions (~10 min/build) | Free tier (2000 min/mo) |
 | **Total** | **$0/month** for the first year |
 
 After free tier expires:
 - t4g.micro: ~$6/month
 - Supabase Pro (if needed): $25/month
 
-## Architecture
-
-```
-                    +---------------+
-                    |     Caddy     | :80, :443
-                    |  (auto SSL)   |
-                    +-------+-------+
-                            |
-               +------------+------------+
-               |                         |
-               v                         v
-        +-------------+          +-------------+
-        |  Frontend   |          |   Backend   |
-        |  (Next.js)  | ------->|   (Rust)    |
-        |    :3000    |  /api/* |    :3001    |
-        +-------------+          +------+------+
-                                        |
-                                        v
-                                +-------------+
-                                |  Supabase   |
-                                | (PostgreSQL |
-                                | + PostGIS)  |
-                                +-------------+
-```
-
-## Why nerdctl?
-
-- Lighter weight than Docker Engine (just containerd + nerdctl binary)
-- No Docker daemon overhead - better for constrained t4g.micro instances
-- Full compose compatibility via `nerdctl compose`
-- BuildKit included in the full package for image builds
-
 ## Troubleshooting
 
 ### Backend won't start
 ```bash
-# Check logs
-sudo nerdctl compose -f docker-compose.supabase.yml logs backend
-
-# Common issues:
-# - DATABASE_URL incorrect or unreachable
-# - PASETO_KEY not set or wrong length
+sudo nerdctl compose -f docker-compose.deploy.yml logs backend
+# Common: DATABASE_URL wrong, PASETO_KEY not set
 ```
 
-### SSL certificate not working
+### SSL not working
 ```bash
-# Check Caddy logs
-sudo nerdctl compose -f docker-compose.supabase.yml logs caddy
+sudo nerdctl compose -f docker-compose.deploy.yml logs caddy
+# Common: domain not pointing to server, ports 80/443 blocked
+```
 
-# Common issues:
-# - Domain not pointing to server IP yet
-# - Ports 80/443 not open in security group
+### Can't pull images
+```bash
+# Re-authenticate
+sudo nerdctl login ghcr.io
+# Check the image exists
+sudo nerdctl pull ghcr.io/estk/track-leader/backend:latest
 ```
 
 ### Supabase connection issues
-- Use "Session" mode in connection pooler (not "Transaction")
+- Use "Session" mode pooler (not "Transaction")
 - Keep `DATABASE_MAX_CONNECTIONS` low (10) for free tier
-- Check if your IP is allowed in Supabase network settings
-
-### nerdctl-specific issues
-```bash
-# Check containerd is running
-sudo systemctl status containerd
-
-# Check buildkit is running (required for builds)
-sudo systemctl status buildkit
-
-# List running containers
-sudo nerdctl ps
-
-# Clean up unused images/containers
-sudo nerdctl system prune
-```
+- Check Supabase network settings allow your EC2 IP

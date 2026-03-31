@@ -225,10 +225,10 @@ pub fn read_backend_url_from_dev_ports() -> Option<String> {
 
     let contents = std::fs::read_to_string(dev_ports_path).ok()?;
     for line in contents.lines() {
-        if let Some(port_str) = line.strip_prefix("BACKEND_PORT=") {
-            if let Ok(port) = port_str.trim().parse::<u16>() {
-                return Some(format!("http://localhost:{}", port));
-            }
+        if let Some(port_str) = line.strip_prefix("BACKEND_PORT=")
+            && let Ok(port) = port_str.trim().parse::<u16>()
+        {
+            return Some(format!("http://localhost:{}", port));
         }
     }
     None

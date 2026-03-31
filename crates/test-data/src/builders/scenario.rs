@@ -734,10 +734,10 @@ impl ScenarioBuilder {
                 let offset = last_ts - first_ts + time::Duration::seconds(1);
 
                 // Record boundary timestamp (start of this segment) with adjusted time
-                if let Some(first_point) = segment_points.first() {
-                    if let Some(ts) = first_point.timestamp {
-                        type_boundaries.push(ts + offset);
-                    }
+                if let Some(first_point) = segment_points.first()
+                    && let Some(ts) = first_point.timestamp
+                {
+                    type_boundaries.push(ts + offset);
                 }
 
                 for point in &segment_points {
@@ -750,10 +750,10 @@ impl ScenarioBuilder {
                 }
             } else {
                 // First segment - record boundary from original timestamp
-                if let Some(first_point) = segment_points.first() {
-                    if let Some(ts) = first_point.timestamp {
-                        type_boundaries.push(ts);
-                    }
+                if let Some(first_point) = segment_points.first()
+                    && let Some(ts) = first_point.timestamp
+                {
+                    type_boundaries.push(ts);
                 }
                 all_track_points.extend(segment_points.clone());
             }
@@ -765,10 +765,10 @@ impl ScenarioBuilder {
         }
 
         // Add final boundary (end timestamp)
-        if let Some(last_point) = all_track_points.last() {
-            if let Some(ts) = last_point.timestamp {
-                type_boundaries.push(ts);
-            }
+        if let Some(last_point) = all_track_points.last()
+            && let Some(ts) = last_point.timestamp
+        {
+            type_boundaries.push(ts);
         }
 
         // Create the activity with multisport metadata

@@ -385,7 +385,8 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
 
     // Parse CORS origins from environment variable (comma-separated)
     // Defaults to localhost:3000 for development
-    let cors_origins = env::var("CORS_ORIGINS").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let cors_origins =
+        env::var("CORS_ORIGINS").unwrap_or_else(|_| "http://localhost:3000".to_string());
     let allow_origin = if cors_origins == "*" {
         AllowOrigin::any()
     } else {

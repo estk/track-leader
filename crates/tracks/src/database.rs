@@ -3152,6 +3152,7 @@ impl Database {
 
     /// Get activity feed for a user with filtering support.
     /// Filters activities from users they follow by activity type and date range.
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_activity_feed_filtered(
         &self,
         user_id: Uuid,
@@ -3855,6 +3856,7 @@ impl Database {
     }
 
     /// Update a team.
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_team(
         &self,
         id: Uuid,
@@ -5141,6 +5143,7 @@ impl Database {
     }
 
     /// Get sensor data for an activity, including calculated distances from track geometry.
+    #[allow(clippy::type_complexity)]
     pub async fn get_sensor_data(
         &self,
         activity_id: Uuid,

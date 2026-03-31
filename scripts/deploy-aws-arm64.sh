@@ -1,13 +1,14 @@
 #!/bin/bash
 # AWS EC2 ARM64 (Amazon Linux 2023) Deployment Script for Track Leader
 #
-# Uses nerdctl + containerd instead of Docker.
+# Pulls pre-built images from ghcr.io — no local compilation needed.
 #
 # Prerequisites:
 #   1. EC2 t4g.micro (ARM64) instance with Amazon Linux 2023
 #   2. Security group allowing ports 22, 80, 443
 #   3. Elastic IP attached (recommended for stable DNS)
 #   4. Supabase project with database ready
+#   5. GitHub Personal Access Token (PAT) with read:packages scope
 #
 # Usage:
 #   1. SSH into your instance: ssh -i your-key.pem ec2-user@your-ip
@@ -44,40 +45,47 @@ fi
 NERDCTL_VERSION="2.0.4"
 
 echo ""
-log_info "Step 1: Installing containerd + nerdctl + buildkit..."
+log_info "Step 1: Installing containerd + nerdctl..."
 echo ""
 
 if ! command -v nerdctl &> /dev/null; then
     sudo dnf update -y
     sudo dnf install -y tar gzip curl --allowerasing
 
-    # Download nerdctl full package (includes containerd, buildkit, CNI plugins)
+    # Download nerdctl full package (includes containerd, CNI plugins)
     NERDCTL_ARCHIVE="nerdctl-full-${NERDCTL_VERSION}-linux-arm64.tar.gz"
     curl -sSL "https://github.com/containerd/nerdctl/releases/download/v${NERDCTL_VERSION}/${NERDCTL_ARCHIVE}" \
         -o "/tmp/${NERDCTL_ARCHIVE}"
 
-    # Extract to /usr/local (puts binaries in /usr/local/bin, services in /usr/local/lib/systemd)
+    # Extract to /usr/local
     sudo tar -xzf "/tmp/${NERDCTL_ARCHIVE}" -C /usr/local
     rm -f "/tmp/${NERDCTL_ARCHIVE}"
 
     # Enable and start containerd
     sudo systemctl daemon-reload
     sudo systemctl enable --now containerd
-    sudo systemctl enable --now buildkit
 
-    log_info "nerdctl ${NERDCTL_VERSION} installed (containerd + buildkit + CNI)."
+    log_info "nerdctl ${NERDCTL_VERSION} installed."
 else
     log_info "nerdctl already installed: $(nerdctl --version)"
 fi
 
 echo ""
-log_info "Step 2: Installing Git..."
+log_info "Step 2: Authenticate with GitHub Container Registry..."
 echo ""
 
-if ! command -v git &> /dev/null; then
-    sudo dnf install -y git
+# Check if already logged in by trying a pull
+if ! sudo nerdctl pull ghcr.io/estk/track-leader/backend:latest --quiet 2>/dev/null; then
+    log_info "Log in to ghcr.io to pull private images."
+    echo "You need a GitHub Personal Access Token (PAT) with read:packages scope."
+    echo "Create one at: https://github.com/settings/tokens"
+    echo ""
+    read -rp "GitHub username: " GH_USER
+    read -rsp "GitHub PAT: " GH_TOKEN
+    echo ""
+    echo "$GH_TOKEN" | sudo nerdctl login ghcr.io -u "$GH_USER" --password-stdin
 else
-    log_info "Git already installed."
+    log_info "Already authenticated with ghcr.io."
 fi
 
 echo ""
@@ -87,19 +95,18 @@ echo ""
 APP_DIR="/home/ec2-user/track-leader"
 
 if [ ! -d "$APP_DIR" ]; then
-    log_info "Cloning repository..."
+    log_info "Cloning repository (for compose file + Caddyfile)..."
     echo "Enter your git repository URL (or press Enter to skip if uploading manually):"
     read -r REPO_URL
     if [ -n "$REPO_URL" ]; then
+        sudo dnf install -y git
         git clone "$REPO_URL" "$APP_DIR"
     else
         mkdir -p "$APP_DIR"
         log_warn "Created empty directory. Upload your code to $APP_DIR"
     fi
 else
-    log_info "App directory exists. Pulling latest..."
-    cd "$APP_DIR"
-    git pull || log_warn "Git pull failed - manual update may be needed"
+    log_info "App directory exists."
 fi
 
 cd "$APP_DIR"
@@ -128,7 +135,7 @@ else
 fi
 
 echo ""
-log_info "Step 5: Building and starting services..."
+log_info "Step 5: Pulling images and starting services..."
 echo ""
 
 # Check if .env.production has been configured
@@ -138,18 +145,18 @@ if [ -f ".env.production" ]; then
         log_info "Edit the file and re-run this script, or run manually:"
         echo ""
         echo "  cd $APP_DIR"
-        echo "  sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d --build"
+        echo "  sudo nerdctl compose -f docker-compose.deploy.yml --env-file .env.production up -d"
         echo ""
         exit 1
     fi
 fi
 
-# Build and start (nerdctl requires root for compose with port binding)
-log_info "Building containers (this may take 5-10 minutes on first run)..."
-sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production build
+# Pull and start
+log_info "Pulling images..."
+sudo nerdctl compose -f docker-compose.deploy.yml --env-file .env.production pull
 
 log_info "Starting services..."
-sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d
+sudo nerdctl compose -f docker-compose.deploy.yml --env-file .env.production up -d
 
 echo ""
 log_info "Step 6: Verifying deployment..."
@@ -159,7 +166,7 @@ sleep 10  # Give services time to start
 
 # Check container status
 echo "Container status:"
-sudo nerdctl compose -f docker-compose.supabase.yml ps
+sudo nerdctl compose -f docker-compose.deploy.yml ps
 
 echo ""
 
@@ -187,10 +194,10 @@ echo "  2. Caddy will automatically obtain SSL certificates"
 echo "  3. Access your app at https://\$DOMAIN"
 echo ""
 echo "Useful commands:"
-echo "  View logs:     sudo nerdctl compose -f docker-compose.supabase.yml logs -f"
-echo "  Stop:          sudo nerdctl compose -f docker-compose.supabase.yml down"
-echo "  Restart:       sudo nerdctl compose -f docker-compose.supabase.yml restart"
-echo "  Update:        git pull && sudo nerdctl compose -f docker-compose.supabase.yml up -d --build"
+echo "  View logs:     sudo nerdctl compose -f docker-compose.deploy.yml logs -f"
+echo "  Stop:          sudo nerdctl compose -f docker-compose.deploy.yml down"
+echo "  Restart:       sudo nerdctl compose -f docker-compose.deploy.yml restart"
+echo "  Update:        sudo nerdctl compose -f docker-compose.deploy.yml pull && sudo nerdctl compose -f docker-compose.deploy.yml up -d"
 echo ""
 echo "Monitor resources:"
 echo "  sudo nerdctl stats"

@@ -155,45 +155,43 @@ impl ActivityQueue {
                 };
 
                 // Save sensor data if present
-                if sensor_data.has_any_data() {
-                    if let Err(e) = db.save_sensor_data(id, &sensor_data).await {
-                        tracing::error!("Failed to save sensor data: {e}");
-                    }
+                if sensor_data.has_any_data()
+                    && let Err(e) = db.save_sensor_data(id, &sensor_data).await
+                {
+                    tracing::error!("Failed to save sensor data: {e}");
                 }
 
                 // Find and create segment efforts (only for GPX files currently)
-                if track_saved {
-                    if let Some(ref gpx) = gpx_data {
-                        let matches = if let (Some(boundaries), Some(types)) =
-                            (&type_boundaries, &segment_types)
-                        {
-                            // Multi-sport activity: find all geometric matches, then filter by type
-                            match db.find_matching_segments_any_type(id).await {
-                                Ok(all_matches) => filter_multi_sport_matches(
-                                    all_matches,
-                                    &track_points,
-                                    boundaries,
-                                    types,
-                                ),
-                                Err(e) => {
-                                    tracing::error!("Failed to find matching segments: {e}");
-                                    vec![]
-                                }
+                if track_saved && let Some(ref gpx) = gpx_data {
+                    let matches = if let (Some(boundaries), Some(types)) =
+                        (&type_boundaries, &segment_types)
+                    {
+                        // Multi-sport activity: find all geometric matches, then filter by type
+                        match db.find_matching_segments_any_type(id).await {
+                            Ok(all_matches) => filter_multi_sport_matches(
+                                all_matches,
+                                &track_points,
+                                boundaries,
+                                types,
+                            ),
+                            Err(e) => {
+                                tracing::error!("Failed to find matching segments: {e}");
+                                vec![]
                             }
-                        } else {
-                            // Single-sport activity: filter by activity_type_id directly
-                            match db.find_matching_segments(id, activity_type_id).await {
-                                Ok(m) => m,
-                                Err(e) => {
-                                    tracing::error!("Failed to find matching segments: {e}");
-                                    vec![]
-                                }
-                            }
-                        };
-
-                        for segment_match in matches {
-                            process_segment_match(&db, gpx, uid, id, segment_match).await;
                         }
+                    } else {
+                        // Single-sport activity: filter by activity_type_id directly
+                        match db.find_matching_segments(id, activity_type_id).await {
+                            Ok(m) => m,
+                            Err(e) => {
+                                tracing::error!("Failed to find matching segments: {e}");
+                                vec![]
+                            }
+                        }
+                    };
+
+                    for segment_match in matches {
+                        process_segment_match(&db, gpx, uid, id, segment_match).await;
                     }
                 }
 
@@ -263,16 +261,16 @@ fn detect_stopped_segments(points: &[TrackPointData]) -> Vec<DetectedStoppedSegm
         // Skip points without timestamps
         let (Some(prev_time), Some(curr_time)) = (&prev.timestamp, &curr.timestamp) else {
             // End any current stopped segment if we lose timestamp continuity
-            if let Some((_, start_time)) = stop_start.take() {
-                if let Some(end_time) = points[i - 1].timestamp {
-                    let duration = (end_time - start_time).as_seconds_f64();
-                    if duration >= MIN_STOPPED_DURATION_SECS {
-                        segments.push(DetectedStoppedSegment {
-                            start_time,
-                            end_time,
-                            duration_seconds: duration,
-                        });
-                    }
+            if let Some((_, start_time)) = stop_start.take()
+                && let Some(end_time) = points[i - 1].timestamp
+            {
+                let duration = (end_time - start_time).as_seconds_f64();
+                if duration >= MIN_STOPPED_DURATION_SECS {
+                    segments.push(DetectedStoppedSegment {
+                        start_time,
+                        end_time,
+                        duration_seconds: duration,
+                    });
                 }
             }
             continue;
@@ -310,16 +308,16 @@ fn detect_stopped_segments(points: &[TrackPointData]) -> Vec<DetectedStoppedSegm
     }
 
     // Handle case where track ends while stopped
-    if let Some((_, start_time)) = stop_start {
-        if let Some(end_time) = points.last().and_then(|p| p.timestamp) {
-            let duration = (end_time - start_time).as_seconds_f64();
-            if duration >= MIN_STOPPED_DURATION_SECS {
-                segments.push(DetectedStoppedSegment {
-                    start_time,
-                    end_time,
-                    duration_seconds: duration,
-                });
-            }
+    if let Some((_, start_time)) = stop_start
+        && let Some(end_time) = points.last().and_then(|p| p.timestamp)
+    {
+        let duration = (end_time - start_time).as_seconds_f64();
+        if duration >= MIN_STOPPED_DURATION_SECS {
+            segments.push(DetectedStoppedSegment {
+                start_time,
+                end_time,
+                duration_seconds: duration,
+            });
         }
     }
 

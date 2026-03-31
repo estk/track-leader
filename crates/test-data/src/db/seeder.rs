@@ -399,7 +399,7 @@ impl Seeder {
 
         // Build a map from user_id to gender for efficient lookup
         let user_genders: std::collections::HashMap<uuid::Uuid, Option<Gender>> =
-            users.iter().map(|u| (u.id, u.gender.clone())).collect();
+            users.iter().map(|u| (u.id, u.gender)).collect();
 
         let mut kom_count = 0;
         let mut qom_count = 0;

@@ -1,5 +1,5 @@
 # Build stage - multi-arch support for Apple Silicon and x86_64
-FROM rust:1.90-trixie as builder
+FROM rust:1.93-trixie as builder
 
 WORKDIR /app
 
