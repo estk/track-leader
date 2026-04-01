@@ -48,7 +48,6 @@ RUN mkdir -p /app/uploads
 
 # Set environment variables
 ENV RUST_LOG=info
-ENV DATABASE_URL=postgres://tracks_user:tracks_password@postgres:5432/tracks_db
 ENV OBJECT_STORE_PATH=/app/uploads
 ENV PORT=3001
 

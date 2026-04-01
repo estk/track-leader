@@ -1,305 +1,361 @@
 # Deployment Guide
 
-This guide covers deploying Track Leader to production.
+Track Leader runs on AWS EC2 t4g.micro (ARM64) with nerdctl/containerd and Supabase. Deployment is automated via GitHub Actions — push a git tag and everything deploys.
 
-## Prerequisites
+## One-Time Setup
 
-- Docker and Docker Compose
-- Domain name with DNS access
-- SSL certificates (or Let's Encrypt)
+These steps are required before automated deployment works. Do them in order.
 
-## Environment Setup
+### 1. Supabase
 
-### Required Environment Variables
+1. Create a project at https://supabase.com
+2. SQL Editor > paste `scripts/supabase-setup.sql` > run
+3. Settings > Database > Connection string > select **Session** mode > copy the URI
 
-Create a `.env.prod` file:
+### 2. AWS SSM Parameter Store
 
-```bash
-# Database
-POSTGRES_DB=tracks_db
-POSTGRES_USER=tracks_user
-POSTGRES_PASSWORD=<secure-random-password>
+Store secrets in SSM so EC2 can pull them automatically during provisioning.
 
-# Backend
-DATABASE_URL=postgres://tracks_user:<password>@postgres:5432/tracks_db
-JWT_SECRET=<secure-random-string>
-OBJECT_STORE_PATH=/app/uploads
-RUST_LOG=info
+1. Open AWS Systems Manager > Parameter Store (same region as your EC2)
+2. Create parameter `/track-leader/ghcr-token`:
+   - Type: SecureString
+   - Value: GitHub Personal Access Token with `read:packages` scope
+   - Create one at: https://github.com/settings/tokens
+3. Create parameter `/track-leader/env-production`:
+   - Type: SecureString
+   - Value: contents of your `.env.production` file (see `.env.production.example` for template)
+   - Required values: `DATABASE_URL` (Supabase Session mode URI), `PASETO_KEY` (`openssl rand -hex 32`), `DOMAIN`
 
-# Frontend
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+### 3. EC2 Instance
 
-# Optional
-DATABASE_MAX_CONNECTIONS=20
-DATABASE_MIN_CONNECTIONS=5
-```
+1. Create IAM role `track-leader-ec2`:
+   - Attach `AmazonSSMReadOnlyAccess` managed policy
+   - (Or create a custom policy allowing `ssm:GetParameter` on `arn:aws:ssm:*:*:parameter/track-leader/*`)
 
-### Generate Secrets
+2. Launch EC2 instance:
+   - AMI: Amazon Linux 2023 (ARM64)
+   - Instance type: t4g.micro (free tier eligible for 12 months)
+   - Storage: 8GB gp3
+   - Security group: SSH (22) from your IP, HTTP (80) + HTTPS (443) from anywhere
+   - IAM instance profile: `track-leader-ec2`
+   - **User data**: paste contents of `scripts/ec2-user-data.sh`
 
-```bash
-# Generate JWT secret
-openssl rand -base64 32
+3. Attach an Elastic IP and point your domain's A record to it.
 
-# Generate database password
-openssl rand -base64 24
-```
+4. The user data script will automatically:
+   - Install containerd + nerdctl
+   - Authenticate with ghcr.io
+   - Clone the repo
+   - Pull `.env.production` from SSM
+   - Start all services
 
-## Docker Deployment
+   Check provisioning logs: `cat /var/log/track-leader-setup.log`
 
-### Build Images
+**Alternative (manual setup):** If you prefer not to use user data / SSM, SSH in and run `./scripts/deploy-aws-arm64.sh` which walks through setup interactively.
 
-```bash
-# Build all images
-docker-compose -f docker-compose.prod.yml build
-```
+### 4. SSH Key for GitHub Actions
 
-### Start Services
-
-```bash
-# Start all services
-docker-compose -f docker-compose.prod.yml up -d
-
-# Check status
-docker-compose -f docker-compose.prod.yml ps
-```
-
-### Run Migrations
+On the EC2 instance:
 
 ```bash
-# Apply database migrations
-docker exec tracks_backend_prod /app/tracks migrate
+ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N ''
+cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
+cat ~/.ssh/github_actions  # copy this private key
 ```
 
-### Verify Deployment
+### 5. GitHub Secrets
+
+In your repo: Settings > Secrets and Variables > Actions, add:
+
+| Secret | Value |
+|--------|-------|
+| `EC2_HOST` | Your Elastic IP address |
+| `EC2_SSH_KEY` | Private key from step 4 |
+| `EC2_USER` | `ec2-user` |
+
+---
+
+## Architecture
+
+```
+  Developer (local)
+       |
+       | git tag v0.X.0 <sha> && git push origin v0.X.0
+       v
+  GitHub Actions (.github/workflows/deploy.yml)
+       |
+       | 1. Builds linux/arm64 images
+       | 2. Pushes to ghcr.io (tagged :latest and :X.X.X)
+       | 3. SSHes into EC2, runs scripts/deploy-update.sh
+       v
+  EC2 t4g.micro (Amazon Linux 2023, ARM64)
+  +-----------------------+
+  |  Caddy  :80/:443      |  <- automatic HTTPS via Let's Encrypt
+  |    |          |        |
+  | Frontend  Backend      |
+  |  :3000     :3001       |
+  +-----------|------------+
+              |
+         Supabase
+        (PostgreSQL + PostGIS)
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `.github/workflows/deploy.yml` | CI/CD: build, push, deploy on tag |
+| `docker-compose.deploy.yml` | Production compose (pulls pre-built images) |
+| `caddy/Caddyfile` | Reverse proxy with automatic HTTPS |
+| `.env.production.example` | Template for production secrets |
+| `scripts/deploy-update.sh` | Deploy script called by CI (or manually for rollback) |
+| `scripts/deploy-aws-arm64.sh` | Interactive first-time EC2 setup |
+| `scripts/ec2-user-data.sh` | Non-interactive EC2 provisioning (cloud-init) |
+| `scripts/supabase-setup.sql` | Database schema for Supabase SQL Editor |
+
+---
+
+## Releasing a Version
 
 ```bash
-# Check backend health
-curl http://localhost:3001/health
+# Get the git commit SHA for the current jj change
+SHA=$(jj log --no-graph -r @ -T 'commit_id' | head -c 40)
 
-# Check frontend
-curl http://localhost:3000
+# Create and push a git tag (triggers CI/CD)
+git tag v0.2.0 "$SHA"
+git push origin v0.2.0
 ```
 
-## Reverse Proxy Setup
+This triggers the full pipeline: build images → push to ghcr.io → SSH to EC2 → pull → restart → health check.
 
-### Nginx Configuration
+---
 
-Create `nginx/nginx.conf`:
+## Rollback
 
-```nginx
-upstream frontend {
-    server frontend:3000;
-}
+### Container Rollback
 
-upstream backend {
-    server backend:3001;
-}
+CI pushes version-tagged images (e.g., `backend:0.1.0`) alongside `:latest`. Old versions remain in ghcr.io indefinitely.
 
-server {
-    listen 80;
-    server_name yourdomain.com;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com;
-
-    ssl_certificate /etc/nginx/ssl/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-
-    # Frontend
-    location / {
-        proxy_pass http://frontend;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-
-server {
-    listen 443 ssl http2;
-    server_name api.yourdomain.com;
-
-    ssl_certificate /etc/nginx/ssl/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-
-    # Backend API
-    location / {
-        proxy_pass http://backend;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # File upload size
-        client_max_body_size 50M;
-    }
-}
-```
-
-### Enable Nginx
+To roll back to a previous version, SSH into EC2:
 
 ```bash
-docker-compose -f docker-compose.prod.yml --profile with-nginx up -d
+cd ~/track-leader
+./scripts/deploy-update.sh 0.1.0
 ```
 
-## SSL Certificates
+This pulls the old versioned images, tags them as `:latest`, and recreates the containers.
 
-### Let's Encrypt with Certbot
+If a deploy fails health checks, the CI job exits non-zero. The containers may be in a bad state — roll back with the command above.
+
+### Database Rollback
+
+Every deploy takes a `pg_dump` snapshot before touching anything. Backups are stored in `~/backups/` on EC2 (last 5 kept).
+
+To restore from a pre-deploy snapshot:
 
 ```bash
-# Install certbot
-apt install certbot
+# Stop the backend so no new writes happen
+sudo nerdctl compose -f docker-compose.deploy.yml stop backend
 
-# Obtain certificate
-certbot certonly --webroot -w /var/www/certbot \
-  -d yourdomain.com \
-  -d api.yourdomain.com
+# Restore (gunzip pipes into psql)
+gunzip -c ~/backups/pre-deploy-YYYYMMDD-HHMMSS.sql.gz | psql "$DATABASE_URL"
 
-# Copy to nginx ssl directory
-cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem nginx/ssl/
-cp /etc/letsencrypt/live/yourdomain.com/privkey.pem nginx/ssl/
+# Roll back the container image too
+./scripts/deploy-update.sh 0.1.0
 ```
 
-### Auto-Renewal
+For surgical rollbacks, new migrations use reversible format (`.up.sql`/`.down.sql` pairs) — run the `down.sql` manually via Supabase SQL Editor or psql.
 
-Add to crontab:
+### Full Rollback Checklist
+
+1. Identify the last known-good version (check GitHub Actions history)
+2. If the migration was destructive (dropped columns/tables), restore from snapshot first
+3. If the migration was additive (added columns/indexes), you may skip the DB restore — the old code simply won't use the new columns
+4. Roll back containers: `./scripts/deploy-update.sh <good-version>`
+5. Verify: `curl https://<domain>/health`
+
+---
+
+## Database Migrations
+
+SQLx migrations run automatically on backend startup. A `pg_dump` snapshot is taken before each deploy (see Rollback above).
+
+### Writing Migrations
+
+Existing migrations (001-012) use simple `.sql` format (non-reversible). New migrations must use the reversible format:
+
+```
+migrations/
+  013_add_feature.up.sql    # forward migration
+  013_add_feature.down.sql  # reverse migration
+```
+
+SQLx supports mixing simple and reversible migrations. The `down.sql` should cleanly undo what `up.sql` did. Example:
+
+```sql
+-- 013_add_feature.up.sql
+ALTER TABLE activities ADD COLUMN elevation_gain_m DOUBLE PRECISION;
+
+-- 013_add_feature.down.sql
+ALTER TABLE activities DROP COLUMN elevation_gain_m;
+```
+
+### Concurrent Indexes (Large Tables)
+
+Some index migrations lock the table during creation. For production tables with existing data, create these indexes manually using `CONCURRENTLY` to avoid blocking writes:
+
+```sql
+-- Run each index separately (CONCURRENTLY cannot be inside a transaction)
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_user_type_date
+  ON activities(user_id, activity_type, submitted_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_efforts_segment_time
+  ON segment_efforts(segment_id, elapsed_time_seconds ASC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_efforts_user_segment
+  ON segment_efforts(user_id, segment_id, elapsed_time_seconds ASC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, read_at) WHERE read_at IS NULL;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_notifications_user_time
+  ON notifications(user_id, created_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_activities_feed
+  ON activities(submitted_at DESC) WHERE visibility = 'public';
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_follows_follower
+  ON follows(follower_id, created_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_follows_following
+  ON follows(following_id, created_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_kudos_activity
+  ON kudos(activity_id, created_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_comments_activity
+  ON comments(activity_id, created_at ASC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_segments_type
+  ON segments(activity_type, created_at DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_segment_stars_user
+  ON segment_stars(user_id, created_at DESC);
+```
+
+Monitor progress:
+
+```sql
+SELECT a.pid, a.query, p.phase,
+  round(100.0 * p.blocks_done / nullif(p.blocks_total, 0), 1) AS "% done"
+FROM pg_stat_activity a
+JOIN pg_stat_progress_create_index p ON p.pid = a.pid;
+```
+
+---
+
+## Manual Operations
+
+### Shell Alias
+
+Add this to `~/.bashrc` on EC2 to avoid typing the full compose command every time:
+
 ```bash
-0 0 1 * * certbot renew --quiet && docker-compose -f docker-compose.prod.yml restart nginx
+alias trs='sudo nerdctl compose -f ~/track-leader/docker-compose.deploy.yml --env-file ~/track-leader/.env.production'
 ```
 
-## Cloud Deployments
+Then reload: `source ~/.bashrc`
 
-### AWS (Free Tier)
+### Common Commands
 
-See `docs/planning/deployment.md` for the full guide using:
-- **t4g.micro** (ARM64, free tier 12 months) + **Supabase** free tier = $0/month
-- **nerdctl/containerd** instead of Docker (lighter on constrained instances)
-- **Caddy** for automatic HTTPS
+| Command | What it does |
+|---------|-------------|
+| `trs ps` | Container status |
+| `trs logs -f` | Tail all logs |
+| `trs logs -f backend` | Tail backend logs |
+| `trs logs --tail=100 backend` | Last 100 lines of backend |
+| `trs restart backend` | Restart a service |
+| `trs stop backend` | Stop a service |
+| `trs down` | Stop everything |
+| `trs up -d` | Start everything |
+| `trs up -d --force-recreate` | Recreate all containers |
+| `sudo nerdctl stats` | Resource usage |
+| `sudo nerdctl image prune -a` | Clean up old images (important on 8GB disk) |
+| `ls -lht ~/backups/` | List DB snapshots |
 
-#### Quick Start
-1. Launch EC2 t4g.micro (Amazon Linux 2023 ARM64)
-2. Run `./scripts/deploy-aws-arm64.sh` (installs nerdctl + containerd + buildkit)
-3. Configure `.env.production` (Supabase connection string, PASETO key, domain)
-4. `sudo nerdctl compose -f docker-compose.supabase.yml --env-file .env.production up -d --build`
-
-### Google Cloud
-
-#### Cloud Run
-1. Build and push images to Container Registry
-2. Deploy backend and frontend to Cloud Run
-3. Use Cloud SQL for PostgreSQL
-
-### DigitalOcean
-
-#### App Platform
-1. Connect GitHub repository
-2. Configure environment variables
-3. Deploy with managed database
-
-## Monitoring
-
-### Healthcheck URLs
-
-| Service | Endpoint | Expected |
-|---------|----------|----------|
-| Backend | /health | 200 OK |
-| Frontend | / | 200 OK |
-| Database | pg_isready | 0 exit code |
-
-### Logging
-
-View logs:
-```bash
-# All services
-docker-compose -f docker-compose.prod.yml logs -f
-
-# Specific service
-docker-compose -f docker-compose.prod.yml logs -f backend
-```
-
-### Resource Monitoring
-
-```bash
-# Container stats
-docker stats
-
-# Disk usage
-df -h
-```
-
-## Backups
-
-### Database
-
-```bash
-# Manual backup
-docker exec tracks_postgres_prod pg_dump -U tracks_user tracks_db > backup.sql
-
-# Scheduled backup (add to crontab)
-0 2 * * * docker exec tracks_postgres_prod pg_dump -U tracks_user tracks_db | gzip > /backups/db_$(date +\%Y\%m\%d).sql.gz
-```
-
-### File Uploads
-
-```bash
-# Backup uploads volume
-docker run --rm -v tracks_uploads_data:/data -v $(pwd):/backup \
-  alpine tar cvf /backup/uploads.tar /data
-```
-
-## Updating
-
-### Rolling Update
-
-```bash
-# Pull latest code
-git pull origin main
-
-# Rebuild images
-docker-compose -f docker-compose.prod.yml build
-
-# Restart services (one at a time for zero downtime)
-docker-compose -f docker-compose.prod.yml up -d --no-deps backend
-docker-compose -f docker-compose.prod.yml up -d --no-deps frontend
-
-# Run any new migrations
-docker exec tracks_backend_prod /app/tracks migrate
-```
+---
 
 ## Troubleshooting
 
-### Common Issues
-
-**Container won't start:**
+### Backend won't start
 ```bash
-# Check logs
-docker-compose -f docker-compose.prod.yml logs <service>
+sudo nerdctl compose -f docker-compose.deploy.yml logs backend
+```
+Common causes: `DATABASE_URL` wrong, `PASETO_KEY` not set or not 64 hex chars.
 
-# Check configuration
-docker-compose -f docker-compose.prod.yml config
+### Can't reach Supabase (IPv6)
+
+Supabase only exposes an IPv6 address (`AAAA` record). EC2 instances need IPv6 connectivity.
+
+- Verify: `dig AAAA db.<project-ref>.supabase.co` should return an IPv6 address
+- Test: `curl -6 -sv https://db.<project-ref>.supabase.co:5432 2>&1 | head -10`
+- Fix: Ensure your VPC subnet has IPv6 CIDR assigned, security group allows outbound IPv6
+- Use the **Session mode** connection pooler (not Transaction mode) — it routes via `aws-0-<region>.pooler.supabase.com` which has IPv4
+
+### SSL not working
+```bash
+sudo nerdctl compose -f docker-compose.deploy.yml logs caddy
+```
+Common causes: domain not pointing to server IP, ports 80/443 blocked in security group.
+
+### Ghost containers (nerdctl)
+
+If `nerdctl compose down` leaves zombie containers:
+
+```bash
+# Nuclear option: restart containerd
+sudo systemctl restart containerd
+# Then recreate
+sudo nerdctl compose -f docker-compose.deploy.yml --env-file .env.production up -d --force-recreate
 ```
 
-**Database connection failed:**
+### Can't pull images
 ```bash
-# Test connectivity
-docker exec tracks_backend_prod nc -zv postgres 5432
-
-# Check credentials
-docker exec -it tracks_postgres_prod psql -U tracks_user -d tracks_db
+# Re-authenticate
+sudo nerdctl login ghcr.io
+# Verify image exists
+sudo nerdctl pull ghcr.io/estk/track-leader/backend:latest
 ```
 
-**Out of disk space:**
+### Disk full
 ```bash
-# Clean up Docker
-docker system prune -a
-
-# Check volume usage
-docker system df
+# Remove all unused images (not just dangling)
+sudo nerdctl image prune -a
+# Check disk
+df -h
 ```
 
-See `docs/runbook.md` for more troubleshooting procedures.
+### Health check fails in CI
+
+The deploy script waits up to 60 seconds for each service. If it times out:
+1. Check logs (the script prints them on failure)
+2. SSH in and check manually: `curl http://localhost:3001/health`
+3. If the backend is still starting (migration running), increase retry count in `scripts/deploy-update.sh`
+
+---
+
+## Cost Estimate
+
+| Service | Cost |
+|---------|------|
+| AWS t4g.micro | Free for 12 months (750 hrs/mo) |
+| Supabase free tier | $0 |
+| ghcr.io (private, <500MB) | $0 |
+| GitHub Actions (~10 min/build) | Free tier (2000 min/mo) |
+| SSM Parameter Store (2 params) | $0 |
+| **Total** | **$0/month** for the first year |
+
+After free tier expires:
+- t4g.micro: ~$6/month
+- Supabase Pro (if needed): $25/month

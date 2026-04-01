@@ -150,6 +150,5 @@ For development testing:
 
 - [API Reference](../api-reference.md) - Full endpoint documentation
 - [Architecture Overview](../architecture/overview.md) - System design
-- [Deployment Guide](../deployment.md) - Production setup
+- [Deployment Guide](../deployment.md) - Production setup and operations
 - [Performance Targets](../performance.md) - Load testing targets
-- [Runbook](../runbook.md) - Operations procedures

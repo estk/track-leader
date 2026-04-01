@@ -50,7 +50,7 @@ echo ""
 
 if ! command -v nerdctl &> /dev/null; then
     sudo dnf update -y
-    sudo dnf install -y tar gzip curl --allowerasing
+    sudo dnf install -y tar gzip curl postgresql16 --allowerasing
 
     # Download nerdctl full package (includes containerd, CNI plugins)
     NERDCTL_ARCHIVE="nerdctl-full-${NERDCTL_VERSION}-linux-arm64.tar.gz"
@@ -74,15 +74,18 @@ echo ""
 log_info "Step 2: Authenticate with GitHub Container Registry..."
 echo ""
 
-# Check if already logged in by trying a pull
 if ! sudo nerdctl pull ghcr.io/estk/track-leader/backend:latest --quiet 2>/dev/null; then
-    log_info "Log in to ghcr.io to pull private images."
-    echo "You need a GitHub Personal Access Token (PAT) with read:packages scope."
-    echo "Create one at: https://github.com/settings/tokens"
-    echo ""
-    read -rp "GitHub username: " GH_USER
-    read -rsp "GitHub PAT: " GH_TOKEN
-    echo ""
+    GH_USER="${GH_USER:-}"
+    GH_TOKEN="${GH_TOKEN:-}"
+    if [ -z "$GH_USER" ] || [ -z "$GH_TOKEN" ]; then
+        log_info "Log in to ghcr.io to pull private images."
+        echo "You need a GitHub Personal Access Token (PAT) with read:packages scope."
+        echo "Create one at: https://github.com/settings/tokens"
+        echo ""
+        read -rp "GitHub username: " GH_USER
+        read -rsp "GitHub PAT: " GH_TOKEN
+        echo ""
+    fi
     echo "$GH_TOKEN" | sudo nerdctl login ghcr.io -u "$GH_USER" --password-stdin
 else
     log_info "Already authenticated with ghcr.io."
@@ -94,17 +97,12 @@ echo ""
 
 APP_DIR="/home/ec2-user/track-leader"
 
+REPO_URL="${REPO_URL:-https://github.com/estk/track-leader.git}"
+
 if [ ! -d "$APP_DIR" ]; then
-    log_info "Cloning repository (for compose file + Caddyfile)..."
-    echo "Enter your git repository URL (or press Enter to skip if uploading manually):"
-    read -r REPO_URL
-    if [ -n "$REPO_URL" ]; then
-        sudo dnf install -y git
-        git clone "$REPO_URL" "$APP_DIR"
-    else
-        mkdir -p "$APP_DIR"
-        log_warn "Created empty directory. Upload your code to $APP_DIR"
-    fi
+    log_info "Cloning repository..."
+    sudo dnf install -y git
+    git clone "$REPO_URL" "$APP_DIR"
 else
     log_info "App directory exists."
 fi
@@ -193,12 +191,27 @@ echo "  1. Point your domain DNS to this server's IP"
 echo "  2. Caddy will automatically obtain SSL certificates"
 echo "  3. Access your app at https://\$DOMAIN"
 echo ""
-echo "Useful commands:"
-echo "  View logs:     sudo nerdctl compose -f docker-compose.deploy.yml logs -f"
-echo "  Stop:          sudo nerdctl compose -f docker-compose.deploy.yml down"
-echo "  Restart:       sudo nerdctl compose -f docker-compose.deploy.yml restart"
-echo "  Update:        sudo nerdctl compose -f docker-compose.deploy.yml pull && sudo nerdctl compose -f docker-compose.deploy.yml up -d"
+# Add shell alias
+ALIAS_LINE="alias trs='sudo nerdctl compose -f ~/track-leader/docker-compose.deploy.yml --env-file ~/track-leader/.env.production'"
+if ! grep -q "alias trs=" ~/.bashrc 2>/dev/null; then
+    echo "$ALIAS_LINE" >> ~/.bashrc
+    log_info "Added 'trs' alias to ~/.bashrc (run: source ~/.bashrc)"
+fi
+
+echo "Useful commands (after 'source ~/.bashrc'):"
+echo "  trs ps              Container status"
+echo "  trs logs -f         Tail all logs"
+echo "  trs logs -f backend Tail backend logs"
+echo "  trs restart backend Restart a service"
+echo "  trs down            Stop everything"
+echo "  trs up -d           Start everything"
+echo "  sudo nerdctl stats Resource usage"
 echo ""
-echo "Monitor resources:"
-echo "  sudo nerdctl stats"
+echo "To enable automated deployment from GitHub Actions:"
+echo "  1. ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N ''"
+echo "  2. cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys"
+echo "  3. cat ~/.ssh/github_actions  # copy this private key"
+echo "  4. Add it as GitHub secret EC2_SSH_KEY"
+echo "  5. Add this server's IP as GitHub secret EC2_HOST"
+echo "  6. Add 'ec2-user' as GitHub secret EC2_USER"
 echo ""

@@ -26,7 +26,7 @@ Migrations are in `crates/tracks/migrations/` and use SQLx.
 ### Known Issues
 
 1. **CONCURRENTLY indexes**: SQLx runs migrations in transactions, but `CREATE INDEX CONCURRENTLY` can't run in a transaction. Even with `-- no-transaction` directive, Postgres creates an implicit transaction when there are multiple statements.
-   - **Solution**: Don't use CONCURRENTLY in migrations. For production, create indexes manually (see `docs/architecture/production-deployment.md`).
+   - **Solution**: Don't use CONCURRENTLY in migrations. For production, create indexes manually (see the "Concurrent Indexes" section in `docs/deployment.md`).
 
 2. **Table naming**: Code uses `segment_stars` table. Migration 015 originally referenced `starred_segments` (wrong name) - this was fixed in migration 016.
 

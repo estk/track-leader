@@ -210,7 +210,7 @@ Frontend uses `auth-context.tsx` to:
 | Variable | Description |
 |----------|-------------|
 | DATABASE_URL | PostgreSQL connection string |
-| JWT_SECRET | Token signing key |
+| PASETO_KEY | Token encryption key (64 hex chars) |
 | OBJECT_STORE_PATH | File storage path |
 
-See `docs/runbook.md` for operational procedures.
+See `docs/deployment.md` for operational procedures.

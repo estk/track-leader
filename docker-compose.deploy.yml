@@ -25,6 +25,12 @@ services:
     volumes:
       - uploads_data:/app/uploads
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   frontend:
     image: ghcr.io/estk/track-leader/frontend:latest
@@ -35,6 +41,12 @@ services:
       BACKEND_URL: http://localhost:3001
     command: ["sh", "-c", "HOSTNAME=0.0.0.0 node server.js"]
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   caddy:
     image: caddy:2-alpine
