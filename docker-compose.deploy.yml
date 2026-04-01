@@ -16,14 +16,17 @@ services:
     network_mode: host
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
-      OBJECT_STORE_PATH: /app/uploads
+      OBJECT_STORE_BACKEND: ${OBJECT_STORE_BACKEND:-s3}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:?AWS_S3_BUCKET is required}
+      AWS_S3_PREFIX: ${AWS_S3_PREFIX:-uploads}
+      AWS_REGION: ${AWS_REGION:?AWS_REGION is required}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       PORT: 3001
       RUST_LOG: ${RUST_LOG:-info}
       PASETO_KEY: ${PASETO_KEY:?PASETO_KEY is required}
       DATABASE_MAX_CONNECTIONS: ${DATABASE_MAX_CONNECTIONS:-10}
       DATABASE_MIN_CONNECTIONS: ${DATABASE_MIN_CONNECTIONS:-2}
-    volumes:
-      - uploads_data:/app/uploads
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
@@ -61,8 +64,6 @@ services:
     restart: always
 
 volumes:
-  uploads_data:
-    driver: local
   caddy_data:
     driver: local
   caddy_config:

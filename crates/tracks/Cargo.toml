@@ -40,7 +40,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 # Object storage
-object_store = { version = "0.12.4", features = ["http"] }
+object_store = { version = "0.12.4", features = ["http", "aws"] }
 bytes = "1.0"
 
 # Misc

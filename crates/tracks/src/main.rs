@@ -1,6 +1,7 @@
 use sqlx::postgres::PgPoolOptions;
 use std::env;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracks::object_store_service::ObjectStoreService;
 use tracks::run_server;
 
 fn init_logging() {
@@ -39,13 +40,26 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    let object_store_path =
-        env::var("OBJECT_STORE_PATH").unwrap_or_else(|_| "./uploads".to_string());
+    let store = match env::var("OBJECT_STORE_BACKEND").as_deref() {
+        Ok("s3") => {
+            let bucket =
+                env::var("AWS_S3_BUCKET").expect("AWS_S3_BUCKET is required when using S3");
+            let region = env::var("AWS_REGION").expect("AWS_REGION is required when using S3");
+            let prefix = env::var("AWS_S3_PREFIX").ok();
+            tracing::info!(%bucket, %region, prefix = prefix.as_deref().unwrap_or(""), "Using S3 object store");
+            ObjectStoreService::new_s3(&bucket, &region, prefix.as_deref())
+        }
+        _ => {
+            let path = env::var("OBJECT_STORE_PATH").unwrap_or_else(|_| "./uploads".to_string());
+            tracing::info!(%path, "Using local object store");
+            ObjectStoreService::new_local(path)
+        }
+    };
 
     let port = env::var("PORT")
         .unwrap_or_else(|_| "3001".to_string())
         .parse::<u16>()
         .unwrap_or(3001);
 
-    run_server(pool, object_store_path, port).await
+    run_server(pool, store, port).await
 }

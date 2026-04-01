@@ -378,10 +378,9 @@ impl utoipa::Modify for SecurityAddon {
     }
 }
 
-pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
+pub fn create_router(pool: PgPool, store: ObjectStoreService) -> Router {
     let db = Database::new(pool);
     let aq = ActivityQueue::new(db.clone());
-    let store = ObjectStoreService::new_local(object_store_path);
 
     // Parse CORS origins from environment variable (comma-separated)
     // Defaults to localhost:3000 for development
@@ -624,11 +623,10 @@ pub fn create_router(pool: PgPool, object_store_path: String) -> Router {
         ))
 }
 
-pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> anyhow::Result<()> {
+pub async fn run_server(pool: PgPool, store: ObjectStoreService, port: u16) -> anyhow::Result<()> {
     // Create core components
     let db = Database::new(pool.clone());
     let aq = ActivityQueue::new(db.clone());
-    let store = ObjectStoreService::new_local(object_store_path.clone());
 
     // Recover orphaned activities (uploaded but not processed due to restart)
     match db.find_orphaned_activities().await {
@@ -649,7 +647,7 @@ pub async fn run_server(pool: PgPool, object_store_path: String, port: u16) -> a
         }
     }
 
-    let app = create_router(pool, object_store_path);
+    let app = create_router(pool, store);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
 

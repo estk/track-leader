@@ -1,5 +1,7 @@
 use axum_extra::headers::Mime;
 use bytes::Bytes;
+use object_store::aws::AmazonS3Builder;
+use object_store::prefix::PrefixStore;
 use object_store::{ObjectStore, PutOptions, local::LocalFileSystem, path::Path};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -93,7 +95,7 @@ impl FileType {
 #[derive(Clone, Debug)]
 pub struct ObjectStoreService {
     store: Arc<dyn ObjectStore>,
-    _base_path: String,
+    set_content_type: bool,
 }
 
 impl ObjectStoreService {
@@ -103,7 +105,26 @@ impl ObjectStoreService {
         let store = Arc::new(LocalFileSystem::new_with_prefix(&base_path).unwrap());
         Self {
             store,
-            _base_path: base_path,
+            // LocalFileSystem does not support attributes
+            set_content_type: false,
+        }
+    }
+
+    pub fn new_s3(bucket: &str, region: &str, prefix: Option<&str>) -> Self {
+        let s3 = AmazonS3Builder::from_env()
+            .with_bucket_name(bucket)
+            .with_region(region)
+            .build()
+            .expect("Failed to create S3 store");
+
+        let store: Arc<dyn ObjectStore> = match prefix {
+            Some(p) => Arc::new(PrefixStore::new(s3, p)),
+            None => Arc::new(s3),
+        };
+
+        Self {
+            store,
+            set_content_type: true,
         }
     }
 
@@ -124,13 +145,14 @@ impl ObjectStoreService {
 
         let path = Path::from(object_path.clone());
 
-        let opts = PutOptions::default();
+        let mut opts = PutOptions::default();
 
-        // todo re-enable when using proper blob storage
-        // opts.attributes.insert(
-        //     object_store::Attribute::ContentType,
-        //     file_type.as_mime_str().into(),
-        // );
+        if self.set_content_type {
+            opts.attributes.insert(
+                object_store::Attribute::ContentType,
+                file_type.as_mime_str().into(),
+            );
+        }
 
         self.store
             .put_opts(&path, content.into(), opts)
