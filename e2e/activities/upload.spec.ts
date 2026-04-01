@@ -96,10 +96,10 @@ test.describe("Upload Activity Page", () => {
     // Navigate to activities first, then to upload, so there's history to go back to
     await page.goto("/activities");
     await page.waitForLoadState("networkidle");
-    await page.goto("/activities/upload");
+    await page.goto("/activities/upload", { waitUntil: "networkidle" });
 
     // Wait for the upload page to fully render (auth check complete)
-    await expect(page.locator("text=/Upload Activity/i")).toBeVisible({
+    await expect(page.getByRole("heading", { name: /upload activity/i })).toBeVisible({
       timeout: 15000,
     });
 
