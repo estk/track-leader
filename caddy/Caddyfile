@@ -6,17 +6,17 @@
 {$DOMAIN:localhost} {
     # API routes -> Rust backend
     handle /api/* {
-        reverse_proxy backend:3001
+        reverse_proxy localhost:3001
     }
 
     # Health check endpoint (useful for load balancers)
     handle /health {
-        reverse_proxy backend:3001
+        reverse_proxy localhost:3001
     }
 
     # Everything else -> Next.js frontend
     handle {
-        reverse_proxy frontend:3000
+        reverse_proxy localhost:3000
     }
 
     # Compression

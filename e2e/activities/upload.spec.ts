@@ -97,7 +97,11 @@ test.describe("Upload Activity Page", () => {
     await page.goto("/activities");
     await page.waitForLoadState("networkidle");
     await page.goto("/activities/upload");
-    await page.waitForLoadState("networkidle");
+
+    // Wait for the upload page to fully render (auth check complete)
+    await expect(page.locator("text=/Upload Activity/i")).toBeVisible({
+      timeout: 15000,
+    });
 
     const cancelButton = page.getByRole("button", { name: /cancel/i });
     await cancelButton.click();

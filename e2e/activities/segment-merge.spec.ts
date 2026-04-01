@@ -10,7 +10,11 @@ const TEST_GPX_PATH = path.join(__dirname, "../../test-data/sample.gpx");
 
 async function uploadFileAndEnableMultiSport(page: Page) {
   await page.goto("/activities/upload");
-  await page.waitForLoadState("networkidle");
+
+  // Wait for the upload page to fully render (auth check complete)
+  await expect(page.locator("text=/Upload Activity/i")).toBeVisible({
+    timeout: 15000,
+  });
 
   // Upload the test GPX file
   const fileInput = page.locator('input[type="file"]');
