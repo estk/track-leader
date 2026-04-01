@@ -79,7 +79,11 @@ function NavTreeItem({
     (child) => !child.teamPlaceholder && (!child.authRequired || user)
   );
   const hasChildren = visibleChildren && visibleChildren.length > 0;
-  const isActive = item.href ? pathname === item.href || pathname.startsWith(item.href + "/") : false;
+  const isActive = item.href
+    ? item.exactMatch
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href + "/")
+    : false;
   const Icon = item.icon;
 
   // Check if any child is active (for highlighting parent)
@@ -135,7 +139,63 @@ function NavTreeItem({
   }
 
   // Full sidebar mode
-  // Render as collapsible if marked collapsible OR has visible children
+  // Collapsible item that also links somewhere — label navigates, chevron toggles
+  if (item.collapsible && item.href) {
+    return (
+      <div>
+        <div
+          className={cn(itemClasses, "justify-between p-0")}
+          style={{ paddingLeft: `${0.75 + depth * 1}rem` }}
+        >
+          <Link
+            href={item.href}
+            className="flex flex-1 items-center gap-3 py-2 pl-3"
+            aria-current={isActive ? "page" : undefined}
+          >
+            {Icon && <Icon className="h-4 w-4 shrink-0" />}
+            <span className="truncate">{item.label}</span>
+          </Link>
+          <span className="flex items-center gap-2">
+            {item.badge !== undefined && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                {item.badge}
+              </span>
+            )}
+            <button
+              onClick={handleClick}
+              className="flex items-center py-2 pr-3 pl-2"
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
+            >
+              <ChevronRight
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-transform",
+                  isExpanded && "rotate-90"
+                )}
+              />
+            </button>
+          </span>
+        </div>
+        {isExpanded && visibleChildren && visibleChildren.length > 0 && (
+          <div className="mt-1">
+            {visibleChildren.map((child) => (
+              <NavTreeItem
+                key={child.id}
+                item={child}
+                expandedIds={expandedIds}
+                onToggle={onToggle}
+                pathname={pathname}
+                collapsed={collapsed}
+                depth={depth + 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Collapsible item without a link — entire row toggles expand/collapse
   if (item.collapsible) {
     return (
       <div>

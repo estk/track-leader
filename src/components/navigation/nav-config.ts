@@ -33,6 +33,8 @@ export interface NavItem {
   teamPlaceholder?: boolean;
   /** Badge count (e.g., member count) */
   badge?: number;
+  /** Only highlight when pathname matches href exactly (no prefix matching) */
+  exactMatch?: boolean;
 }
 
 /**
@@ -110,6 +112,7 @@ export const NAV_CONFIG: NavItem[] = [
       {
         id: "my-teams",
         label: "My Teams",
+        href: "/teams",
         icon: Users,
         collapsible: true,
         children: [
@@ -145,6 +148,7 @@ export function generateTeamNavItems(
       label: "Daily Map",
       href: `/teams/${teamId}`,
       icon: Calendar,
+      exactMatch: true,
     },
     {
       id: `team-${teamId}-heat-map`,
