@@ -1,7 +1,7 @@
 # Development Dockerfile for Next.js frontend with hot reloading
 # Multi-arch support for Apple Silicon (M1/M2)
 
-FROM node:20-bookworm-slim
+FROM node:24-trixie-slim
 
 WORKDIR /app
 

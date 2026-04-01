@@ -46,6 +46,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/backend:latest
             ${{ env.IMAGE_PREFIX }}/backend:${{ steps.version.outputs.VERSION }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -86,6 +88,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/frontend:latest
             ${{ env.IMAGE_PREFIX }}/frontend:${{ steps.version.outputs.VERSION }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
