@@ -39,6 +39,8 @@ services:
     image: caddy:2-alpine
     container_name: tracks_caddy
     network_mode: host
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
