@@ -32,6 +32,7 @@ services:
     network_mode: host
     environment:
       NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
       BACKEND_URL: http://localhost:3001
     restart: always
 
