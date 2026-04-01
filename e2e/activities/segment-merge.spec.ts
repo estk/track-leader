@@ -9,10 +9,10 @@ import path from "path";
 const TEST_GPX_PATH = path.join(__dirname, "../../test-data/sample.gpx");
 
 async function uploadFileAndEnableMultiSport(page: Page) {
-  await page.goto("/activities/upload");
+  await page.goto("/activities/upload", { waitUntil: "networkidle" });
 
   // Wait for the upload page to fully render (auth check complete)
-  await expect(page.locator("text=/Upload Activity/i")).toBeVisible({
+  await expect(page.getByRole("heading", { name: /upload activity/i })).toBeVisible({
     timeout: 15000,
   });
 
