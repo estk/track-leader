@@ -4,10 +4,10 @@
 # Uses host networking for IPv6 support and simplicity on a single VPS.
 #
 # Prerequisites:
-#   1. Run scripts/supabase-setup.sql in Supabase SQL Editor
-#   2. Create .env.production with your secrets
-#   3. Domain pointing to your VPS IP
-#   4. Log in to ghcr.io: sudo nerdctl login ghcr.io
+#   1. Create .env.production with your secrets (see .env.production.example)
+#   2. Domain pointing to your VPS IP
+#   3. Log in to ghcr.io: sudo nerdctl login ghcr.io
+#   4. VPC IPv6 configured (Supabase requires IPv6 connectivity)
 
 services:
   backend:

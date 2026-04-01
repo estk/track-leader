@@ -9,10 +9,23 @@ These steps are required before automated deployment works. Do them in order.
 ### 1. Supabase
 
 1. Create a project at https://supabase.com
-2. SQL Editor > paste `scripts/supabase-setup.sql` > run
-3. Settings > Database > Connection string > select **Session** mode > copy the URI
+2. Settings > Database > Connection string > select **Session** mode > copy the URI
 
-### 2. AWS SSM Parameter Store
+Schema and extensions (including PostGIS) are created automatically by SQLx migrations on first backend startup.
+
+### 2. AWS VPC IPv6 Networking
+
+Supabase database endpoints resolve to IPv6 only. Your EC2 instance needs outbound IPv6 connectivity.
+
+1. **VPC**: VPC > Your VPC > Actions > Edit CIDRs > Add IPv6 CIDR (Amazon-provided)
+2. **Subnet**: Subnets > Your subnet > Actions > Edit IPv6 CIDRs > Add IPv6 CIDR (assign a /64 from the VPC's /56)
+3. **Route table**: Route Tables > Your route table > Edit routes > Add ``::/0`` → your Internet Gateway
+4. **Security group**: Outbound rules > ensure ``All traffic`` to ``::/0`` is allowed (default allows all outbound)
+5. **Instance**: EC2 > Your instance > Actions > Networking > Manage IP addresses > Auto-assign IPv6 address
+
+Verify from the instance: `ping6 -c 3 db.<project-ref>.supabase.co`
+
+### 3. AWS SSM Parameter Store
 
 Store secrets in SSM so EC2 can pull them automatically during provisioning.
 
@@ -36,6 +49,8 @@ Store secrets in SSM so EC2 can pull them automatically during provisioning.
    - AMI: Amazon Linux 2023 (ARM64)
    - Instance type: t4g.micro (free tier eligible for 12 months)
    - Storage: 8GB gp3
+   - Subnet: one with IPv6 configured (see step 2 above)
+   - Auto-assign IPv6: Enable
    - Security group: SSH (22) from your IP, HTTP (80) + HTTPS (443) from anywhere
    - IAM instance profile: `track-leader-ec2`
    - **User data**: paste contents of `scripts/ec2-user-data.sh`
@@ -296,12 +311,12 @@ Common causes: `DATABASE_URL` wrong, `PASETO_KEY` not set or not 64 hex chars.
 
 ### Can't reach Supabase (IPv6)
 
-Supabase only exposes an IPv6 address (`AAAA` record). EC2 instances need IPv6 connectivity.
+Supabase database endpoints resolve to IPv6 only. If the backend can't connect, IPv6 networking is misconfigured.
 
-- Verify: `dig AAAA db.<project-ref>.supabase.co` should return an IPv6 address
-- Test: `curl -6 -sv https://db.<project-ref>.supabase.co:5432 2>&1 | head -10`
-- Fix: Ensure your VPC subnet has IPv6 CIDR assigned, security group allows outbound IPv6
-- Use the **Session mode** connection pooler (not Transaction mode) — it routes via `aws-0-<region>.pooler.supabase.com` which has IPv4
+- Verify DNS: `dig AAAA db.<project-ref>.supabase.co`
+- Test connectivity: `ping6 -c 3 db.<project-ref>.supabase.co`
+- Fix: follow the VPC IPv6 setup in "One-Time Setup > step 2" above
+- Use the **Session mode** connection pooler (not Transaction mode)
 
 ### SSL not working
 ```bash
