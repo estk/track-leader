@@ -4,8 +4,9 @@
 # Caddy automatically obtains and renews Let's Encrypt certificates.
 
 {$DOMAIN:localhost} {
-    # API routes -> Rust backend
+    # API routes -> Rust backend (strip /api prefix)
     handle /api/* {
+        uri strip_prefix /api
         reverse_proxy localhost:3001
     }
 
